@@ -575,6 +575,13 @@ union luai_Cast { double l_d; long l_l; };
 #endif
 
 
+/* CoA64: x64 MSVC reproduces the 32-bit client's "fld; fistp dword" (0x84E0A4) with cvtsd2si: round to nearest even
+** (the default MXCSR mode), 0x80000000 when out of range. A plain (int) cast would truncate instead. */
+#elif defined(_MSC_VER) && defined(_M_X64)
+#include <emmintrin.h>
+#define lua_number2int(i,d)	((i)=_mm_cvtsd_si32(_mm_set_sd(d)))
+#define lua_number2integer(i,d)	((i)=(lua_Integer)_mm_cvtsd_si32(_mm_set_sd(d)))
+
 /* this option always works, but may be slow */
 #else
 #define lua_number2int(i,d)	((i)=(int)(d))
