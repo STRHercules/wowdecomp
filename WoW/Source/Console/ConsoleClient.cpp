@@ -943,22 +943,18 @@ void ConsoleCommandExecute(const char* commandLine, int32_t addToHistory) {
     const char* command;
     CONSOLECOMMAND* entry = ParseCommand(commandLine, &command, arguments, 1024);
 
+    // CoA64: security hardening -- the g_defaultCommand hook (nothing ever sets it) is not called: it is only a code
+    // pointer an out-of-bounds write could aim (RCEPatcher2 makes 0x765940 always take the "run" path).
     if (!entry) {
-        if (g_defaultCommand) {
-            if (g_defaultCommand(command, arguments)) {
-                goto done;
-            }
-        } else {
-            entry = g_consoleCommandHash.Ptr("run");
+        entry = g_consoleCommandHash.Ptr("run");
 
-            if (!entry) {
-                ConsoleWrite("Unknown command", DEFAULT_COLOR);
-                goto done;
-            }
-
-            command = "";
-            SStrCopy(arguments, commandLine, STORM_MAX_STR);
+        if (!entry) {
+            ConsoleWrite("Unknown command", DEFAULT_COLOR);
+            goto done;
         }
+
+        command = "";
+        SStrCopy(arguments, commandLine, STORM_MAX_STR);
     }
 
     OsValidateFunctionPointer(reinterpret_cast<const void*>(entry->m_handler));

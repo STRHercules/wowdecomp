@@ -183,7 +183,10 @@ bool CGlueMgr::SurveyExecute() {
                     OsCloseFile(file);
                     file = OS_INVALID_FILE;
                     DebugLog("Cache\\Survey.dll");
-                    library = OsLoadLibrary("Cache\\Survey.dll");
+                    // CoA64: security hardening -- the survey archive is unauthenticated on Ascension (patch
+                    // 0x4E4BC2), so Survey.dll is any server's code; it is never loaded (a 32-bit survey DLL could not
+                    // load in this x64 process anyway, so the server sees the same "no survey" result).
+                    library = nullptr;
 
                     int32_t (*extraWork)(uint16_t* data) = library ? reinterpret_cast<int32_t (*)(uint16_t*)>(OsGetLibraryEntryPoint(library, "ExtraWork")) : nullptr;
                     uint16_t* data = extraWork ? static_cast<uint16_t*>(SMemAlloc(0x1004, __FILE__, __LINE__, 0)) : nullptr;

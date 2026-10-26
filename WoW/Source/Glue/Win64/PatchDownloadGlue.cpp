@@ -22,6 +22,12 @@ static bool ShellExecuteRunAs(const char* path, const char* arguments) {
 
 // OFFSET: 0x00462190
 bool CGlueMgr::PatchDownloadExecuteCommand(const char* path, const char* arguments) {
+    // CoA64: security hardening -- prepatch.lst runs unauthenticated on Ascension (patch 0x4E57FE), so "execute" would
+    // run any server's program (with "runas"); it is refused and the prepatch fails (PatchCommandPolicy.h).
+    (void)path;
+    (void)arguments;
+    return false;
+
     OSVERSIONINFOA versionInfo;
     versionInfo.dwOSVersionInfoSize = sizeof(versionInfo);
     GetVersionExA(&versionInfo);

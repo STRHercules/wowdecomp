@@ -6,6 +6,7 @@
 #include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
+#include "WoW/Source/Glue/PatchCommandPolicy.h"
 #include "WoW/Source/WowServices/BattlenetLogin.h"
 #include "WoW/Source/WowServices/Login.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
@@ -54,6 +55,11 @@ bool CGlueMgr::m_deleteLocalPatch;
 // VERIFY: 434eb4cd auto
 // OFFSET: 0x004E4F70
 bool CGlueMgr::PatchDownloadExtractCommand(SArchive* archive, const char* name) {
+    // CoA64: security hardening -- only non-runnable files inside the download folder (PatchCommandPolicy.h).
+    if (!PatchExtractAllowed(name)) {
+        return false;
+    }
+
     void* data;
     uint32_t size;
 
@@ -79,6 +85,11 @@ bool CGlueMgr::PatchDownloadExtractCommand(SArchive* archive, const char* name) 
 // VERIFY: 81f1800c auto
 // OFFSET: 0x004E5000
 bool CGlueMgr::PatchDownloadDeleteCommand(const char* path) {
+    // CoA64: security hardening -- only paths inside the download folder (PatchCommandPolicy.h).
+    if (!PatchPathConfined(path)) {
+        return false;
+    }
+
     if (OsFileExists(path)) {
         if (SStrCmpI(path, "wow-patch.mpq", STORM_MAX_STR)) {
             OsDeleteFile(path);
