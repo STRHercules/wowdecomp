@@ -2623,7 +2623,10 @@ static int32_t Script_GetFramerate(lua_State* L) {
 // VERIFY: ee32b2a0 auto
 // OFFSET: 0x005165E0
 static int32_t Script_GetNumTitles(lua_State* L) {
-    lua_pushnumber(L, g_charTitlesDB.m_maxID + 1);
+    // CoA64: decomp fix -- 0x5165E4 reads [0xAD337C], g_charTitlesDB (0xAD3374) + 8 = m_numRecords, not m_maxID. With
+    // Ascension's CharTitles.dbc (190 rows, ids up to 235) m_maxID + 1 made TitlesPanel ask IsTitleKnown past the
+    // 192 title bits (into the known currencies) and GetTitleName return nothing for those indexes.
+    lua_pushnumber(L, g_charTitlesDB.m_numRecords + 1);
     return 1;
 }
 
