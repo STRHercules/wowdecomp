@@ -867,17 +867,17 @@ static int str_format (lua_State *L) {
       strfrmt = e;
       switch (*strfrmt++) {
         case 'c': {
-          sprintf(buff, form, (int)luaL_checknumber(L, arg));
+          sprintf(buff, form, (int)(long long)luaL_checknumber(L, arg));  /* CoA64: __ftol2 wrap, as lbitlib.c */
           break;
         }
         case 'd':  case 'i': {
           addintlen(form);
-          sprintf(buff, form, (LUA_INTFRM_T)luaL_checknumber(L, arg));
+          sprintf(buff, form, (LUA_INTFRM_T)(long long)luaL_checknumber(L, arg));  /* CoA64: low dword of a 64-bit truncation (fistp qword) */
           break;
         }
         case 'o':  case 'u':  case 'x':  case 'X': {
           addintlen(form);
-          sprintf(buff, form, (unsigned LUA_INTFRM_T)luaL_checknumber(L, arg));
+          sprintf(buff, form, (unsigned LUA_INTFRM_T)(long long)luaL_checknumber(L, arg));  /* CoA64: as %d */
           break;
         }
         case 'e':  case 'E': case 'f':
