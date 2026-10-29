@@ -88,6 +88,11 @@
 #include "WoW/Source/WorldClient/World.h"
 #include "Engine/Source/UnitOutline/UnitOutline.h"
 #include "Engine/Source/Lumenveil/Lumenveil.h"
+#include "WoW/Source/WorldClient/HD/HdAO.h"
+#include "WoW/Source/WorldClient/HD/HdBloom.h"
+#include "WoW/Source/WorldClient/HD/HdCamera.h"
+#include "WoW/Source/WorldClient/HD/HdFog.h"
+#include "WoW/Source/WorldClient/HD/HdGrade.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/UnitOutlineGather.h"
 #include <cfloat>
@@ -1759,6 +1764,9 @@ void CGWorldFrame::OnWorldRender() {
     Lumenveil::OpaqueBegin();
     scene->Draw(M2PASS_0);
     Lumenveil::OpaqueDone();
+    HD::CaptureCamera();
+    // Not in the original binary: Azeroth Remastered's ambient occlusion on the opaque world (visuals 2 only).
+    HD::AO::World();
 
     if (s_spellShadowStyle < 2) {
         DrawSpellCursorShadow(0x200122);
@@ -1790,6 +1798,9 @@ void CGWorldFrame::OnWorldRender() {
         DrawSpellCursorShadow(0x20000);
     }
 
+    // Not in the original binary: Azeroth Remastered's volumetric fog over the world, its liquids and weather, before
+    // the spells and particles (visuals 2 only).
+    HD::Fog::World();
     SpellVisualsTick();
     SpellVisualsRender();
     CGUnit_C::RenderMissileTrajectoryTargetingTexture();
@@ -1799,6 +1810,10 @@ void CGWorldFrame::OnWorldRender() {
     GxuFlushDrawList(GxuCat_1, *World::GetCamPos());
     DayNight::RenderGlares();
     PlayerNameUpdateLate();
+    // Not in the original binary: Azeroth Remastered's bloom and sun rays, then colour grading, over the finished
+    // world (visuals 2 only).
+    HD::Bloom::World();
+    HD::Grade::World();
 
     if (CWorld::enables & 0x20000000) {
         GxMasterEnableSet(GxMasterEnable_PolygonFill, 1);

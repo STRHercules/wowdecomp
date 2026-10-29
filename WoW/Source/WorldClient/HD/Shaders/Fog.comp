@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Azeroth Remastered's fog (HdVulkanFog.comp) on the GxEffects compute interface: the donor's formulas unchanged, its
+// bindings renumbered (textures 0..3, constants 16, images 17..19). The frame is the world's colour in an RGBA16F
+// storage texture, already RGB (no swapRB flag). The shadow maps are raw depth only: GxEffects has no comparison
+// sampler, so the donor's sampler2DShadow path is gone (the host binds no maps yet: c_shadow.x is 0).
+// HdFog.cpp equations: three layers, 32 quadratic segments, same phase/ramp/fade/tone curve.
+// HD: FOG_PASS 0 = the original single pass (debug views 1, 2, 4 and the fallback without the work images);
+// 1 = the march alone: in-scattered light and transmittance to ScatterA (RGBA16F, linear);
+// 2 = depth-aware horizontal blur ScatterA -> ScatterB; 3 = depth-aware vertical blur ScatterB, then the composite
+// into the frame. The march tests the sun shadow at a per-pixel jittered place in each of its 32 steps; the two
+// blurs average that jitter away (the grain in the light shafts) without bleeding across depth edges.
+#version 450
+#ifndef FOG_PASS
+#define FOG_PASS 0
+#endif
+layout(local_size_x=8,local_size_y=8) in;
+layout(std140,set=0,binding=16) uniform Params {vec4 r[34];vec4 viewport;vec4 extra;} fog;
+layout(set=0,binding=0) uniform sampler2D DepthTex;
+layout(set=0,binding=1) uniform sampler2D Raw0;
+layout(set=0,binding=2) uniform sampler2D Raw1;
+layout(set=0,binding=3) uniform sampler2D Raw2;
+layout(set=0,binding=17,rgba16f) uniform image2D Frame;
+layout(set=0,binding=18,rgba16f) uniform image2D ScatterA;
+layout(set=0,binding=19,rgba16f) uniform image2D ScatterB;
+#define c_screen fog.r[0]
+#define c_proj fog.r[1]
+#define c_rot0 fog.r[2]
+#define c_rot1 fog.r[3]
+#define c_rot2 fog.r[4]
+#define c_cam fog.r[5]
+#define c_sun fog.r[6]
+#define c_vp fog.r[7]
+#define c_range fog.r[8]
+#define c_shadow fog.r[33]
+#define saturate(x) clamp(x,0.0,1.0)
+float ShadowSample(int index,vec3 p) {
+    vec2 uv=p.xy*.5+.5;
+    float depth=index==0?textureLod(Raw0,uv,0).r:(index==1?textureLod(Raw1,uv,0).r:textureLod(Raw2,uv,0).r);
+    return p.z<=depth?1:0;
+}
+float SunVisible(vec3 p) {
+    if(c_shadow.x<.5) return 1;
+    vec4 q=vec4(p,1);
+    for(int i=0;i<3;++i) {
+        int base=24+i*3;
+        vec3 pos=vec3(dot(q,fog.r[base]),dot(q,fog.r[base+1]),dot(q,fog.r[base+2]));
+        if(max(abs(pos.x),abs(pos.y))<.98) return ShadowSample(i,pos);
+    }
+    return 1;
+}
+// Henyey-Greenstein, 1 toward the sun
+float Phase(float c, float g) {
+    g = clamp(g, -0.95, 0.95);
+    float k = (1.0 - g) / sqrt(max(1.0 + g * g - 2.0 * g * c, 1e-4));
+    return k * k * k;
+}
+
+// The view ray of a pixel: raw depth, view-space direction (z = 1), view depth, sky flag, world distance/direction.
+struct Ray { float raw; vec3 v; float zv; bool sky; float dist; vec3 dir; };
+Ray PixelRay(vec2 fullUV, vec2 uv) {
+    Ray ray;
+    ray.raw = textureLod(DepthTex, fullUV, 0).r;
+    // the world viewport only uses depth c_vp.x..c_vp.y (0..0.94): back to the projection's 0..1
+    float z = saturate((ray.raw - c_vp.x) / max(c_vp.y - c_vp.x, 1e-4));
+    vec2 ndc = vec2(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0);
+    ray.v = vec3((ndc.x - c_proj.z) / c_proj.x, (ndc.y - c_proj.w) / c_proj.y, 1.0);
+    // view depth from the depth buffer: z = c2 + d2 / zv
+    float denom = z - c_screen.z;
+    ray.zv = abs(c_screen.w / (abs(denom) < 1e-7 ? 1e-7 : denom));
+    ray.sky = ray.raw >= 0.99999 || ray.zv >= c_cam.w;
+    ray.zv = min(ray.zv, c_cam.w);
+    vec3 w = ray.v.x * c_rot0.xyz + ray.v.y * c_rot1.xyz + ray.v.z * c_rot2.xyz;
+    ray.dist = ray.zv * length(w);
+    ray.dir = normalize(w);
+    // HD (Claude): the liquids write no depth. Past the sea floor the depth buffer holds the sky, so open water far
+    // away was fogged like the sky (the whole fog range: black at night). Stop the ray at the water's surface,
+    // extra.z = the height of the plane the Cata water's mirror chose this frame (extra.w = 1 when there is one).
+    if (fog.extra.w > 0.5 && ray.dir.z < -1e-4) {
+        float t = (fog.extra.z - c_cam.z) / ray.dir.z;
+        if (t > 0.0 && (ray.sky || t < ray.dist)) { ray.sky = false; ray.dist = t; ray.zv = t / length(w); }
+    }
+    return ray;
+}
+
+// The march: in-scattered light (linear) in rgb, transmittance in a.
+vec4 Scatter(vec2 vpos, Ray ray) {
+    vec3 dir = ray.dir;
+    vec3 vdir = ray.v / length(ray.v); // view-space direction (same length as the world one)
+    // each layer's colour only depends on the direction
+    float cosSun = dot(dir, c_sun.xyz);
+    vec3 sun0 = fog.r[10].rgb * Phase(cosSun, fog.r[10].w);
+    vec3 sun1 = fog.r[15].rgb * Phase(cosSun, fog.r[15].w);
+    vec3 sun2 = fog.r[20].rgb * Phase(cosSun, fog.r[20].w);
+    vec3 useShadow = vec3(fog.r[11].w, fog.r[16].w, fog.r[21].w);
+
+    // the sky is fogged up to the fog range, like Forever's volume behind the far clip
+    float D = ray.sky ? c_range.x : min(ray.dist, c_range.x);
+    // where in each step the shadow is tested: dithered per pixel (interleaved gradient noise), so 32 steps
+    // give fine grain instead of bands across the light shafts (passes 2 and 3 blur the grain away)
+    float jitter = fract(52.9829189 * fract(dot(vpos, vec2(0.06711056, 0.00583715))));
+    float T = 1.0;
+    vec3 L = vec3(0.0);
+    float t0 = 0.0;
+    for (int s = 1; s <= 32; s++) {
+        float u = s / 32.0;
+        float t1 = D * u * u;
+        float seg = max(t1 - t0, 1e-3);
+        float tm = 0.5 * (t0 + t1);
+        float h = c_cam.z + dir.z * tm;
+        vec3 d;
+        vec3 start = vec3(fog.r[11].x, fog.r[16].x, fog.r[21].x);
+        // part of this step past each layer's start distance
+        vec3 cov = saturate((t1 - start) / seg);
+        vec3 x = saturate((tm - start) * c_range.y);
+        vec3 strength = vec3(fog.r[11].y, fog.r[16].y, fog.r[21].y);
+        vec3 expo = vec3(fog.r[11].z, fog.r[16].z, fog.r[21].z);
+        vec3 ramp = 1.0 + strength * pow(max(x, 1e-6), expo);
+        vec3 topRate = vec3(fog.r[12].x, fog.r[17].x, fog.r[22].x);
+        vec3 topH = vec3(fog.r[12].y, fog.r[17].y, fog.r[22].y);
+        vec3 botRate = vec3(fog.r[12].z, fog.r[17].z, fog.r[22].z);
+        vec3 botH = vec3(fog.r[12].w, fog.r[17].w, fog.r[22].w);
+        vec3 fade = saturate(exp(-topRate * (h - topH))) * saturate(exp(botRate * (h - botH)));
+        vec3 density = vec3(fog.r[9].w, fog.r[14].w, fog.r[19].w);
+        vec3 base = density * cov * ramp * fade * seg;
+        // sun at this step: the shadow maps and the sun being up; layers without the shadow flag stay lit
+        // HD: the maps are only read when the sun is up and a shadowed layer has fog in this step: otherwise the
+        // result does not depend on them (same image, fewer shadow reads)
+        float lit = 0.0;
+        if (c_shadow.z != 0.0 && any(notEqual(base * useShadow, vec3(0.0))))
+            lit = SunVisible(vdir * (t0 + (t1 - t0) * jitter)) * c_shadow.z;
+        vec3 S = mix(vec3(1.0), vec3(lit), useShadow);
+        vec3 shadowMul = vec3(fog.r[13].w, fog.r[18].w, fog.r[23].w);
+        d = base * mix(shadowMul, vec3(1.0), S);
+        vec3 col0 = mix(fog.r[13].rgb, fog.r[9].rgb, S.x) + sun0 * S.x;
+        vec3 col1 = mix(fog.r[18].rgb, fog.r[14].rgb, S.y) + sun1 * S.y;
+        vec3 col2 = mix(fog.r[23].rgb, fog.r[19].rgb, S.z) + sun2 * S.z;
+        float sigma = d.x + d.y + d.z;
+        vec3 rgb = col0 * d.x + col1 * d.y + col2 * d.z;
+        float Ts = exp(-sigma);
+        L += T * rgb * ((1.0 - Ts) / max(sigma, 1e-6));
+        T *= Ts;
+        t0 = t1;
+    }
+    return vec4(L, T);
+}
+
+vec3 Composite(vec3 sceneRGB, vec4 fogLT) {
+    vec3 scene = c_vp.z > 2.5 ? vec3(0.0) : pow(sceneRGB, vec3(2.2)); // hdFogDebug 3: the fog alone
+    // HD: Forever draws in HDR and tone maps, so the haze around the sun rolls off in its own colour (orange, as
+    // in the Forever capture: 247,209,151) instead of clipping to white. Same here: above 0.7 (linear) the
+    // brightest channel is compressed smoothly toward 1 and the others scaled with it, which keeps the hue.
+    vec3 col = max(scene * fogLT.a + fogLT.rgb, 0.0);
+    float peak = max(col.r, max(col.g, col.b));
+    if (peak > 0.7) col *= (0.7 + 0.3 * (1.0 - exp(-(peak - 0.7) / 0.3))) / peak;
+    return pow(saturate(col), vec3(1.0 / 2.2));
+}
+
+vec4 FogPixel(vec2 vpos, vec2 fullUV, vec2 uv, vec3 sceneRGB) {
+    Ray ray = PixelRay(fullUV, uv);
+    if (c_vp.z > 1.5 && c_vp.z < 2.5) {
+        // hdFogDebug 2: raw depth buffer value (white = near), pure blue where nothing was drawn
+        return ray.raw >= 0.999999 ? vec4(0, 0, 1, 1) : vec4(saturate((1.0 - ray.raw) * 200.0).xxx, 1);
+    }
+    if (c_vp.z > 3.5) {
+        // hdFogDebug 4: the sun shadow the fog sees on each surface (black = shadow), must match the world's shadows
+        return ray.sky ? vec4(0, 0, 1, 1) : vec4(SunVisible(ray.v * ray.zv).xxx, 1);
+    }
+    if (c_vp.z > 0.5 && c_vp.z < 1.5) {
+        // hdFogDebug 1: distance in grey (black = near, white = far clip), sky in red
+        return ray.sky ? vec4(1, 0, 0, 1) : vec4(saturate(ray.dist / c_cam.w).xxx, 1);
+    }
+    return vec4(Composite(sceneRGB, Scatter(vpos, ray)), 1);
+}
+
+// The pixel's place in the world viewport (outside 0..1: not the world).
+vec2 ViewportUV(ivec2 pixel, out vec2 fullUV) {
+    fullUV=(vec2(pixel)+.5)*c_screen.xy;
+    return (fullUV-fog.viewport.xy-fog.extra.xy*c_screen.xy)*fog.viewport.zw;
+}
+bool Outside(vec2 uv) {return any(lessThan(uv,vec2(0)))||any(greaterThan(uv,vec2(1)));}
+
+#if FOG_PASS == 0
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pixel,imageSize(Frame)))) return;
+    vec2 fullUV;vec2 uv=ViewportUV(pixel,fullUV);
+    if(Outside(uv)) return;
+    vec4 old=imageLoad(Frame,pixel);
+    vec3 result=FogPixel(vec2(pixel)-fog.extra.xy,fullUV,uv,old.rgb).rgb;
+    imageStore(Frame,pixel,vec4(result,old.a));
+}
+#elif FOG_PASS == 1
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    if(any(greaterThanEqual(pixel,imageSize(ScatterA)))) return;
+    vec2 fullUV;vec2 uv=ViewportUV(pixel,fullUV);
+    // outside the world: no fog (the blurs never take it in, its depth is far from any world pixel's)
+    imageStore(ScatterA,pixel,Outside(uv)?vec4(0,0,0,1):Scatter(vec2(pixel)-fog.extra.xy,PixelRay(fullUV,uv)));
+}
+#else
+// Depth-aware 9-tap Gaussian (sigma 2.5 pixels): a tap counts less the farther its view depth is from the centre's,
+// relative to that depth, so a tree in front of a lit fog shaft keeps its own fog and does not take the shaft's.
+const float kGauss[5] = float[5](1.0, 0.923116, 0.726149, 0.487752, 0.279543);
+float ViewDepth(ivec2 pixel) {
+    vec2 fullUV;vec2 uv=ViewportUV(pixel,fullUV);
+    return Outside(uv)?-1e6:PixelRay(fullUV,uv).zv;
+}
+vec4 Blur(ivec2 pixel, ivec2 step, ivec2 size) {
+    float zc=ViewDepth(pixel);
+    float tolerance=.03*zc+.15;
+    vec4 total=vec4(0);float weights=0;
+    for(int i=-4;i<=4;++i) {
+        ivec2 tap=clamp(pixel+step*i,ivec2(0),size-1);
+        float w=kGauss[abs(i)]*exp(-abs(ViewDepth(tap)-zc)/tolerance);
+#if FOG_PASS == 2
+        total+=imageLoad(ScatterA,tap)*w;
+#else
+        total+=imageLoad(ScatterB,tap)*w;
+#endif
+        weights+=w;
+    }
+    return total/max(weights,1e-6);
+}
+#if FOG_PASS == 2
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size=imageSize(ScatterB);
+    if(any(greaterThanEqual(pixel,size))) return;
+    imageStore(ScatterB,pixel,Blur(pixel,ivec2(1,0),size));
+}
+#else
+void main() {
+    ivec2 pixel=ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size=imageSize(Frame);
+    if(any(greaterThanEqual(pixel,size))) return;
+    vec2 fullUV;vec2 uv=ViewportUV(pixel,fullUV);
+    if(Outside(uv)) return;
+    vec4 fogLT=Blur(pixel,ivec2(0,1),size);
+    vec4 old=imageLoad(Frame,pixel);
+    vec3 result=Composite(old.rgb,fogLT);
+    imageStore(Frame,pixel,vec4(result,old.a));
+}
+#endif
+#endif

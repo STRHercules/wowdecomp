@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Azeroth Remastered's bloom and sun rays (HdVulkanBloom.comp, the HdBloom.cpp formulas), on the GxEffects compute
+// interface. Compile.py builds one module per BLOOM_PASS: 1 bright, 2 down, 3 blur, 4 ray mask, 5 radial,
+// 6 composite. The donor's pass 0 (the half-size copy of the frame) is CopyColor here, and the frame the composite
+// writes is the world's colour in an RGBA16F storage texture, already RGB (no swapRB).
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform sampler2D tex0;
+layout(set = 0, binding = 1) uniform sampler2D tex1;
+layout(set = 0, binding = 2) uniform sampler2D tex2;
+layout(set = 0, binding = 17, rgba16f) uniform image2D dst;
+layout(push_constant) uniform Params { vec4 target, a, b, c; } pc;
+
+vec3 T0(vec2 uv) { return textureLod(tex0, uv, 0).rgb; }
+
+vec3 Box4(vec2 uv, vec2 texel)
+{
+    return (T0(uv + texel * vec2(-1, -1)) + T0(uv + texel * vec2(1, -1)) + T0(uv + texel * vec2(-1, 1)) + T0(uv + texel * vec2(1, 1))) * .25;
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy), size = imageSize(dst);
+    if (any(greaterThanEqual(pixel, size))) return;
+    vec2 uv = (vec2(pixel) + .5) * pc.target.xy;
+    vec3 color;
+#if BLOOM_PASS == 1
+    vec3 c = Box4(uv, pc.a.xy);
+    float l = max(c.r, max(c.g, c.b));
+    float k = pc.b.y;
+    float soft = clamp(l - pc.b.x + k, 0.0, 2.0 * k);
+    soft = soft * soft / (4.0 * k + 1e-4);
+    color = c * (max(soft, l - pc.b.x) / max(l, 1e-4));
+#elif BLOOM_PASS == 2
+    color = Box4(uv, pc.a.xy);
+#elif BLOOM_PASS == 3
+    color = T0(uv) * .2270270;
+    color += (T0(uv + pc.a.xy * 1.3846154) + T0(uv - pc.a.xy * 1.3846154)) * .3162162;
+    color += (T0(uv + pc.a.xy * 3.2307692) + T0(uv - pc.a.xy * 3.2307692)) * .0702703;
+#elif BLOOM_PASS == 4
+    float raw = textureLod(tex1, uv, 0).r;
+    float z = clamp((raw - pc.c.x) / max(pc.c.y - pc.c.x, 1e-4), 0.0, 1.0);
+    float denom = z - pc.c.z;
+    float zv = abs(pc.c.w / (abs(denom) < 1e-7 ? 1e-7 : denom));
+    float sky = (raw >= .99999 || zv >= pc.b.y * .98) ? 1.0 : 0.0;
+    vec3 c = T0(uv);
+    float fall = clamp(1.0 - length((uv - pc.a.xy) * vec2(pc.a.z, 1)) / pc.a.w, 0.0, 1.0);
+    float l = max(c.r, max(c.g, c.b));
+    float b = clamp((l - pc.b.x) / max(1.0 - pc.b.x, 1e-3), 0.0, 1.0);
+    color = c * (sky * fall * fall * (.25 + .75 * b));
+#elif BLOOM_PASS == 5
+    vec2 stepUv = (uv - pc.a.xy) * (pc.a.z / 48.0);
+    vec3 sum = vec3(0);
+    float w = 1, total = 0;
+    for (int i = 0; i < 48; ++i) {
+        sum += T0(uv) * w;
+        total += w;
+        uv -= stepUv;
+        w *= pc.a.w;
+    }
+    color = sum / total * pc.b.x;
+#elif BLOOM_PASS == 6
+    vec3 halo = (T0(uv) * .6 + textureLod(tex1, uv, 0).rgb * .8) * pc.a.x;
+    vec3 rays = textureLod(tex2, uv, 0).rgb * pc.a.y;
+    vec4 original = imageLoad(dst, pixel);
+    if (pc.a.z > .5) {
+        color = pc.a.z > 2.5 ? halo : (pc.a.z > 1.5 ? rays : textureLod(tex2, uv, 0).rgb * 4.0);
+        if (length((uv - pc.b.xy) * vec2(pc.b.z, 1)) < .012) color = vec3(1, 0, 0);
+        color = clamp(color, 0.0, 1.0);
+    } else {
+        vec3 light = clamp(halo + rays, 0.0, 1.0);
+        color = light + original.rgb * (vec3(1) - light);
+    }
+    imageStore(dst, pixel, vec4(color, original.a));
+    return;
+#endif
+    imageStore(dst, pixel, vec4(color, 1));
+}

@@ -1,0 +1,194 @@
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Copyright (C) 2016-2021, Intel Corporation 
+// 
+// SPDX-License-Identifier: MIT
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+//
+// XeGTAO is based on GTAO/GTSO "Jimenez et al. / Practical Real-Time Strategies for Accurate Indirect Occlusion", 
+// https://www.activision.com/cdn/research/Practical_Real_Time_Strategies_for_Accurate_Indirect_Occlusion_NEW%20VERSION_COLOR.pdf
+// 
+// Implementation:  Filip Strugar (filip.strugar@intel.com), Steve Mccalla <stephen.mccalla@intel.com>         (\_/)
+// Version:         (see XeGTAO.h)                                                                            (='.'=)
+// Details:         https://github.com/GameTechDev/XeGTAO                                                     (")_(")
+//
+// Version history: see XeGTAO.h
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+// HD: GLSL 450 Vulkan port, FP32 arithmetic, fixed spatial noise, no bent normals.
+// wowdecomp: Azeroth Remastered's HdVulkanAO.comp on the GxEffects compute interface, its formulas unchanged and its
+// bindings renumbered (textures 0..8, images 17 and 18). The AO/edges images and the frame are RGBA16F (GxEffects stores
+// no RGBA8; the 8-bit edge packing survives FP16); the frame is the world's colour copied into a storage texture.
+
+#version 450
+#extension GL_GOOGLE_include_directive : require
+#ifndef AO_PASS
+#define AO_PASS 0
+#endif
+#ifndef AO_QUALITY
+#define AO_QUALITY 1
+#endif
+layout(local_size_x=8,local_size_y=8)in;
+layout(binding=0)uniform sampler2D RawDepth;
+layout(binding=1)uniform sampler2D Z0;layout(binding=2)uniform sampler2D Z1;
+layout(binding=3)uniform sampler2D Z2;layout(binding=4)uniform sampler2D Z3;layout(binding=5)uniform sampler2D Z4;
+layout(binding=6)uniform sampler2D NormalTex;layout(binding=7)uniform sampler2D AOTex;
+#if AO_PASS < 2
+layout(binding=17,r32f)uniform writeonly image2D Output;
+#else
+layout(binding=17,rgba16f)uniform writeonly image2D Output;
+#endif
+layout(binding=18,rgba16f)uniform image2D Frame;
+layout(binding=8)uniform sampler2D History;
+layout(push_constant)uniform Push {vec4 screen,view,rect,depth,params,blur,full;uvec4 flags;}c;
+#include "XeGTAO.glsl"
+ivec2 FullSize(){return textureSize(RawDepth,0);}ivec2 WorkSize(){return textureSize(Z0,0);}
+ivec2 FullPixel(ivec2 a){return clamp(c.flags.w!=0u?a*2+1:a,ivec2(0),FullSize()-1);}
+vec2 FullUV(ivec2 p){return (vec2(clamp(p,ivec2(0),FullSize()-1))+.5)*c.full.xy;}
+vec2 Local(vec2 uv){return (uv-c.rect.xy-c.full.zw*c.full.xy)*c.rect.zw;}
+bool Inside(vec2 uv){vec2 v=Local(uv);return all(greaterThanEqual(v,vec2(0)))&&all(lessThanEqual(v,vec2(1)));}
+float RawZ(ivec2 p){p=clamp(p,ivec2(0),FullSize()-1);float raw=texelFetch(RawDepth,p,0).r,z01=raw*c.screen.z+c.screen.w;
+    if(isnan(raw)||isinf(raw)||z01<0||z01>=c.depth.z||!Inside(FullUV(p)))return 1000000.0;
+    return c.depth.y/max(c.depth.x-z01,1e-7);}
+vec3 Position(vec2 uv,float z){return vec3((Local(uv)*c.view.xy+c.view.zw)*z,z);}
+float LoadZ(int level,ivec2 p){
+    if(level==0)return texelFetch(Z0,clamp(p,ivec2(0),textureSize(Z0,0)-1),0).r;
+    if(level==1)return texelFetch(Z1,clamp(p,ivec2(0),textureSize(Z1,0)-1),0).r;
+    if(level==2)return texelFetch(Z2,clamp(p,ivec2(0),textureSize(Z2,0)-1),0).r;
+    if(level==3)return texelFetch(Z3,clamp(p,ivec2(0),textureSize(Z3,0)-1),0).r;
+    return texelFetch(Z4,clamp(p,ivec2(0),textureSize(Z4,0)-1),0).r;
+}
+vec3 SamplePosition(ivec2 work,int level){
+    int block=1<<level;ivec2 p=clamp(work,ivec2(0),WorkSize()-1)/block;
+    ivec2 lo=p*block,hi=min(lo+block,WorkSize())-1;
+    // HD: reconstruct at the actual selected mip texel footprint centre, not the requested unrounded ray point.
+    vec2 centre=.5*vec2(lo+hi);
+    if(c.flags.w!=0u){centre=vec2(lo+hi)+1;
+        // HD: the final odd full pixel is clamped by one; use the mean of actual selected centres.
+        if(hi.x==WorkSize().x-1&&(FullSize().x&1)!=0)centre.x-=1.0/float(hi.x-lo.x+1);
+        if(hi.y==WorkSize().y-1&&(FullSize().y&1)!=0)centre.y-=1.0/float(hi.y-lo.y+1);}
+    vec2 uv=(centre+.5)*c.full.xy;
+    return Position(uv,LoadZ(level,p));
+}
+vec3 SurfaceNormal(ivec2 fp,vec3 center){
+    vec3 l=Position(FullUV(fp+ivec2(-1,0)),RawZ(fp+ivec2(-1,0))),r=Position(FullUV(fp+ivec2(1,0)),RawZ(fp+ivec2(1,0)));
+    vec3 t=Position(FullUV(fp+ivec2(0,-1)),RawZ(fp+ivec2(0,-1))),b=Position(FullUV(fp+ivec2(0,1)),RawZ(fp+ivec2(0,1)));
+    vec3 n=XeNormal(XeEdges(center.z,l.z,r.z,t.z,b.z),center,l,r,t,b);
+    if(c.flags.z!=0u){vec4 g=texelFetch(NormalTex,clamp(fp,ivec2(0),FullSize()-1),0);float tag=abs(g.w),decoded=((tag-.505)/.49)*16-4;
+        bool same=tag==1||(tag>=.505&&tag<=.9951&&abs(decoded-log2(max(center.z,1.0/16.0)))<=c.depth.w);
+        if(g.w>.5&&same&&!any(isnan(g))&&!any(isinf(g))&&dot(g.xyz,g.xyz)>1e-10)n=normalize(g.xyz);}
+    return dot(n,center)>0?-n:n;
+}
+#if AO_PASS == 0
+void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,imageSize(Output))))return;
+    imageStore(Output,p,vec4(RawZ(FullPixel(p))));}
+#elif AO_PASS == 1
+float Coverage(ivec2 p,int block){ivec2 size=clamp(WorkSize()-p*block,ivec2(0),ivec2(block));return float(size.x*size.y);}
+void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,imageSize(Output))))return;int level=int(c.flags.x)-1;ivec2 q=p*2;
+    vec4 z=vec4(LoadZ(level,q),LoadZ(level,q+ivec2(1,0)),LoadZ(level,q+ivec2(0,1)),LoadZ(level,q+ivec2(1,1)));
+    // HD: do not count a clamped child twice. Partial mip cells retain their true base-pixel area.
+    int block=1<<level;vec4 area=vec4(Coverage(q,block),Coverage(q+ivec2(1,0),block),Coverage(q+ivec2(0,1),block),Coverage(q+ivec2(1,1),block));
+    imageStore(Output,p,vec4(XeDepthFilter(z,c.params.x,area)));}
+#elif AO_PASS == 2
+void main(){
+    ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,WorkSize())))return;
+    float z=LoadZ(0,p);if(z>=250){imageStore(Output,p,vec4(1.0/1.5,0,0,0));return;}
+    vec4 edges=XeEdges(z,LoadZ(0,p+ivec2(-1,0)),LoadZ(0,p+ivec2(1,0)),LoadZ(0,p+ivec2(0,-1)),LoadZ(0,p+ivec2(0,1)));
+    ivec2 fp=FullPixel(p);vec2 uv=FullUV(fp);vec3 center=Position(uv,z),normal=SurfaceNormal(fp,center);
+    center*=.99999;vec3 viewVec=normalize(-center);
+    // HD (Claude): noise on the AO work grid like upstream; odd full-res pixels in half-res skewed the Hilbert/R2 pattern.
+    vec2 noise=XeNoise(p,uint(c.blur.x));
+    const int slices=AO_QUALITY==0?1:AO_QUALITY==1?2:AO_QUALITY==2?3:9;
+    const int steps=AO_QUALITY<2?2:3;
+    float effectRadius=c.params.x*1.457,falloffRange=effectRadius*.615;
+    float falloffMul=-1.0/falloffRange,falloffAdd=1.0+effectRadius*(1.0-.615)/falloffRange;
+    // HD: use the true projection scale and viewport dimensions; +Z view, screen Y down.
+    float pixelSize=abs(c.view.x*c.rect.z*c.full.x)*(c.flags.w!=0u?2.0:1.0)*z;
+    float screenRadius=effectRadius/max(pixelSize,1e-8),fade=sat((10-screenRadius)/100)*.5;
+    float visibility=0,unoccluded=0;
+    float pixelSizeY=abs(c.view.y*c.rect.w*c.full.y)*(c.flags.w!=0u?2.0:1.0)*z;
+    for(int slice=0;slice<slices;++slice){float phi=(float(slice)+noise.x)/float(slices)*XE_PI;
+        float cs=cos(phi),sn=sin(phi);vec2 omega=vec2(cs*screenRadius,-sn*effectRadius/max(pixelSizeY,1e-8));
+        float minS=1.3/max(length(omega),1e-8);
+        vec3 direction=vec3(cs,sn,0),ortho=direction-dot(direction,viewVec)*viewVec;
+        vec3 axis=normalize(cross(ortho,viewVec)),projected=normal-axis*dot(normal,axis);
+        float len=max(length(projected),1e-7),cosNorm=sat(dot(projected,viewVec)/len);
+        float n=sign(dot(ortho,projected))*XeACos(cosNorm);
+        vec2 low=vec2(cos(n+XE_PI*.5),cos(n-XE_PI*.5)),horizon=low;
+        for(int step=0;step<steps;++step){float stepNoise=fract(noise.y+float(slice+step*steps)*.6180339887498948482);
+            float s=(float(step)+stepNoise)/float(steps);s=s*s+minS;
+            vec2 offset=round(s*omega);float distancePixels=max(length(offset),1);
+            int mip=int(clamp(floor(log2(distancePixels)-c.params.w+.5),0,4));
+            for(int side=0;side<2;++side){vec3 samplePos=SamplePosition(p+ivec2(offset)*(side==0?1:-1),mip),delta=samplePos-center;
+                float distanceWorld=length(delta);if(distanceWorld<1e-8)continue;
+                // HD: samples outside the normal hemisphere, including the same tangent plane,
+                // cannot occlude it. A 0.2%-radius surface tolerance rejects D32/rounding self-noise.
+                if(dot(normal,delta)<=max(c.params.x*.002,z*.00002))continue;
+                float weight=sat(distanceWorld*falloffMul+falloffAdd),h=dot(delta/distanceWorld,viewVec);
+                horizon[side]=max(horizon[side],mix(low[side],h,weight));}
+        }
+        len=mix(len,1.0,.05);float h0=-XeACos(horizon.y),h1=XeACos(horizon.x);
+        float arc0=(cosNorm+2*h0*sin(n)-cos(2*h0-n))*.25,arc1=(cosNorm+2*h1*sin(n)-cos(2*h1-n))*.25;
+        visibility+=len*(arc0+arc1);
+        // HD: normalize against the same slices' open horizons. With 1-3 slices the open-horizon integral
+        // varies per slice (0.4..1.5 on grazing planes), which upstream leaves to TAA; the ratio removes that noise.
+        float open0=-XeACos(low.y),open1=XeACos(low.x);
+        unoccluded+=len*((cosNorm+2*open0*sin(n)-cos(2*open0-n))+(cosNorm+2*open1*sin(n)-cos(2*open1-n)))*.25;
+    }
+    // HD (Claude): upstream adds the small-radius fade after averaging slices: fade/sliceCount + mean.
+    visibility=fade/float(slices)+visibility/max(unoccluded,1e-7);
+    visibility=max(.03,pow(max(visibility,0),c.params.z));
+    imageStore(Output,p,vec4(sat(visibility/1.5),XePackEdges(edges),0,1));
+}
+#elif AO_PASS == 3
+vec4 ReadAO(ivec2 p){return texelFetch(AOTex,clamp(p,ivec2(0),WorkSize()-1),0);}
+void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,WorkSize())))return;
+    vec4 center=ReadAO(p);if(center.a<.5){imageStore(Output,p,center);return;}
+    vec4 l=ReadAO(p+ivec2(-1,0)),r=ReadAO(p+ivec2(1,0)),t=ReadAO(p+ivec2(0,-1)),b=ReadAO(p+ivec2(0,1));
+    vec4 el=XeUnpackEdges(l.g),er=XeUnpackEdges(r.g),et=XeUnpackEdges(t.g),eb=XeUnpackEdges(b.g);
+    vec4 e=XeUnpackEdges(center.g)*vec4(el.y,er.x,et.w,eb.z);
+    // HD: retain XeGTAO symmetric edge/diagonal weights, omit deliberate cross-edge leakage without TAA.
+    float weights[9]=float[9](e.x,e.y,e.z,e.w,.425*(e.x*el.z+e.z*et.x),.425*(e.z*et.y+e.y*er.z),.425*(e.w*eb.x+e.x*el.w),.425*(e.y*er.w+e.w*eb.y),c.flags.x!=0u?1.2:.24);
+    ivec2 offsets[9]=ivec2[9](ivec2(-1,0),ivec2(1,0),ivec2(0,-1),ivec2(0,1),ivec2(-1,-1),ivec2(1,-1),ivec2(-1,1),ivec2(1,1),ivec2(0));
+    float sum=0,total=0;
+    for(int i=0;i<9;++i){vec4 q=ReadAO(p+offsets[i]);float w=weights[i]*q.a;sum+=q.r*w;total+=w;}
+    float ao=sum/max(total,1e-8);if(c.flags.x!=0u)ao=sat(ao*1.5);
+    imageStore(Output,p,vec4(ao,center.g,0,center.a));}
+#elif AO_PASS == 5
+// HD (Claude): temporal accumulation. XeGTAO's noise is made to be averaged over frames (upstream relies on TAA).
+// screen/depth/params hold view position -> previous work pixel * w and w (previous view depth); blur = max frames,
+// history usable, clamp margin, relative depth tolerance. History: r AO, g view depth, b frames, a valid.
+vec4 Cur(ivec2 q){return texelFetch(AOTex,clamp(q,ivec2(0),WorkSize()-1),0);}
+void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,WorkSize())))return;
+    vec4 cur=Cur(p);float z=LoadZ(0,p);
+    if(cur.a<.5||z>=250){imageStore(Output,p,vec4(cur.r,z,0,0));return;}
+    float lo=cur.r,hi=cur.r;
+    for(int y=-1;y<=1;++y)for(int x=-1;x<=1;++x){vec4 q=Cur(p+ivec2(x,y));if(q.a>.5){lo=min(lo,q.r);hi=max(hi,q.r);}}
+    float frames=1,ao=cur.r;
+    if(c.blur.y>.5){vec4 v=vec4(Position(FullUV(FullPixel(p)),z),1);float w=dot(v,c.params);
+        if(w>1e-3){vec2 prev=vec2(dot(v,c.screen),dot(v,c.depth))/w;ivec2 base=ivec2(floor(prev));vec2 f=prev-vec2(base);
+            float sum=0,count=0,total=0;
+            for(int y=0;y<2;++y)for(int x=0;x<2;++x){ivec2 q=base+ivec2(x,y);
+                if(any(lessThan(q,ivec2(0)))||any(greaterThanEqual(q,WorkSize())))continue;
+                vec4 h=texelFetch(History,q,0);float b=(x==0?1-f.x:f.x)*(y==0?1-f.y:f.y);
+                if(h.a<.5||abs(h.g-w)>c.blur.w*w)continue; // disocclusion or moved object: no history there
+                sum+=h.r*b;count+=h.b*b;total+=b;}
+            if(total>.05){float history=clamp(sum/total,lo-c.blur.z,hi+c.blur.z);
+                frames=min(count/total+1,c.blur.x);ao=mix(history,cur.r,1/frames);}}}
+    imageStore(Output,p,vec4(ao,z,frames,1));}
+#else
+float Upsample(ivec2 fp,float z){
+    if(c.flags.w==0u)return texelFetch(AOTex,fp,0).r;
+    vec2 grid=(vec2(fp)-1.0)*.5;ivec2 base=ivec2(floor(grid));float sum=0,total=0;
+    for(int y=0;y<2;++y)for(int x=0;x<2;++x){ivec2 q=clamp(base+ivec2(x,y),ivec2(0),WorkSize()-1),fullQ=FullPixel(q);
+        vec2 spatial=max(vec2(0),vec2(2)-abs(vec2(fp-fullQ)));float zq=LoadZ(0,q);
+        float w=spatial.x*spatial.y*exp2(-abs(zq-z)/max(z*.011,1e-5));
+        sum+=texelFetch(AOTex,q,0).r*w;total+=w;}
+    return total>1e-6?sum/total:1;
+}
+void main(){ivec2 p=ivec2(gl_GlobalInvocationID.xy);if(any(greaterThanEqual(p,imageSize(Frame))))return;
+    vec2 uv=FullUV(p);if(!Inside(uv))return;float z=RawZ(p),ao=z>=250?1:Upsample(p,z);
+    ao=mix(ao,1,sat((z-150)*.01));ao=clamp(1-(1-ao)*c.params.y,0,1);
+    vec4 color=imageLoad(Frame,p);color.rgb=c.flags.y!=0u?vec3(ao):color.rgb*ao;
+    imageStore(Frame,p,color); // HD: scalar multiplication commutes with ctx.swapRB; alpha is preserved.
+}
+#endif

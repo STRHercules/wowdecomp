@@ -1,0 +1,38 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Azeroth Remastered's colour grading (HdVulkanGrade.comp), on the GxEffects compute interface: two bilinear 2D
+// lookups per LUT, interpolated between blue slices. The frame is the world's colour copied into an RGBA16F storage
+// texture, so it is already RGB (the donor's swapRB flag is gone).
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform sampler2D lutA;
+layout(set = 0, binding = 1) uniform sampler2D lutB;
+layout(set = 0, binding = 17, rgba16f) uniform image2D frame;
+layout(push_constant) uniform Params { vec4 grade; } pc;   // x blend A..B, y strength, z split-screen debug
+
+vec3 Lut(sampler2D lut, vec3 c)
+{
+    float b = clamp(c.b, 0.0, 1.0) * 31.0;
+    float b0 = floor(b), b1 = min(b0 + 1.0, 31.0);
+    vec2 uv = vec2((clamp(c.r, 0.0, 1.0) * 31.0 + 0.5) / 1024.0, (clamp(c.g, 0.0, 1.0) * 31.0 + 0.5) / 32.0);
+    vec3 x0 = textureLod(lut, uv + vec2(b0 * 32.0 / 1024.0, 0), 0).rgb;
+    vec3 x1 = textureLod(lut, uv + vec2(b1 * 32.0 / 1024.0, 0), 0).rgb;
+    return mix(x0, x1, b - b0);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy), size = imageSize(frame);
+    if (any(greaterThanEqual(pixel, size))) return;
+    vec4 original = imageLoad(frame, pixel);
+    vec3 c = original.rgb;
+    vec3 outColor;
+    // Algebraic integer form of uv.x < .5 and uv.x > .5 - 2/width: the exact centre stays on the right for odd widths.
+    int centre = 2 * pixel.x + 1;
+    if (pc.grade.z > 0.5 && centre < size.x) {
+        outColor = centre > size.x - 4 ? vec3(1) : c;
+    } else {
+        vec3 g = mix(Lut(lutA, c), Lut(lutB, c), pc.grade.x);
+        outColor = clamp(mix(c, g, pc.grade.y), 0.0, 1.0);
+    }
+    imageStore(frame, pixel, vec4(outColor, original.a));
+}
