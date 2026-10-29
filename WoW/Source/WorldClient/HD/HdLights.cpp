@@ -37,6 +37,7 @@ namespace {
 
     CVar* s_mode = nullptr;
     CVar* s_radius = nullptr;
+    CVar* s_strength = nullptr;
     CVar* s_info = nullptr;
 
     std::vector<FrameLight> s_frame;       // this frame's lights
@@ -63,7 +64,8 @@ namespace {
         registered = true;
         s_mode = CVar::Register("hdLights", "HD: 1 = lamps and fires light the ground per pixel (WoW Forever), 2 = light path with no light (must equal 0), 3 = test view (lights only), 0 = 3.3.5 per-vertex lights", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
         s_radius = CVar::Register("hdLightsRadius", "HD: yards where a lamp's light ends, 0 = from its colour", 1, "0", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
-        s_info = CVar::Register("hdLightsInfo", "HD: hdLights status (read only)", 0, "no light yet", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+        s_strength = CVar::Register("hdLightsStrength", "HD: lamp light strength (ours: scales every light's colour, and so its reach)", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_info = CVar::Register("hdLightsInfo", "HD: hdLights status (read only)", 0, "no light yet", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     }
 
     float Radius(float strength) {
@@ -74,7 +76,9 @@ namespace {
         return r < kMinRadius ? kMinRadius : (r > kMaxRadius ? kMaxRadius : r);
     }
 
-    void AddFrameLight(const C3Vector& pos, const C3Vector& c, const C3Vector& camera) {
+    void AddFrameLight(const C3Vector& pos, const C3Vector& base, const C3Vector& camera) {
+        float gain = s_strength ? s_strength->m_floatValue : 1.0f;
+        C3Vector c(base.x * gain, base.y * gain, base.z * gain);
         float dx = pos.x - camera.x;
         float dy = pos.y - camera.y;
         float dz = pos.z - camera.z;
@@ -157,7 +161,8 @@ int32_t HD::LightsMode() {
     return mode < 0 || mode > 3 ? 0 : mode;
 }
 
-int32_t HD::LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSphere& sphere, float* out) {
+int32_t HD::LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSphere& sphere, float* out, int32_t limit) {
+    if (limit > kLightsBuilding) limit = kLightsBuilding;
     RegisterCVars();
     if (!scene) return 0;
     if (scene != s_frameScene || scene->m_frameStamp != s_frameStamp) {
@@ -168,8 +173,8 @@ int32_t HD::LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSp
     }
 
     // the strongest lights at the sphere's nearest point (brightest first)
-    int32_t picked[kLightsMax];
-    float score[kLightsMax];
+    int32_t picked[kLightsBuilding];
+    float score[kLightsBuilding];
     int32_t count = 0;
     for (size_t i = 0; i < s_frame.size(); i++) {
         const FrameLight& l = s_frame[i];
@@ -182,8 +187,8 @@ int32_t HD::LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSp
         float d = sqrtf(distSq) - sphere.r;
         if (d < 1.0f) d = 1.0f;
         float s = l.strength / (0.7f * d + 0.03f * d * d);
-        if (count == kLightsMax && s <= score[kLightsMax - 1]) continue;
-        int32_t j = count < kLightsMax ? count++ : kLightsMax - 1;
+        if (count == limit && s <= score[limit - 1]) continue;
+        int32_t j = count < limit ? count++ : limit - 1;
         while (j > 0 && score[j - 1] < s) { score[j] = score[j - 1]; picked[j] = picked[j - 1]; j--; }
         score[j] = s;
         picked[j] = static_cast<int32_t>(i);

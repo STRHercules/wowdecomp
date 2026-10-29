@@ -28,6 +28,8 @@ class CM2Light;
 namespace HD {
     // Lights one draw can take (4 pixel constants each).
     const int32_t kLightsMax = 4;
+    // Lights the building shaders take (4 pixel constants each, c17..c48): the nearest to the camera, once per frame.
+    const int32_t kLightsBuilding = 8;
 
     // hdLights (0..3).
     int32_t LightsMode();
@@ -35,7 +37,8 @@ namespace HD {
     // Up to kLightsMax of this frame's point lights that reach `sphere` (world), strongest first, packed for the
     // pixel shader in out[16 * kLightsMax] (4 float4 per light, layout in HdLights.cpp), positions relative to
     // `camera`. Returns how many. The frame's lights are gathered from `scene` the first time it is called in a frame.
-    int32_t LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSphere& sphere, float* out);
+    // `limit` (at most kLightsBuilding) is how many it may return.
+    int32_t LightsForSphere(CM2Scene* scene, const C3Vector& camera, const CAaSphere& sphere, float* out, int32_t limit = kLightsMax);
 
     // A model's light leaves its scene (detached or freed): forget its last animated state.
     void LightsForget(const CM2Light* light);

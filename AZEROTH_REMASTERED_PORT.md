@@ -14,7 +14,7 @@ its effects onto ours through `GxEffects` (see "Why not swap the backend").
 | Built, not confirmed in game | Contact shadows (mask now built before the grass), GI, full shadow casters |
 | Works in game (material shaders) | Terrain (352 shaders, ~6 s on 15 threads), buildings, grass (dark-in-shade fixed with `hdGrassShadow`; that last build installed, not yet seen in game) |
 | Built, installed, not seen in game | Sky (`HdSky`) |
-| Built, installed, not seen in game | Point lights (`hdLights`, terrain only, as in the donor) |
+| Built, installed, not seen in game | Point lights (`hdLights`: terrain, and buildings, which the donor lacks) |
 | Not started | Forever water, the donor's own shadow module |
 
 Everything below is gated on `visuals 2`; Stock (0) and Lumenveil (1) are untouched.
@@ -110,7 +110,13 @@ translated for that exact bytecode exists. Our backend works the same way (manif
   c17..c32 the lights, vertex c53 camera origin); the vertex shader then leaves its 3 per-vertex lights out. cvars `hdLights`
   (1; 2 = light path with no light, must equal 0; 3 = test view, lights only), `hdLightsRadius`, `hdLightsInfo`. Hooks:
   `HD::TerrainVertexConstants(sphere, scene, camera)` from `MapRenderChunk`, `HD::LightsForget` in three places in
-  `M2Model.cpp`. Buildings and grass do not get them (the donor does not either).
+  `M2Model.cpp`. Grass does not get them (the donor does not either).
+- **Point lights on buildings** (ours, not in the donor; built and installed 2026-10-29, **not seen in game yet**): the same
+  light maths in the building pixel shaders (`HdMapObj.cpp`), 8 lights (c17..c48, view space) = the nearest to the camera,
+  picked once per frame (`HD::LightsForSphere` with a 60 yd sphere on the camera, `limit` 8) since `SelectWorldShaders` has
+  no batch bounds. Only exterior-lit batches in the shadowed pixel variants (they carry the view position and normal; with
+  shadows off a building gets no lights), and the vertex shader then leaves its per-vertex lights out (c53.w). Same cvars
+  (`hdLights`, `hdLightsStrength`). 206 blobs compiled offline (scratch `hd_compile_mapobj.py`, names `HdMapObj-v/p-...`).
 
 **Fixes past the donor.**
 - *Custom lights:* the donor fades fog and grading out inside any light Forever lacks. This server's own lights (IDs 5000+,

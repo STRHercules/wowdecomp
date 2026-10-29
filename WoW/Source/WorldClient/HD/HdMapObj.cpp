@@ -25,7 +25,13 @@
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
 #include "WoW/Source/Ui/OptionCVars.h"
 #include "WoW/Source/Ui/Visuals.h"
+#include "Engine/Source/Model2/M2Scene.h"
+#include "Engine/Source/Tempest/C3Vector.h"
+#include "Engine/Source/Tempest/CAaSphere.h"
+#include "Engine/Source/Tempest/C44Matrix.h"
+#include "WoW/Source/WorldClient/HD/HdLights.h"
 #include "WoW/Source/WorldClient/HD/HdShaderSwap.h"
+#include "WoW/Source/WorldClient/World.h"
 #include "WoW/Source/WorldClient/HD/HdTerrain.h"
 
 namespace {
@@ -95,7 +101,8 @@ float4 cHdLight       : register(c49);  // z = 1 Forever lighting on this batch 
 float4 cHdLight2      : register(c50);  // x = ambient strength in Forever lighting (1 = the ambient as it is)
 float4 cHdHorizon     : register(c51);  // rgb = Forever's horizon ambient / its sky ambient, per channel
 float4 cHdGround      : register(c52);  // rgb = Forever's ground ambient / its sky ambient, per channel
-float4 cHdUp          : register(c53);  // xyz = world up (0, 0, 1) in view space (the hemisphere axis)
+float4 cHdUp          : register(c53);  // xyz = world up (0, 0, 1) in view space (the hemisphere axis), w = 1 when the pixel
+                                        // shader does the point lights (hdLights): they are left out of the ambient here
 
 #if LIGHTS
 // local light i at view position vp, normal n; k = its constant, linear and quadratic attenuation
@@ -192,7 +199,7 @@ void main(
         float3 sky = cAmbient.xyz * cHdLight2.x;
         float3 horizon = sky * cHdHorizon.xyz;
         float3 hemi = horizon + (sky - horizon) * saturate(up) + (sky * cHdGround.xyz - horizon) * saturate(-up);
-        float3 ambient = hemi * (nl * 0.2 + 0.9) + points;
+        float3 ambient = hemi * (nl * 0.2 + 0.9) + points * (1.0 - cHdUp.w);
         float3 direct = cDiffuse.xyz * saturate(nl);
         // like 3.3.5 (saturate of the light), a channel never goes over 1: both parts are scaled down together
         float3 fit = 1.0 / max(ambient + direct, 1.0);
@@ -276,7 +283,9 @@ float4 cFogColor     : register(c2);   // rgb = fog colour, w = alpha reference 
 float4 cCutoff       : register(c3);   // view-space plane: past it the shadow fades out
 float4 cSunDirView   : register(c4);   // view-space sun direction (shadow facing term)
 float4 cPcfOffset[8] : register(c5);   // xy = PCF tap offsets in shadow-map UV (c5..c12)
-float4 cHdPs         : register(c16);  // HD: x = 1 Forever lighting on this batch, y = 1 test view
+float4 cHdPs         : register(c16);  // HD: x = 1 Forever lighting on this batch, y = 1 test view, z = point light count (0..8),
+                                       // w = 1 lights test view (only the point lights)
+float4 cHdLight[32]  : register(c17);  // HD lights, 4 registers each, positions in VIEW space (HdLights.h, the terrain's layout)
 // (not c15: the Vulkan backend overwrites pixel c14 and c15 with its fixed-function fog at every draw)
 
 sampler2D sTex0      : register(s0);
@@ -300,6 +309,32 @@ float Tap(sampler2D s, float2 uv, float z)
 #else
     return step(z, tex2Dlod(s, float4(uv, 0.0, 0.0)).x);
 #endif
+}
+
+// One point light at view position p, unit normal n: WoW Forever's lightbufferomni.bls maths (the terrain's HdPointLight).
+float3 HdPointLight(float3 p, float3 n, float4 l0, float4 l1, float4 l2, float4 l3)
+{
+    float3 l = l0.xyz - p;
+    float d2 = dot(l, l);
+    float inv = rsqrt(d2);
+    float d = inv * d2;
+    float nl = max(dot(l, n) * inv, 0.0);
+    float3 c;
+    if (l0.w > 0.5) {
+        c = l1.xyz * (nl / ((inv * 0.7 + 0.03) * d2));
+    } else {
+        float a = 1.0 - saturate((d - l1.w) * l2.w);
+        float t = saturate(d * l3.x + l3.y);
+        t = t * t * (3.0 - t * 2.0);
+        c = (l2.xyz + (l1.xyz - l2.xyz) * t) * (a * a * nl);
+    }
+    return c * saturate((l3.z - d) * l3.w);
+}
+
+// Forever: the light buffer is added in linear space to the light, then back
+float3 HdCombine(float3 light, float3 buffer)
+{
+    return pow(pow(max(light, 0.0), 2.2) + buffer, 1.0 / 2.2);
 }
 
 // centre + offsets 0,2,4,6 ; returns the SUM (0..5)
@@ -438,9 +473,28 @@ void main(
         light = saturate(iColor.xyz + iColor2.xyz * S);
     }
 
+    // ---- HD lights: Forever's light buffer for this pixel (shadowed variants only: they carry the view position and normal)
+    float3 buffer = float3(0.0, 0.0, 0.0);
+#if SHADOW
+    [branch] if (cHdPs.z > 0.5) {
+        float3 nv = normalize(iNormal);
+        buffer = HdPointLight(iViewPos, nv, cHdLight[0], cHdLight[1], cHdLight[2], cHdLight[3]);
+        [branch] if (cHdPs.z > 1.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[4], cHdLight[5], cHdLight[6], cHdLight[7]);
+        [branch] if (cHdPs.z > 2.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[8], cHdLight[9], cHdLight[10], cHdLight[11]);
+        [branch] if (cHdPs.z > 3.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[12], cHdLight[13], cHdLight[14], cHdLight[15]);
+        [branch] if (cHdPs.z > 4.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[16], cHdLight[17], cHdLight[18], cHdLight[19]);
+        [branch] if (cHdPs.z > 5.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[20], cHdLight[21], cHdLight[22], cHdLight[23]);
+        [branch] if (cHdPs.z > 6.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[24], cHdLight[25], cHdLight[26], cHdLight[27]);
+        [branch] if (cHdPs.z > 7.5) buffer = buffer + HdPointLight(iViewPos, nv, cHdLight[28], cHdLight[29], cHdLight[30], cHdLight[31]);
+    }
+#endif
+
     // ---- combine (3.3.5: 2 x texture x light, + the environment term, then the fog)
     float3 col = t.xyz * light;
     col = col + col;
+#if SHADOW
+    [branch] if (cHdPs.z > 0.5) col = t.xyz * HdCombine(light * 2.0, buffer);
+#endif
 #if KIND == 2
     col = col + t.w * tex2D(sTex1, iTex1).xyz;
 #endif
@@ -450,6 +504,8 @@ void main(
     oColor = float4((col - cFogColor.xyz) * iFog + cFogColor.xyz, alpha);
     // HD: test view (hdWmoLight 3): only the sun after the shadow, no texture, no ambient, no fog
     if (cHdPs.y > 0.5) oColor.xyz = iColor2.xyz * S * 2.0;
+    // HD: lights test view (hdLights 3): only the point lights (gamma encoded), no texture, no fog
+    if (cHdPs.w > 0.5) oColor.xyz = pow(buffer, 1.0 / 2.2);
 }
 )HLSL";
 
@@ -764,6 +820,37 @@ void HD::MapObjShaders(CShaderEffect* effect, uint32_t vertexPermute, uint32_t p
     HD::TerrainHemisphere(horizon, ground);
     float up[3];
     ViewUp(up);
+    // hdLights: the nearest lights to the camera, once per frame, moved into view space (a direction d goes to
+    // d.x * a + d.y * b + d.z * c with a, b, c the rows of the view matrix, as in ViewUp). Only for the shadowed pixel
+    // variants (they carry the view position and normal); the 3.3.5 per-vertex lights are then left out of the ambient.
+    int32_t lights = forever && mode == 1 ? HD::LightsMode() : 0;
+    bool perPixel = (lights == 1 || lights == 3) && (pixelPermute & 3) != 0 && World::s_m2Scene;
+    float pixel[4 + 16 * HD::kLightsBuilding];
+    int32_t count = 0;
+    if (perPixel) {
+        static uint32_t s_stamp = 0xFFFFFFFFu;
+        static int32_t s_count = 0;
+        static float s_lights[16 * HD::kLightsBuilding];
+        const C3Vector& camera = CWorldScene::s_activeWorldView;
+        if (World::s_m2Scene->m_frameStamp != s_stamp) {
+            s_stamp = World::s_m2Scene->m_frameStamp;
+            CAaSphere around;
+            around.c = camera;
+            around.r = 60.0f;
+            s_count = HD::LightsForSphere(World::s_m2Scene, camera, around, s_lights, HD::kLightsBuilding);
+        }
+        C44Matrix view;
+        GxXformView(view);
+        count = s_count;
+        for (int32_t k = 0; k < count; k++) {
+            float* l = pixel + 4 + 16 * k;
+            const float* d = s_lights + 16 * k;
+            memcpy(l, d, 16 * sizeof(float));
+            l[0] = d[0] * view.a0 + d[1] * view.b0 + d[2] * view.c0;
+            l[1] = d[0] * view.a1 + d[1] * view.b1 + d[2] * view.c1;
+            l[2] = d[0] * view.a2 + d[1] * view.b2 + d[2] * view.c2;
+        }
+    }
     float vertex[20] = {};
     vertex[2] = forever ? 1.0f : 0.0f;       // c49.z Forever lighting on this batch
     vertex[3] = test ? 1.0f : 0.0f;          // c49.w test view (read by the pixel shader through c16.y)
@@ -773,7 +860,11 @@ void HD::MapObjShaders(CShaderEffect* effect, uint32_t vertexPermute, uint32_t p
         vertex[12 + c] = ground[c];  // c52
         vertex[16 + c] = up[c];      // c53
     }
+    vertex[19] = perPixel ? 1.0f : 0.0f;  // c53.w: the pixel shader does the point lights
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 49, vertex, 5);
-    float pixel[4] = { forever ? 1.0f : 0.0f, test ? 1.0f : 0.0f, 0.0f, 0.0f };
-    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, pixel, 1);
+    pixel[0] = forever ? 1.0f : 0.0f;
+    pixel[1] = test ? 1.0f : 0.0f;
+    pixel[2] = static_cast<float>(count);
+    pixel[3] = perPixel && lights == 3 ? 1.0f : 0.0f;
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, pixel, 1 + 4 * count);
 }
