@@ -4,7 +4,10 @@
 
 #include <cstdint>
 
+class CAaSphere;
+class C3Vector;
 class CGxShader;
+class CM2Scene;
 
 // Not in the original binary. Azeroth Remastered's terrain shaders (HdTerrain.cpp): the 3.3.5 terrain shaders rewritten
 // in HLSL (checked by the donor against Blizzard's bytecode for all 128 vertex and 224 pixel permutations) with WoW
@@ -30,8 +33,9 @@ void RegisterTerrainCVars();
 void TerrainShadersStart();
 // Where the client picks a terrain shader: gives it our code or Blizzard's, to match hdTerrainLight and visuals.
 void TerrainShader(CGxShader* shader, int32_t kind, int32_t permutation);
-// Vertex c49..c53 and pixel c16 for our shaders, after the client's per-chunk terrain constants.
-void TerrainVertexConstants();
+// Vertex c49..c53 and pixel c16.. for our shaders, after the client's per-chunk terrain constants. hdLights picks the
+// point lights for the chunk's sphere from the scene's lights, positions relative to `camera` (s_activeWorldView).
+void TerrainVertexConstants(const CAaSphere* sphere, CM2Scene* scene, const C3Vector* camera);
 // Forever's horizon / sky and ground / sky ambient ratios (per channel) where the camera is (redone at most every 50 ms).
 void TerrainHemisphere(float* horizon, float* ground);
 // hdLightAmbient: ambient strength in Forever lighting (1 = Forever's).

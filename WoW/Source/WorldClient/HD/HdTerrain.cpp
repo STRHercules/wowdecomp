@@ -2,7 +2,7 @@
 // Azeroth Remastered's HdTerrain.cpp: its terrain shaders (the 3.3.5 terrain shaders rewritten in HLSL, with WoW Forever's
 // terrain lighting), the HLSL below unchanged, compiled at start-up by the system's d3dcompiler_47 and put into the
 // client's terrain CGxShaders (HdShaderSwap.h) when the Vulkan backend has their translated modules. Only with visuals 2.
-// Not ported yet: hdLights (the per-pixel lamps; the shaders get no light, the vertex shader keeps 3.3.5's per-vertex ones).
+// hdLights (HdLights.cpp): the pixel shader lights the ground with the lamps per pixel.
 #include "WoW/Source/WorldClient/HD/HdTerrain.h"
 
 #include <windows.h>
@@ -20,12 +20,15 @@
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/CGxDevice/CGxShader.h"
+#include "Engine/Source/Tempest/C3Vector.h"
+#include "Engine/Source/Tempest/CAaSphere.h"
 #include "WoW/Source/DB/Rec/LightRec.h"
 #include "WoW/Source/Ui/OptionCVars.h"
 #include "WoW/Source/Ui/Visuals.h"
 #include "WoW/Source/WorldClient/DayNight.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdForever.h"
+#include "WoW/Source/WorldClient/HD/HdLights.h"
 #include "WoW/Source/WorldClient/HD/HdShaderSwap.h"
 
 namespace {
@@ -919,7 +922,7 @@ void HD::TerrainShader(CGxShader* shader, int32_t kind, int32_t permutation) {
     ShowState(state);
 }
 
-void HD::TerrainVertexConstants() {
+void HD::TerrainVertexConstants(const CAaSphere* sphere, CM2Scene* scene, const C3Vector* camera) {
     if (!g_theGxDevicePtr || Visuals::Current() != Visuals::AzerothRemastered) return;
     RefreshHemisphere();
 
@@ -932,14 +935,25 @@ void HD::TerrainVertexConstants() {
         constants[8 + c] = s_horizonRatio[c];
         constants[12 + c] = s_groundRatio[c];
     }
-    // c53: the origin of the per-pixel light positions and whether the pixel shader does them (hdLights, not ported
-    // yet: the vertex shader keeps the client's 3 per-vertex lights).
+    // c53: the origin of the per-pixel light positions, and whether the pixel shader does the point lights (the vertex
+    // shader then leaves its 3 per-vertex ones out). Per-pixel lights only with Forever lighting.
+    int32_t lights = mode == 1 ? HD::LightsMode() : 0;
+    bool perPixel = (lights == 1 || lights == 3) && sphere && scene && camera;
+    constants[16] = camera ? camera->x : 0.0f;
+    constants[17] = camera ? camera->y : 0.0f;
+    constants[18] = camera ? camera->z : 0.0f;
+    constants[19] = perPixel ? 1.0f : 0.0f;
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 49, constants, 5);
     if (mode == 0) return;  // Blizzard's shaders read no pixel constant of ours
 
-    // pixel c16 = (Forever lighting, test view, point light count, lights test view)
-    float pixel[4] = { constants[2], constants[3], 0.0f, 0.0f };
-    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, pixel, 1);
+    // pixel c16 = (Forever lighting, test view, point light count, lights test view), c17.. = the lights
+    float pixel[4 + 16 * HD::kLightsMax];
+    int32_t count = perPixel ? HD::LightsForSphere(scene, *camera, *sphere, pixel + 4) : 0;
+    pixel[0] = constants[2];
+    pixel[1] = constants[3];
+    pixel[2] = static_cast<float>(count);
+    pixel[3] = perPixel && lights == 3 ? 1.0f : 0.0f;
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, pixel, 1 + 4 * count);
 }
 
 void HD::TerrainHemisphere(float* horizon, float* ground) {

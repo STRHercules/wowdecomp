@@ -2107,7 +2107,7 @@ void CMapRenderChunk::SetVertexShader(CMapRenderChunk* renderChunk, int32_t laye
     CGxShader* shader = CMapRenderChunk::GetVertexShader(pointLights, layerCount - 1, specular, vertexColor, a3, CShadowCache::GetShadowValue());
     g_theGxDevicePtr->RsSet(GxRs_VertexShader, shader);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, reinterpret_cast<const float*>(&consts), sizeof(SVertexShaderConstants) / sizeof(C4Vector));
-    HD::TerrainVertexConstants();  // not in the original binary: c49-c53 and pixel c16 for our terrain shaders
+    HD::TerrainVertexConstants(&renderChunk->m_sphere, World::s_m2Scene, &CWorldScene::s_activeWorldView);  // not in the original binary: c49-c53 and pixel c16.. for our terrain shaders (Forever lighting, hdLights)
 }
 
 // VERIFY: 2226742d manual

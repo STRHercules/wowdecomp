@@ -47,6 +47,7 @@
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/Extension/ExtensionMgr.h"
 #include "WoW/Source/Object/ObjectClient/Types.h"
+#include "WoW/Source/WorldClient/HD/HdLights.h"
 
 // STATIC: 0x00A45570
 static const uint32_t s_ribbonBlendModes[] = { 0, 1, 2, 10, 3, 4, 5 };
@@ -181,6 +182,7 @@ void CM2Model::DetachFromScene() {
             CM2Light* light = &this->m_lights[i].m_light;
             light->Unlink();
             light->m_scene = nullptr;
+            HD::LightsForget(light);  // HD: hdLights keeps a lamp's last state while its model is in the scene
         }
     }
 
@@ -639,6 +641,7 @@ void CM2Model::FreeExternalResources() {
     if (this->m_lights) {
         for (uint32_t i = 0; i < data->m_lights.m_count; i++) {
             this->m_lights[i].m_light.SetVisible(0);
+            HD::LightsForget(&this->m_lights[i].m_light);  // HD
         }
     }
 
@@ -4206,6 +4209,7 @@ void CM2Model::FreeInternalResources() {
     if (this->m_lights) {
         for (uint32_t i = 0; i < data->m_lights.m_count; i++) {
             this->m_lights[i].m_light.Unlink();
+            HD::LightsForget(&this->m_lights[i].m_light);  // HD
         }
 
         this->m_lights = nullptr;

@@ -14,7 +14,8 @@ its effects onto ours through `GxEffects` (see "Why not swap the backend").
 | Built, not confirmed in game | Contact shadows (mask now built before the grass), GI, full shadow casters |
 | Works in game (material shaders) | Terrain (352 shaders, ~6 s on 15 threads), buildings, grass (dark-in-shade fixed with `hdGrassShadow`; that last build installed, not yet seen in game) |
 | Built, installed, not seen in game | Sky (`HdSky`) |
-| Not started | Point lights (`hdLights`), Forever water, the donor's own shadow module |
+| Built, installed, not seen in game | Point lights (`hdLights`, terrain only, as in the donor) |
+| Not started | Forever water, the donor's own shadow module |
 
 Everything below is gated on `visuals 2`; Stock (0) and Lumenveil (1) are untouched.
 
@@ -80,7 +81,7 @@ translated for that exact bytecode exists. Our backend works the same way (manif
 - **Terrain** (`HdTerrain.cpp`, the donor's HLSL unchanged: 128 vertex, 224 pixel permutations, all translate): Forever's
   sky/horizon/ground ambient (`hd_forever_ambient.txt`, `HD::ForeverAmbientsAt`), hooked in `CMap::GetTerrainPixelShader`,
   `CMapRenderChunk::GetVertexShader` and after the chunk's vertex constants. cvars `hdTerrainLight` (1; 3 = test view: sun
-  after shadow only), `hdLightAmbient`, `hdTerrainHemi`, `hdTerrainInfo`. Not ported yet: `hdLights` (per-pixel lamps).
+  after shadow only), `hdLightAmbient`, `hdTerrainHemi`, `hdTerrainInfo`.
 - **Buildings** (`HdMapObj.cpp`, works in game): the donor's HLSL and family tables unchanged (7 vertex
   families x 18 distinct codes, 5 pixel kinds x 16; 184 records after folding identical ones), Forever lighting on
   exterior-lit batches with the terrain's hemisphere ratios; the vertex and pixel shader of a batch are swapped as a pair
@@ -104,7 +105,12 @@ translated for that exact bytecode exists. Our backend works the same way (manif
   target size. cvars `hdSky` (1; 2 = 3.3.5 look, must equal 0; 3 = test view), `hdSkyGlow`, `hdSkyGlowHorizon`,
   `hdSkyGlowSize`, `hdSkyCloudSun`, `hdSkyDither`, `hdSkyInfo`. The 4 blobs are named `HdSky-SkyVS/SkyPS/CloudVS/CloudPS`;
   all four or none (a missing one goes to `hd-pending`, Blizzard sky kept).
-- Still to do: `HdLights`.
+- **Point lights** (`HdLights.cpp`, built and installed 2026-10-29, **not seen in game yet**): the client's own M2 point lights (lamps, fires)
+  light the terrain per pixel with Forever's light buffer maths, up to 4 per chunk, in the terrain pixel shader (c16.z count,
+  c17..c32 the lights, vertex c53 camera origin); the vertex shader then leaves its 3 per-vertex lights out. cvars `hdLights`
+  (1; 2 = light path with no light, must equal 0; 3 = test view, lights only), `hdLightsRadius`, `hdLightsInfo`. Hooks:
+  `HD::TerrainVertexConstants(sphere, scene, camera)` from `MapRenderChunk`, `HD::LightsForget` in three places in
+  `M2Model.cpp`. Buildings and grass do not get them (the donor does not either).
 
 **Fixes past the donor.**
 - *Custom lights:* the donor fades fog and grading out inside any light Forever lacks. This server's own lights (IDs 5000+,
@@ -157,8 +163,7 @@ build may need newer ones. Without `forever_data` beside `Wow.exe`, Grade and Fo
 ## Next
 
 1. Check `hdGrassShadow` in game (Goldshire road under the trees, `hdGrassLight 1`), then commit buildings + grass.
-2. **Material shaders left**: point lights (`HdLights`, terrain c16.z already reserved for the count), same method as
-   terrain/buildings/grass. Check the sky in game first (`hdSky 3` test view, `hdSky 2` must match `hdSky 0`).
+2. Check `hdLights` in game (a lamppost at night: `hdLights 3` shows only the lights; `hdLights 2` must equal `hdLights 0`).
 3. **Water**: Forever PBR (`HdWater*`) or Cata water (`HdCata*`, `hd/Cata*`). Largest: the Cata mirror replays the frame
    inside the donor's backend, and Cata water needs its `patch-w.mpq`. Lumenveil's water hook in `Liquid::CRenderer::Flush`
    is the likely entry point.
