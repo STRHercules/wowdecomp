@@ -154,6 +154,11 @@ class Device {
     virtual Readback* BeginRead(Texture* texture, uint32_t x, uint32_t y, uint32_t width, uint32_t height) = 0;
     virtual bool PollRead(Readback* read, void* out) = 0;
     virtual void CancelRead(Readback* read) = 0;
+
+    // The engine's own shaders: whether the backend can draw this DX9 bytecode (as CGxShader::m_code holds it), and
+    // the folder its translated shaders are read from. For code an effect puts into an engine shader.
+    virtual bool ShaderKnown(const void* code, uint32_t bytes) = 0;
+    virtual void ShaderFolder(char* folder, size_t size) = 0;
 };
 
 // While on, the engine's draws write depth whatever their own state says (Lumenveil turns it on through the liquid

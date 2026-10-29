@@ -1,0 +1,224 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Azeroth Remastered's screen-space contact shadows (HdContactShadow.cpp, D3D9 HLSL ps_3_0, v4) as GxEffects compute:
+// the donor's formulas line for line. Compile.py builds one module per CS_PASS:
+//   0 Visibility: what the client's sun shadow maps say here (the 5 taps the HD shaders take), 1 = lit, in all four
+//   1 Generate:   rgb = the share of this pixel's light a contact shadow takes away (linear), a = 0.5 + vis / 2 (0 = takes
+//                 none); a short ray toward the world light, marched in the world depth; characters cast none
+//   2 Blur:       5 taps along cBlur.xy that stop at depth edges and at the shadow maps' edges; a kept
+//   3 Apply:      the world's colour times what is left of its light (gamma 2, as the donor's 8-bit target)
+// The donor's D24 hardware-compare path is gone: this backend's shadow maps are R32F distances.
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform sampler2D DepthTex;   // the world depth (CopyDepth), point, clamp
+layout(set = 0, binding = 1) uniform sampler2D MaskTex;    // the previous pass's result, point, clamp
+layout(set = 0, binding = 2) uniform sampler2D Shadow0;    // the client's sun shadow cascades (40, 160, 640 yards)
+layout(set = 0, binding = 3) uniform sampler2D Shadow1;
+layout(set = 0, binding = 4) uniform sampler2D Shadow2;
+layout(std140, set = 0, binding = 16) uniform Constants { vec4 c[38]; };
+layout(set = 0, binding = 17, rgba16f) uniform image2D Output;   // the mask (passes 0-2)
+layout(set = 0, binding = 18, rgba16f) uniform image2D Frame;    // the world (pass 3)
+
+#define cScreen c[0]    // 1/width, 1/height of the target, depth scale A, depth offset B (z01 = raw * A + B)
+#define cView c[1]      // view xy = (local uv * xy + zw) * view z
+#define cRect c[2]      // world viewport in target uv: offset xy, 1 / size zw
+#define cDepth c[3]     // projection c2, -d2, sky threshold
+#define cParams c[4]    // ray length (yards), strength, debug, occluder thickness (yards)
+#define cBlur c[5]      // blur step in uv (xy), fade start (yards), 1 / fade length
+#define cLight c[6]     // view-space direction to the world light (the shadow maps' light)
+#define cAmbient c[7]   // the client's ambient light now (gamma), w 1 = Forever ground lighting
+#define cDiffuse c[8]   // the client's world light colour now (gamma)
+#define cShadow c[9]    // x 1 = shadow maps bound, y ray start jitter 0..1
+#define cSmat(i) c[10 + (i)]   // view space -> shadow map, 3 rows per cascade
+#define cUnit(i) c[19 + (i)]   // characters near the camera: view-space feet xyz, height
+#define cUp c[35]       // view-space world up (xyz), number of characters (w)
+#define cPcf(i) c[36 + (i)]    // the shaders' 5-tap PCF offsets in map uv
+
+float sat(float x) { return clamp(x, 0.0, 1.0); }
+vec2 sat(vec2 x) { return clamp(x, 0.0, 1.0); }
+
+vec4 ViewPos(vec2 uv)
+{
+    vec2 local = (uv - cRect.xy) * cRect.zw;
+    float raw = textureLod(DepthTex, uv, 0).r;
+    float z01 = raw * cScreen.z + cScreen.w;
+    float z = cDepth.y / max(cDepth.x - z01, 1e-7);
+    bool inside = all(equal(local, sat(local)));
+    float w = (inside && z01 < cDepth.z) ? 1.0 : 0.0;
+    return vec4((local * cView.xy + cView.zw) * z, z, w);
+}
+
+vec2 TargetUv(vec3 q)
+{
+    return ((q.xy / q.z - cView.zw) / cView.xy) / cRect.zw + cRect.xy;
+}
+
+float Noise(vec2 vpos)
+{
+    return fract(52.9829189 * fract(dot(vpos, vec2(0.06711056, 0.00583715))));
+}
+
+float ShadowTap(int map, vec2 uv, float z)
+{
+    float d = map == 0 ? textureLod(Shadow0, uv, 0).r : (map == 1 ? textureLod(Shadow1, uv, 0).r : textureLod(Shadow2, uv, 0).r);
+    return z <= d ? 1.0 : 0.0;
+}
+
+float ShadowSample(int map, vec3 s)
+{
+    vec2 uv = s.xy * 0.5 + 0.5;
+    float sum = ShadowTap(map, uv, s.z);
+    sum += ShadowTap(map, uv + cPcf(0).xy, s.z);
+    sum += ShadowTap(map, uv + cPcf(0).zw, s.z);
+    sum += ShadowTap(map, uv + cPcf(1).xy, s.z);
+    sum += ShadowTap(map, uv + cPcf(1).zw, s.z);
+    return sum * 0.2;
+}
+
+float SunVisible(vec3 p)
+{
+    if (cShadow.x < 0.5) return 1.0;
+    vec4 q = vec4(p, 1.0);
+    for (int i = 0; i < 3; ++i) {
+        vec3 s = vec3(dot(q, cSmat(i * 3)), dot(q, cSmat(i * 3 + 1)), dot(q, cSmat(i * 3 + 2)));
+        if (max(abs(s.x), abs(s.y)) < 0.98) return ShadowSample(i, s);
+    }
+    return 1.0;
+}
+
+float InUnit(vec3 p)
+{
+    float inside = 0.0;
+    for (int i = 0; i < 16; ++i) {
+        if (float(i) >= cUp.w) break;
+        vec4 u = cUnit(i);
+        vec3 d = p - u.xyz;
+        float h = dot(d, cUp.xyz);
+        vec3 q = d - cUp.xyz * clamp(h, 0.0, u.w);
+        float r = clamp(u.w * 0.22, 0.3, 1.2) + 0.1;
+        float w = sat((r - length(q)) / (r * 0.35)) * sat((h - 0.08) * 5.0);
+        inside = max(inside, w);
+    }
+    return inside;
+}
+
+float RawDepth(vec2 uv)
+{
+    return textureLod(DepthTex, uv, 0).r;
+}
+
+vec3 ViewNormal(vec2 uv, vec3 p)
+{
+    vec2 ex = vec2(cScreen.x, 0);
+    vec2 ey = vec2(0, cScreen.y);
+    vec4 l = ViewPos(uv - ex);
+    vec4 r = ViewPos(uv + ex);
+    vec4 u = ViewPos(uv - ey);
+    vec4 d = ViewPos(uv + ey);
+    float c0 = RawDepth(uv);
+    float el = abs(2.0 * RawDepth(uv - ex) - RawDepth(uv - 2.0 * ex) - c0) + (1.0 - l.w) * 1e9;
+    float er = abs(2.0 * RawDepth(uv + ex) - RawDepth(uv + 2.0 * ex) - c0) + (1.0 - r.w) * 1e9;
+    float eu = abs(2.0 * RawDepth(uv - ey) - RawDepth(uv - 2.0 * ey) - c0) + (1.0 - u.w) * 1e9;
+    float ed = abs(2.0 * RawDepth(uv + ey) - RawDepth(uv + 2.0 * ey) - c0) + (1.0 - d.w) * 1e9;
+    vec3 dx = el < er ? p - l.xyz : r.xyz - p;
+    vec3 dy = eu < ed ? p - u.xyz : d.xyz - p;
+    vec3 n = cross(dx, dy);
+    n = dot(n, n) > 1e-12 ? normalize(n) : -normalize(p);
+    return dot(n, p) > 0.0 ? -n : n;
+}
+
+vec4 Visibility(vec2 vpos)
+{
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 v = ViewPos(uv);
+    if (v.w < 0.5) return vec4(1.0);
+    vec3 n = ViewNormal(uv, v.xyz);
+    return vec4(SunVisible(v.xyz + n * (0.05 + 0.004 * v.z)));
+}
+
+vec4 Generate(vec2 vpos)
+{
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 v = ViewPos(uv);
+    if (v.w < 0.5) return vec4(0.0);
+    vec3 p = v.xyz;
+    vec3 n = ViewNormal(uv, p);
+    float ndl = dot(n, cLight.xyz);
+    if (ndl < 0.02) return vec4(0.0);
+    float vis = textureLod(MaskTex, uv, 0).a;
+
+    float len = cParams.x;
+    float stepLen = len * (1.0 / 24.0);
+    float bias = 0.01 + 0.0015 * p.z;
+    float thick = cParams.w * (1.0 + 0.02 * p.z);
+    vec3 o = p + n * (0.02 + 0.002 * p.z);
+    // the donor's screen-fixed jitter, scaled by cShadow.y: at 0 the ray starts mid-step, so nothing is fixed to the screen
+    float noise = mix(0.5, Noise(vpos), cShadow.y);
+    float occ = 0.0;
+    for (int i = 0; i < 24; ++i) {
+        float t = (float(i) + noise) * stepLen;
+        vec3 q = o + cLight.xyz * t;
+        if (q.z < 0.25) break;
+        vec4 s = ViewPos(TargetUv(q));
+        float delta = q.z - s.z;
+        if (s.w > 0.5 && delta > bias && delta < thick && InUnit(s.xyz) < 0.5) {
+            occ = 1.0 - smoothstep(0.4, 1.0, t / len);
+            break;
+        }
+    }
+    occ *= (1.0 - sat((p.z - cBlur.z) * cBlur.w)) * cParams.y;
+    vec3 forever = cAmbient.rgb / max(cAmbient.rgb + cDiffuse.rgb * ndl, 1e-4);
+    vec3 k = mix(vec3(0.7), forever, cAmbient.w * sat((dot(n, cUp.xyz) - 0.55) * 3.3));
+    float s = cParams.z > 1.5 ? 1.0 : vis;
+    vec3 keep = (k + (1.0 - k) * s * (1.0 - occ)) / (k + (1.0 - k) * s);
+    return vec4(1.0 - keep * keep, 0.5 + 0.5 * vis);
+}
+
+vec4 Blur(vec2 vpos)
+{
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 m = textureLod(MaskTex, uv, 0);
+    if (m.a < 0.25) return vec4(0.0);
+    vec4 q[5];
+    for (int j = 0; j < 5; ++j) q[j] = ViewPos(uv + cBlur.xy * float(j - 2));
+    float z = q[2].z;
+    float slope = abs(q[3].z - z) < abs(z - q[1].z) ? q[3].z - z : z - q[1].z;
+    float sharp = 1.0 / (0.03 + 0.01 * z);
+    vec3 total = vec3(0.0);
+    float weights = 0.0;
+    for (int i = 0; i < 5; ++i) {
+        vec4 t = textureLod(MaskTex, uv + cBlur.xy * float(i - 2), 0);
+        float spatial = (i == 2) ? 6.0 : ((i == 1 || i == 3) ? 4.0 : 1.0);
+        float weight = spatial * exp2(-abs(q[i].z - (z + slope * float(i - 2))) * sharp) * q[i].w;
+        weight *= t.a >= 0.25 ? 1.0 : 0.0;
+        weight *= sat(1.0 - 2.0 * abs(t.a - m.a));
+        total += t.rgb * weight;
+        weights += weight;
+    }
+    return vec4(total / max(weights, 1e-6), m.a);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    vec2 vpos = vec2(pixel);
+#if CS_PASS == 3
+    if (any(greaterThanEqual(pixel, imageSize(Frame)))) return;
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 m = textureLod(MaskTex, uv, 0);
+    vec3 keep = sqrt(clamp(1.0 - m.rgb, 0.0, 1.0));
+    // test view 2: red where the shadow maps already shadow
+    if (cParams.z > 1.5 && m.a >= 0.25 && m.a < 0.75) keep = vec3(keep.r, keep.g * 0.35, keep.b * 0.35);
+    vec4 world = imageLoad(Frame, pixel);
+    // the test views write the shadow alone; the alpha is kept
+    imageStore(Frame, pixel, vec4(cParams.z > 0.5 ? keep : world.rgb * keep, world.a));
+#else
+    if (any(greaterThanEqual(pixel, imageSize(Output)))) return;
+#if CS_PASS == 0
+    imageStore(Output, pixel, Visibility(vpos));
+#elif CS_PASS == 1
+    imageStore(Output, pixel, Generate(vpos));
+#else
+    imageStore(Output, pixel, Blur(vpos));
+#endif
+#endif
+}

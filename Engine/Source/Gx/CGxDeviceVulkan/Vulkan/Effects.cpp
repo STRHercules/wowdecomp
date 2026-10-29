@@ -22,6 +22,8 @@
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Effects.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Frame.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Log.hpp"
+#include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Manifest.hpp"
+#include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Md5.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Memory.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Pipelines.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Texture.hpp"
@@ -1119,6 +1121,19 @@ namespace
             if (!r) return;
             frame::CancelImageRead(r->read);
             delete r;
+        }
+
+        bool ShaderKnown(const void* code, uint32_t bytes) override
+        {
+            if (!code || !bytes || !manifest::Loaded()) return false;
+            char md5[33];
+            gxvk::md5::Hex(static_cast<const uint8_t*>(code), bytes, md5);
+            return manifest::ByMd5(md5) != nullptr;
+        }
+
+        void ShaderFolder(char* folder, size_t size) override
+        {
+            static_cast<CGxDeviceVulkan*>(g_theGxDevicePtr)->IShaderFolder(folder, size);
         }
     };
 

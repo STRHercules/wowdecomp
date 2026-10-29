@@ -49,3 +49,23 @@ void HD::CaptureCamera() {
 const HD::Camera& HD::CurrentCamera() {
     return s_camera;
 }
+
+bool HD::ScreenRows(const Camera& cam, uint32_t width, uint32_t height, float rows[4][4]) {
+    const float* p = cam.projection;
+    for (int i = 0; i < 16; ++i) {
+        if (!std::isfinite(p[i])) return false;
+    }
+    if (!cam.valid || !width || !height || p[0] == 0 || p[5] == 0 || std::fabs(p[11] - 1) > 1e-3f || std::fabs(p[15]) > 1e-3f || !(p[10] > 0)
+        || !(p[14] < 0) || !(cam.maxZ > cam.minZ)) {
+        return false;
+    }
+    const float scale = 1.0f / (cam.maxZ - cam.minZ);
+    const float r[4][4] = {
+        { 1.0f / width, 1.0f / height, scale, -cam.minZ * scale },
+        { 2.0f / p[0], -2.0f / p[5], (-1.0f - p[8]) / p[0], (1.0f - p[9]) / p[5] },
+        { cam.x / width, cam.y / height, width / cam.width, height / cam.height },
+        { p[10], -p[14], 0.99999f, 0.0f },
+    };
+    std::memcpy(rows, r, sizeof r);
+    return true;
+}

@@ -1,4 +1,5 @@
 #include "MapRenderChunk.h"
+#include "WoW/Source/WorldClient/HD/HdTerrain.h"
 #include <cmath>
 #include <cstring>
 #include "Engine/Source/Gx/CGxBuf.h"
@@ -1953,7 +1954,9 @@ void CMapRenderChunk::AllocLayerTextures() {
 // VERIFY: 7488cd14 manual
 // OFFSET: 0x0079E470
 CGxShader* CMapRenderChunk::GetVertexShader(int32_t pointLights, int32_t layers, int32_t specular, int32_t vertexColor, int32_t a5, int32_t shadow) {
-    return CMap::vertexShader_Terrain[64 * pointLights + 16 * (layers - 1) + 8 * specular + 4 * vertexColor + 2 * a5 + (shadow != 0)];
+    int32_t index = 64 * pointLights + 16 * (layers - 1) + 8 * specular + 4 * vertexColor + 2 * a5 + (shadow != 0);
+    HD::TerrainShader(CMap::vertexShader_Terrain[index], HD::TerrainVertex, index);  // not in the original binary: hdTerrainLight
+    return CMap::vertexShader_Terrain[index];
 }
 
 // VERIFY: a33ed04d auto
@@ -2104,6 +2107,7 @@ void CMapRenderChunk::SetVertexShader(CMapRenderChunk* renderChunk, int32_t laye
     CGxShader* shader = CMapRenderChunk::GetVertexShader(pointLights, layerCount - 1, specular, vertexColor, a3, CShadowCache::GetShadowValue());
     g_theGxDevicePtr->RsSet(GxRs_VertexShader, shader);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, reinterpret_cast<const float*>(&consts), sizeof(SVertexShaderConstants) / sizeof(C4Vector));
+    HD::TerrainVertexConstants();  // not in the original binary: c49-c53 and pixel c16 for our terrain shaders
 }
 
 // VERIFY: 2226742d manual

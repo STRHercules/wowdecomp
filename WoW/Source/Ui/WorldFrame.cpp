@@ -91,8 +91,10 @@
 #include "WoW/Source/WorldClient/HD/HdAO.h"
 #include "WoW/Source/WorldClient/HD/HdBloom.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
+#include "WoW/Source/WorldClient/HD/HdContactShadow.h"
 #include "WoW/Source/WorldClient/HD/HdFog.h"
 #include "WoW/Source/WorldClient/HD/HdFrame.h"
+#include "WoW/Source/WorldClient/HD/HdGI.h"
 #include "WoW/Source/WorldClient/HD/HdGrade.h"
 #include "WoW/Source/WorldClient/HD/HdTime.h"
 #include "WoW/Source/Ui/LootBeam.h"
@@ -1779,7 +1781,13 @@ void CGWorldFrame::OnWorldRender() {
 
     GxuSortDrawList(GxuCat_0, GxuSort_VtxStream, *World::GetCamPos());
     GxuFlushDrawList(GxuCat_0, *World::GetCamPos());
+    HD::ContactShadowPrepare();  // not in the original binary: the contact shadows' mask, from the depth without the grass
     CWorldScene::RenderDetailDoodads();
+    // Not in the original binary: Azeroth Remastered's contact shadows, then its one-bounce GI, on the opaque world and
+    // the grass, before the water and the transparent models (visuals 2 only).
+    HD::ContactShadowRenderOpaque();
+    HD::GIRenderOpaque();
+    HD::Frame::Close();
 
     if (World::SceneCamLiquidStatus(nullptr)) {
         CWorldScene::RenderBarriers(this->m_elapsedSec);

@@ -1,0 +1,143 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Azeroth Remastered's screen-space GI, one colour bounce (HdGI.cpp, D3D9 HLSL ps_3_0) as GxEffects compute: the donor's
+// formulas line for line. Compile.py builds one module per GI_PASS:
+//   0 Generate: the light bounced once onto this pixel by what is around it on screen (8 samples in the half sphere
+//               over the normal rebuilt from the depth), stored with gamma 2
+//   1 Blur:     5 taps along cBlur.xy that stop at depth edges
+//   2 Apply:    the world's colour with the bounce added, in linear: colour + albedo * bounce * strength
+// The scene the bounce reads is the shared frame (contact shadows already in it), sampled while no pass writes it; the
+// apply pass reads the frame it writes with imageLoad.
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(set = 0, binding = 0) uniform sampler2D DepthTex;   // the world depth (CopyDepth), point, clamp
+layout(set = 0, binding = 1) uniform sampler2D GITex;      // the bounce (rgb), point, clamp
+layout(set = 0, binding = 2) uniform sampler2D SceneTex;   // the world drawn so far (gamma), point, clamp
+layout(std140, set = 0, binding = 16) uniform Constants { vec4 c[7]; };
+layout(set = 0, binding = 17, rgba16f) uniform image2D Output;   // the bounce (passes 0, 1)
+layout(set = 0, binding = 18, rgba16f) uniform image2D Frame;    // the world (pass 2)
+
+#define cScreen c[0]    // 1/width, 1/height of the target, depth scale A, depth offset B
+#define cView c[1]      // view xy = (local uv * xy + zw) * view z
+#define cRect c[2]      // world viewport in target uv: offset xy, 1 / size zw
+#define cDepth c[3]     // projection c2, -d2, sky threshold
+#define cParams c[4]    // radius (yards), strength, debug, blur sharpness (1/yards)
+#define cBlur c[5]      // blur step in uv (xy), fade start (yards), 1 / fade length
+#define cLight c[6]     // rgb the client's ambient light now (linear), a the brightest albedo
+
+float sat(float x) { return clamp(x, 0.0, 1.0); }
+vec2 sat(vec2 x) { return clamp(x, 0.0, 1.0); }
+
+vec4 ViewPos(vec2 uv)
+{
+    vec2 local = (uv - cRect.xy) * cRect.zw;
+    float raw = textureLod(DepthTex, uv, 0).r;
+    float z01 = raw * cScreen.z + cScreen.w;
+    float z = cDepth.y / max(cDepth.x - z01, 1e-7);
+    bool inside = all(equal(local, sat(local)));
+    float w = (inside && z01 < cDepth.z) ? 1.0 : 0.0;
+    return vec4((local * cView.xy + cView.zw) * z, z, w);
+}
+
+vec2 TargetUv(vec3 q)
+{
+    return ((q.xy / q.z - cView.zw) / cView.xy) / cRect.zw + cRect.xy;
+}
+
+float Noise(vec2 vpos)
+{
+    return fract(52.9829189 * fract(dot(vpos, vec2(0.06711056, 0.00583715))));
+}
+
+vec4 Generate(vec2 vpos)
+{
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 v = ViewPos(uv);
+    if (v.w < 0.5) return vec4(0, 0, 0, 1);
+    vec3 p = v.xyz;
+
+    vec4 l = ViewPos(uv - vec2(cScreen.x, 0));
+    vec4 r = ViewPos(uv + vec2(cScreen.x, 0));
+    vec4 u = ViewPos(uv - vec2(0, cScreen.y));
+    vec4 d = ViewPos(uv + vec2(0, cScreen.y));
+    vec3 dx = (abs(p.z - l.z) * l.w + (1.0 - l.w) * 1e9 < abs(r.z - p.z) * r.w + (1.0 - r.w) * 1e9) ? p - l.xyz : r.xyz - p;
+    vec3 dy = (abs(p.z - u.z) * u.w + (1.0 - u.w) * 1e9 < abs(d.z - p.z) * d.w + (1.0 - d.w) * 1e9) ? p - u.xyz : d.xyz - p;
+    vec3 n = cross(dx, dy);
+    n = dot(n, n) > 1e-12 ? normalize(n) : -normalize(p);
+    n = dot(n, p) > 0.0 ? -n : n;
+    vec3 t = normalize(cross(n, abs(n.y) < 0.9 ? vec3(0, 1, 0) : vec3(1, 0, 0)));
+    vec3 b = cross(n, t);
+
+    float noise = Noise(vpos);
+    float sa = sin(noise * 0.78539816), ca = cos(noise * 0.78539816);
+    float scale = noise;
+    vec3 sum = vec3(0.0);
+    float cover = 0.0;
+    for (int i = 0; i < 8; ++i) {
+        scale = fract(scale + 0.618034);
+        vec3 s = p + ((t * ca + b * sa) * 0.8 + n * 0.6) * (cParams.x * (scale * 0.75 + 0.25));
+        vec2 uvS = TargetUv(vec3(s.xy, max(s.z, 0.2)));
+        vec4 q = ViewPos(uvS);
+        vec3 w = q.xyz - p;
+        float dist2 = max(dot(w, w), 1e-4);
+        float facing = sat(dot(n, w) * inversesqrt(dist2));
+        float falloff = sat(1.0 - dist2 / (cParams.x * cParams.x));
+        vec3 col = textureLod(SceneTex, uvS, 0).rgb;
+        float wgt = facing * falloff * q.w;
+        sum += col * col * wgt;
+        cover += wgt;
+        float c2 = ca * 0.70710678 - sa * 0.70710678;
+        sa = ca * 0.70710678 + sa * 0.70710678;
+        ca = c2;
+    }
+    vec3 gi = max(sum - cLight.rgb * cover, 0.0) * 0.25;
+    gi *= 1.0 - sat((p.z - cBlur.z) * cBlur.w);
+    return vec4(sqrt(clamp(gi, 0.0, 1.0)), 1.0);
+}
+
+vec4 Blur(vec2 vpos)
+{
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec4 v = ViewPos(uv);
+    if (v.w < 0.5) return vec4(0, 0, 0, 1);
+    float sharp = cParams.w / (1.0 + 0.02 * v.z);
+    vec3 total = vec3(0.0);
+    float weights = 0.0;
+    for (int i = -2; i <= 2; ++i) {
+        vec2 tuv = uv + cBlur.xy * float(i);
+        vec4 q = ViewPos(tuv);
+        float spatial = (i == 0) ? 6.0 : ((i == -1 || i == 1) ? 4.0 : 1.0);
+        float weight = spatial * exp2(-abs(q.z - v.z) * sharp) * q.w;
+        total += textureLod(GITex, tuv, 0).rgb * weight;
+        weights += weight;
+    }
+    return vec4(total / max(weights, 1e-6), 1.0);
+}
+
+void main()
+{
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    vec2 vpos = vec2(pixel);
+#if GI_PASS == 2
+    if (any(greaterThanEqual(pixel, imageSize(Frame)))) return;
+    vec2 uv = (vpos + 0.5) * cScreen.xy;
+    vec3 g = textureLod(GITex, uv, 0).rgb;
+    vec3 gi = g * g;
+    vec4 world = imageLoad(Frame, pixel);
+    vec3 lin = world.rgb * world.rgb;
+    float lum = dot(lin, vec3(0.2126, 0.7152, 0.0722));
+    // the receiving surface's albedo estimate: its colour over the ambient light, at most cLight.a bright
+    vec3 albedo = lin / max(max(cLight.rgb, vec3(lum / cLight.a)), 1e-4);
+    vec3 o = sqrt(lin + albedo * gi * cParams.y);
+    // test views: 1 = the bounce alone (x 4), 2 = the albedo estimate
+    if (cParams.z > 0.5) o = sqrt(clamp(gi * 4.0, 0.0, 1.0));
+    if (cParams.z > 1.5) o = sqrt(albedo);
+    imageStore(Frame, pixel, vec4(o, world.a));
+#else
+    if (any(greaterThanEqual(pixel, imageSize(Output)))) return;
+#if GI_PASS == 0
+    imageStore(Output, pixel, Generate(vpos));
+#else
+    imageStore(Output, pixel, Blur(vpos));
+#endif
+#endif
+}

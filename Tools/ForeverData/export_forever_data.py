@@ -9,6 +9,8 @@ storage in local mode. Written:
     hd_forever_light.txt    L light map slot0..slot7         Light: the 8 LightParams per light
     hd_forever_grading.txt  G setting time lut                LightData.ColorGradingFileDataID
     hd_forever_fog.txt      F setting time layer flags ...   LightDataGlobalVolumeFog, drawn layers (flag 8)
+    hd_forever_ambient.txt  B setting band count (time colour)...  LightData's sky (band 1), horizon (18) and ground
+                            (19) ambient colours, for the terrain lighting
     grading/<lut>.blp       the LUTs those name (1024x32 uncompressed BLP2)
 
 A 3.3.5 light gets Forever's settings when its ID and map match: the IDs of the lights both clients
@@ -36,6 +38,8 @@ FOG = "Field_1_60_1_69876_{:03d}"
 FOG_COLOURS = (1, 2, 3)
 FOG_FLOATS = (5, 6, 7, 8, 10, 11, 12, 14, 15, 25, 26)
 FOG_FLAGS, FOG_LAYER, FOG_DRAWN = 22, 23, 8
+# The donor's band numbers (HdForever.cpp): 1 the client's ambient (sky), 18 horizon, 19 ground.
+AMBIENT_BANDS = ((1, "AmbientColor"), (18, "HorizonAmbientColor"), (19, "GroundAmbientColor"))
 
 
 def probe(exe, config, name, destination, table):
@@ -104,7 +108,20 @@ def main():
         fog.sort(key=lambda f: f[:3])
         (out / "hd_forever_fog.txt").write_text("".join(f"F {s} {t} {layer} {rest}\n" for s, t, layer, rest in fog))
 
-    print(f"{len(lines)} lights, {len(keys)} grading keys ({len({k[2] for k in keys})} LUTs), {len(fog)} fog layers -> {out}")
+        # HdForever.cpp's band lines: per setting, each band's keys in time order (at most 32, as it reads).
+        by_setting = {}
+        for r in light_data.values():
+            by_setting.setdefault(r["LightParamID"], []).append(r)
+        bands = []
+        for setting, rows in sorted(by_setting.items()):
+            rows = sorted(rows, key=lambda r: r["Time"])[:32]
+            for band, column in AMBIENT_BANDS:
+                pairs = " ".join(f"{r['Time']} {r[column] & 0xFFFFFF:06x}" for r in rows)
+                bands.append(f"B {setting} {band} {len(rows)} {pairs}\n")
+        (out / "hd_forever_ambient.txt").write_text("".join(bands))
+
+    print(f"{len(lines)} lights, {len(keys)} grading keys ({len({k[2] for k in keys})} LUTs), {len(fog)} fog layers, "
+          f"{len(by_setting)} ambient settings -> {out}")
 
 
 if __name__ == "__main__":

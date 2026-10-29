@@ -38,6 +38,13 @@ OUTPUTS = [
         ("AO.comp", "kAOBlur", "AO_PASS=3"),
         ("AO.comp", "kAOTemporal", "AO_PASS=5"),
         ("AO.comp", "kAOApply", "AO_PASS=4"),
+        ("ContactShadow.comp", "kContactVisibility", "CS_PASS=0"),
+        ("ContactShadow.comp", "kContactGenerate", "CS_PASS=1"),
+        ("ContactShadow.comp", "kContactBlur", "CS_PASS=2"),
+        ("ContactShadow.comp", "kContactApply", "CS_PASS=3"),
+        ("GI.comp", "kGIGenerate", "GI_PASS=0"),
+        ("GI.comp", "kGIBlur", "GI_PASS=1"),
+        ("GI.comp", "kGIApply", "GI_PASS=2"),
     ]),
 ]
 

@@ -34,6 +34,9 @@ bool SunFollowsLight();
 float ShadowHeightScale();
 // hdShadowBillboard: 0 original, 1 leaf cards face the sun in the shadow pass, 2 they cast none.
 int32_t ShadowBillboardMode();
+// While hdShadowSun casts long shadows: draw every caster of a band into the shadow maps, not only those the camera's
+// frustum reaches (the donor's FullCasters), or a fern beside or behind the camera loses its long shadow in view.
+bool ShadowFullCasters();
 
 }  // namespace HD
 

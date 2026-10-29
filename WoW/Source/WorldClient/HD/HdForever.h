@@ -44,6 +44,10 @@ bool ForeverHasLight(const LightRec* light);
 void LerpFogLayer(ForeverFogLayer& a, const ForeverFogLayer& b, float t);
 // This light's Forever fog for `slot` at `time`, between Forever's time keys. False when it has none.
 bool ForeverFogAt(const LightRec* light, int32_t slot, int32_t time, ForeverFog* out);
+// Forever's three ambient colours (0..1) for this light and slot at this time, as its terrain shader gets them: sky
+// (LightData AmbientColor), horizon and ground (HorizonAmbientColor, GroundAmbientColor; black = the sky's), blended
+// between Forever's time keys (hd_forever_ambient.txt). False when Forever has no setting for this light.
+bool ForeverAmbientsAt(const LightRec* light, int32_t slot, int32_t time, float* sky, float* horizon, float* ground);
 
 // The LUTs either side of `time` (half-minutes, 0..2880) in this light's Forever setting for `slot` (0 clear,
 // 2 storm; a slot with none falls back to 0), and t, how far from lutA to lutB. False when it has no grading.

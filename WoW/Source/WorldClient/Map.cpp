@@ -1,4 +1,5 @@
 #include <vector>
+#include "WoW/Source/WorldClient/HD/HdTerrain.h"
 #include "Map.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #if defined(_MSC_VER)
@@ -435,19 +436,30 @@ CGxShader* CMap::GetTerrainPixelShader(int32_t bigAlpha, int32_t layers, int32_t
     int32_t layerIndex = layers - 1;
 
     switch (shadowMode) {
-        case 0:
-            return CMap::pixelShader_Terrain1[16 * a5 + 8 * bigAlpha + 2 * layerIndex + a4];
+        case 0: {
+            // Not in the original binary: hdTerrainLight puts our shader code (Forever lighting) into the one picked here.
+            int32_t index = 16 * a5 + 8 * bigAlpha + 2 * layerIndex + a4;
+            HD::TerrainShader(CMap::pixelShader_Terrain1[index], HD::TerrainPixel1, index);
+            return CMap::pixelShader_Terrain1[index];
+        }
 
         case 1:
             if (g_theGxDevicePtr->Caps().m_shaderTargets[4] == 3 || g_theGxDevicePtr->Caps().m_shaderTargets[4] == 12) {
                 return CMap::pixelShader_Terrain2[16 * a5 + 8 * bigAlpha + 2 * layerIndex + a4];
             }
 
-            return CMap::pixelShader_Terrain3[48 * a5 + 24 * bigAlpha + 2 * layerIndex + a4];
+            {
+                int32_t index = 48 * a5 + 24 * bigAlpha + 2 * layerIndex + a4;
+                HD::TerrainShader(CMap::pixelShader_Terrain3[index], HD::TerrainPixel3, index);
+                return CMap::pixelShader_Terrain3[index];
+            }
 
         case 2:
-        case 3:
-            return CMap::pixelShader_Terrain3[48 * a5 - 8 + 24 * bigAlpha + 8 * shadowMode + 2 * layerIndex + a4];
+        case 3: {
+            int32_t index = 48 * a5 - 8 + 24 * bigAlpha + 8 * shadowMode + 2 * layerIndex + a4;
+            HD::TerrainShader(CMap::pixelShader_Terrain3[index], HD::TerrainPixel3, index);
+            return CMap::pixelShader_Terrain3[index];
+        }
 
         default:
             return nullptr;
@@ -762,6 +774,7 @@ void CMap::Initialize() {
     }
 
     g_theGxDevicePtr->ShaderCreate(&CMap::pixelShader_TerrainSM, GxSh_Pixel, "Shaders\\Pixel", "TerrainSM", 1);
+    HD::TerrainShadersStart();  // not in the original binary: compile Azeroth Remastered's terrain shaders in the background
 
     CMap::lowDetailIndexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic, 0x1800, static_cast<EGxPoolHintBits>(0), "CMap::lowDetailIndexPool");
     CMap::lowDetailIndexBuf = g_theGxDevicePtr->BufCreate(CMap::lowDetailIndexPool, sizeof(uint16_t), 0xC00, 0);

@@ -274,6 +274,11 @@ void CShadowQuery::AllocBuffers() {
 // VERIFY: 3e3dfd04 manual
 // OFFSET: 0x007BD200
 int32_t CShadowQuery::QueryCallback(CShadowCacheQueryData& data, uint32_t frame) {
+    // Not in the original binary: hdShadowSun's long shadows reach the view from casters outside the camera's frustum.
+    if (HD::ShadowFullCasters()) {
+        data.m_useFrustum = 0;
+        for (int32_t i = 0; i < 3; ++i) data.m_useCullFrustum[i] = 0;
+    }
     CShadowQuery::AllocBuffers();
 
     if (!++CShadowQuery::s_stamp) {
@@ -595,7 +600,7 @@ int32_t CShadowQuery::RenderCallback(CShadowCacheQueryData& data, int32_t band, 
     g_theGxDevicePtr->DeviceSetRenderTarget(GxBuffers_Color, target, 0);
     GxSceneClear(GxBufferBit_Color | GxBufferBit_Depth, CImVector(0xFF, 0xFF, 0xFF, 0xFF));
 
-    if (g_shadowScissor->m_intValue) {
+    if (g_shadowScissor->m_intValue && !HD::ShadowFullCasters()) {
         GxRsSet(GxRs_ScissorTest, 1);
         float* rect = data.m_cullRects[band];
         CRect scissor;

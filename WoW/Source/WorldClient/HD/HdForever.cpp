@@ -36,6 +36,18 @@ namespace {
     std::unordered_map<int32_t, std::vector<GradeKey>> s_grading;
     std::unordered_map<int32_t, std::vector<FogKey>> s_fog;
 
+    // A colour band of a setting (the donor's Band): its time keys and 0xRRGGBB colours.
+    struct Band {
+        int32_t count = 0;
+        int32_t time[kMaxKeys];
+        uint32_t color[kMaxKeys];
+    };
+    // Per setting, the ambient bands the terrain reads: the sky (the donor's band 1), horizon (18), ground (19).
+    struct Ambient {
+        Band bands[3];
+    };
+    std::unordered_map<int32_t, Ambient> s_ambient;
+
     CVar* s_force = nullptr;
     CVar* s_info = nullptr;
     bool s_triedLoad = false;
@@ -134,6 +146,30 @@ namespace {
         return layers;
     }
 
+    // "B setting band count time colour ..." lines (hd_forever_ambient.txt), bands 1, 18 and 19 only.
+    int32_t LoadAmbient(FILE* file) {
+        static char line[2048];
+        int32_t settings = 0;
+        while (fgets(line, sizeof(line), file)) {
+            if (line[0] != 'B') continue;
+            char* p = line + 1;
+            int32_t setting = strtol(p, &p, 10);
+            int32_t band = strtol(p, &p, 10);
+            int32_t count = strtol(p, &p, 10);
+            int32_t slot = band == 1 ? 0 : (band == 18 ? 1 : (band == 19 ? 2 : -1));
+            if (slot < 0 || count < 1 || count > kMaxKeys) continue;
+            Band& b = s_ambient[setting].bands[slot];
+            b.count = count;
+            for (int32_t i = 0; i < count; i++) {
+                b.time[i] = strtol(p, &p, 10);
+                b.color[i] = static_cast<uint32_t>(strtoul(p, &p, 16));
+            }
+            if (slot == 0) settings++;
+        }
+        fclose(file);
+        return settings;
+    }
+
     void Load() {
         s_triedLoad = true;
         FILE* lights = OpenData("hd_forever_light.txt");
@@ -142,10 +178,13 @@ namespace {
         if (lights) LoadLights(lights);
         int32_t keys = grading ? LoadGrading(grading) : 0;
         int32_t layers = fog ? LoadFog(fog) : 0;
-        char info[224];
-        snprintf(info, sizeof(info), "loaded %d lights, %d grading keys, %d fog layers%s%s%s", static_cast<int>(s_lights.size()),
-                 static_cast<int>(keys), static_cast<int>(layers), lights ? "" : ", no forever_data\\hd_forever_light.txt",
-                 grading ? "" : ", no forever_data\\hd_forever_grading.txt", fog ? "" : ", no forever_data\\hd_forever_fog.txt");
+        FILE* ambient = OpenData("hd_forever_ambient.txt");
+        int32_t ambients = ambient ? LoadAmbient(ambient) : 0;
+        char info[256];
+        snprintf(info, sizeof(info), "loaded %d lights, %d grading keys, %d fog layers, %d ambient settings%s%s%s%s",
+                 static_cast<int>(s_lights.size()), static_cast<int>(keys), static_cast<int>(layers), static_cast<int>(ambients),
+                 lights ? "" : ", no forever_data\\hd_forever_light.txt", grading ? "" : ", no forever_data\\hd_forever_grading.txt",
+                 fog ? "" : ", no forever_data\\hd_forever_fog.txt", ambient ? "" : ", no forever_data\\hd_forever_ambient.txt");
         if (s_info) s_info->Set(info, true, false, false, false);
     }
 
@@ -210,6 +249,38 @@ bool HD::ForeverGradingAt(const LightRec* light, int32_t slot, int32_t time, int
     BandTimeRange(times, count, time, index, *t, next);
     *lutA = keys[index].lut;
     *lutB = keys[next].lut;
+    return true;
+}
+
+// The donor's BandColorAt: a band's colour at this time (0..1), blended between its two time keys. False when empty.
+static bool BandColorAt(const Band& b, int32_t time, float* out) {
+    if (!b.count) return false;
+    int32_t index;
+    float t;
+    int32_t next;
+    BandTimeRange(b.time, b.count, time, index, t, next);
+    for (int32_t c = 0; c < 3; c++) {
+        const float from = ((b.color[index] >> (16 - 8 * c)) & 0xFF) * (1.0f / 255.0f);
+        const float to = ((b.color[next] >> (16 - 8 * c)) & 0xFF) * (1.0f / 255.0f);
+        out[c] = from + (to - from) * t;
+    }
+    return true;
+}
+
+bool HD::ForeverAmbientsAt(const LightRec* light, int32_t slot, int32_t time, float* sky, float* horizon, float* ground) {
+    if (!s_triedLoad) Load();
+    if (!light || slot < 0 || slot > 7) return false;
+    int32_t foreverId = SettingFor(light, slot);
+    if (!foreverId) return false;
+    auto setting = s_ambient.find(foreverId);
+    if (setting == s_ambient.end() || !BandColorAt(setting->second.bands[0], time, sky)) return false;
+    // A colour Forever leaves black (or has no key for) is the sky colour.
+    if (!BandColorAt(setting->second.bands[1], time, horizon) || horizon[0] + horizon[1] + horizon[2] <= 0.0f) {
+        for (int32_t c = 0; c < 3; c++) horizon[c] = sky[c];
+    }
+    if (!BandColorAt(setting->second.bands[2], time, ground) || ground[0] + ground[1] + ground[2] <= 0.0f) {
+        for (int32_t c = 0; c < 3; c++) ground[c] = sky[c];
+    }
     return true;
 }
 

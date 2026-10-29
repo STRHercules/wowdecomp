@@ -56,6 +56,10 @@ float HD::ShadowHeightScale() {
     return On() && OptionCVars::Bool(s_hdShadowSun, false) ? 1.0f : 5.0f;
 }
 
+bool HD::ShadowFullCasters() {
+    return ShadowHeightScale() < 5.0f;
+}
+
 int32_t HD::ShadowBillboardMode() {
     return On() ? OptionCVars::Int(s_hdShadowBillboard, 0, 2, 0) : 0;
 }

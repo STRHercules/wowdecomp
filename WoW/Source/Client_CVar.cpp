@@ -28,6 +28,9 @@
 #include "WoW/Source/WorldClient/HD/HdFog.h"
 #include "WoW/Source/WorldClient/HD/HdGrade.h"
 #include "WoW/Source/WorldClient/HD/HdTime.h"
+#include "WoW/Source/WorldClient/HD/HdContactShadow.h"
+#include "WoW/Source/WorldClient/HD/HdGI.h"
+#include "WoW/Source/WorldClient/HD/HdTerrain.h"
 #include "WoW/Source/UIUtil/Cursor.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/OptionCVars.h"
@@ -689,6 +692,9 @@ void ClientRegisterConsoleCommands() {
     HD::Fog::RegisterCVars();
     HD::Grade::RegisterCVars();
     HD::RegisterTimeCVars();
+    HD::RegisterContactShadowCVars();
+    HD::RegisterGICVars();
+    HD::RegisterTerrainCVars();
 
     g_showPerformanceCVar = CVar::Register("showPerformance", "Show the performance overlay (fps, draw calls, cpu)", 1, "0", ShowPerformanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
 
