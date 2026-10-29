@@ -31,6 +31,9 @@
 #include "WoW/Source/WorldClient/HD/HdContactShadow.h"
 #include "WoW/Source/WorldClient/HD/HdGI.h"
 #include "WoW/Source/WorldClient/HD/HdTerrain.h"
+#include "WoW/Source/WorldClient/HD/HdMapObj.h"
+#include "WoW/Source/WorldClient/HD/HdDetailDoodad.h"
+#include "WoW/Source/WorldClient/HD/HdSky.h"
 #include "WoW/Source/UIUtil/Cursor.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/OptionCVars.h"
@@ -695,6 +698,9 @@ void ClientRegisterConsoleCommands() {
     HD::RegisterContactShadowCVars();
     HD::RegisterGICVars();
     HD::RegisterTerrainCVars();
+    HD::RegisterMapObjCVars();
+    HD::RegisterDetailDoodadCVars();
+    HD::RegisterSkyCVars();
 
     g_showPerformanceCVar = CVar::Register("showPerformance", "Show the performance overlay (fps, draw calls, cpu)", 1, "0", ShowPerformanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
 

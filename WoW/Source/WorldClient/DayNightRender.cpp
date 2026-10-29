@@ -12,6 +12,7 @@
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/CMath.h"
+#include "WoW/Source/WorldClient/HD/HdSky.h"
 
 // VERIFY: 410884f1 auto
 // OFFSET: 0x009ABB00
@@ -177,6 +178,7 @@ void DayNight::DNSky::Render() {
 
     GxPrimVertexPtr(this->m_nVerts, this->m_geoVerts.m_data, sizeof(C3Vector), nullptr, 0, this->m_clrVerts.m_data, sizeof(CImVector), nullptr, 0, nullptr, 0);
     GxPrimIndexPtr(this->m_nIndices, this->m_indices.m_data);
+    bool hdSky = HD::SkyBeginDraw(HD::SkyPass_Dome);  // HD: hdSky (Forever's dnsky shader; RsPop unbinds it)
 
     CGxBatch batch;
     batch.m_primType = GxPrim_TriangleStrip;
@@ -185,6 +187,8 @@ void DayNight::DNSky::Render() {
     batch.m_minIndex = 0;
     batch.m_maxIndex = this->m_nVerts - 1;
     g_theGxDevicePtr->Draw(&batch, 1);
+
+    if (hdSky) HD::SkyEndDraw();  // HD: hdSky
 
     GxXformPop(GxXform_World);
     g_theGxDevicePtr->RsPop();
@@ -228,6 +232,7 @@ void DayNight::DNClouds::Render() {
     }
 
     GxPrimIndexPtr(this->m_nIndices, this->m_indices.m_data);
+    bool hdSky = HD::SkyBeginDraw(HD::SkyPass_Clouds);  // HD: hdSky (Forever's dnclouds shader; RsPop unbinds it)
 
     CGxBatch batch;
     batch.m_primType = GxPrim_TriangleStrip;
@@ -237,6 +242,7 @@ void DayNight::DNClouds::Render() {
     batch.m_maxIndex = this->m_nVerts - 1;
     g_theGxDevicePtr->Draw(&batch, 1);
 
+    if (hdSky) HD::SkyEndDraw();  // HD: hdSky
     g_theGxDevicePtr->RsPop();
     GxXformPop(GxXform_World);
 }

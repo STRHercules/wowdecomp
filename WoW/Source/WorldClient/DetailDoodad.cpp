@@ -1,4 +1,5 @@
 #include "DetailDoodad.h"
+#include "WoW/Source/WorldClient/HD/HdDetailDoodad.h"
 #include <cmath>
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
@@ -153,6 +154,7 @@ void CDetailDoodad::SetupVertexShader(const C44Matrix& world, uint32_t index) {
 
     CDetailDoodad::s_shaderConstants.m_worldView = world * view;
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 0, reinterpret_cast<const float*>(&CDetailDoodad::s_shaderConstants), sizeof(CDetailDoodad::s_shaderConstants) / sizeof(C4Vector));
+    HD::DetailDoodadVertexConstants(world);  // not in the original binary: our grass vertex shader's constants and wind
 }
 
 // VERIFY: f3428d3d manual
@@ -510,6 +512,7 @@ void CDetailDoodad::Initialize() {
     } else if (CDetailDoodad::s_bUseShaders) {
         g_theGxDevicePtr->ShaderCreate(CDetailDoodad::s_vertexShader, GxSh_Vertex, "Shaders\\Vertex", "DetailDoodad", sizeof(CDetailDoodad::s_vertexShader) / sizeof(CDetailDoodad::s_vertexShader[0]));
         g_theGxDevicePtr->ShaderCreate(CDetailDoodad::s_pixelShader, GxSh_Pixel, "Shaders\\Pixel", "DetailDoodad", sizeof(CDetailDoodad::s_pixelShader) / sizeof(CDetailDoodad::s_pixelShader[0]));
+        HD::DetailDoodadShadersStart();  // not in the original binary: compile Azeroth Remastered's grass shaders
     }
 }
 
@@ -598,6 +601,8 @@ int32_t CDetailDoodad::InitializeRenderState() {
 
     if (CDetailDoodad::s_bUseShaders) {
         uint32_t shadow = CShadowCache::GetShadowValue();
+        // Not in the original binary: hdGrassLight puts our shader code (Forever lighting) into all the grass shaders.
+        HD::DetailDoodadShaders();
         g_theGxDevicePtr->RsSet(GxRs_PixelShader, CDetailDoodad::s_pixelShader[4 * ((CWorld::enables2 >> 1) & 1) + shadow]);
         CDetailDoodad::InitializeShaderConstants();
         CShadowCache::SetShadowMapDetailDoodad();
@@ -763,6 +768,8 @@ void CDetailDoodad::Destroy() {
     }
 
     CDetailDoodad::s_instHeap = nullptr;
+
+    HD::DetailDoodadShadersForget();  // not in the original binary: Blizzard's code back before the shaders are released
 
     for (uint32_t i = 0; i < sizeof(CDetailDoodad::s_vertexShader) / sizeof(CDetailDoodad::s_vertexShader[0]); i++) {
         if (CDetailDoodad::s_vertexShader[i]) {

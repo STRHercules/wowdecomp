@@ -8,12 +8,13 @@ its effects onto ours through `GxEffects` (see "Why not swap the backend").
 
 | | State |
 |---|---|
-| Branch | `azeroth-remastered-hd` (3 commits past `f42d5f21`, which `Esteria` has); **uncommitted**: contact shadows, GI, full shadow casters |
+| Branch | `azeroth-remastered-hd` (last commit `89980403`: contact shadows, GI, full casters, terrain); **uncommitted**: buildings, grass (`HdMapObj`, `HdDetailDoodad`, `HdGrassWind`, `HdShaderSwap` hooks) |
 | Dev client | `G:\3.3.5a - Dev\Wow.exe` = `bin\Win\WowClientRetailInventory.exe` from `build/retail-satchel`; every install backed up in `G:\3.3.5a - Dev\_backups\` |
 | Works in game (visuals 2) | AO, Fog (with sun-shadow light shafts), Bloom + sun rays, Grade, HdTime, custom-light fix, Forever data |
 | Built, not confirmed in game | Contact shadows (mask now built before the grass), GI, full shadow casters |
-| Works in game (material shaders) | Terrain with Forever lighting (352 shaders compile in ~6 s on 15 threads) |
-| Not started | Buildings, grass, sky, point lights, Forever water, the donor's own shadow module |
+| Works in game (material shaders) | Terrain (352 shaders, ~6 s on 15 threads), buildings, grass (dark-in-shade fixed with `hdGrassShadow`; that last build installed, not yet seen in game) |
+| Built, installed, not seen in game | Sky (`HdSky`) |
+| Not started | Point lights (`hdLights`), Forever water, the donor's own shadow module |
 
 Everything below is gated on `visuals 2`; Stock (0) and Lumenveil (1) are untouched.
 
@@ -80,7 +81,30 @@ translated for that exact bytecode exists. Our backend works the same way (manif
   sky/horizon/ground ambient (`hd_forever_ambient.txt`, `HD::ForeverAmbientsAt`), hooked in `CMap::GetTerrainPixelShader`,
   `CMapRenderChunk::GetVertexShader` and after the chunk's vertex constants. cvars `hdTerrainLight` (1; 3 = test view: sun
   after shadow only), `hdLightAmbient`, `hdTerrainHemi`, `hdTerrainInfo`. Not ported yet: `hdLights` (per-pixel lamps).
-- Still to do: buildings (`HdMapObj`), grass (`HdDetailDoodad`, `HdGrassWind`), sky (`HdSky`), `HdLights`.
+- **Buildings** (`HdMapObj.cpp`, works in game): the donor's HLSL and family tables unchanged (7 vertex
+  families x 18 distinct codes, 5 pixel kinds x 16; 184 records after folding identical ones), Forever lighting on
+  exterior-lit batches with the terrain's hemisphere ratios; the vertex and pixel shader of a batch are swapped as a pair
+  (all or nothing), looked up by the shader's name. Hooked in `CMapObj::SelectWorldShaders` and `CMapObj::Initialize`.
+  cvars `hdWmoLight` (1; 3 = test view), `hdWmoInfo`.
+- **Grass** (`HdDetailDoodad.cpp` + `HdGrassWind.cpp`, works in game): the donor's HLSL (6 vertex, 8 pixel slots)
+  with the terrain's Forever lighting, and grass wind and parting around the player (WarcraftXL's algorithm, GPLv3) in
+  the vertex shader; all 14 swapped together once per frame. Hooked in `CDetailDoodad::Initialize`,
+  `InitializeRenderState`, `SetupVertexShader` and `Destroy`. cvars `hdGrassLight` (1; 3 = test view), `hdGrassWind`,
+  `hdGrassWindSpeed` (3), `hdGrassWindDirection` (45), `hdGrassWindStrength` (1), `hdGrassReact` (1),
+  `hdGrassReactRadius` (2), `hdGrassInfo`. Not ported: the donor's `hdGrassBuffers` / `hdGrassKeep` (buffer filling, not
+  the look). `hdGrassShadow` (0.5, ours): with Forever lighting the shadow cut the sun fully and left a scaled-down
+  ambient, so grass under trees went near-black; shaded grass now keeps this share of the sun (0 = the donor's look).
+- **Pixel c14/c15 are taken on Vulkan**: `CGxDeviceVulkanDraw.cpp` overwrites them with fixed-function fog on every draw.
+  The donor's grass and building flags lived in c15 (the fog's green turned on the test view: black grass); both now use
+  c16 like the terrain, which each sets before its own draws. Never give a ported shader a constant in pixel c14/c15.
+- **Sky** (`HdSky.cpp`, built and installed 2026-10-29, **not seen in game yet**): Forever's dnsky / dnclouds as 4 new
+  shaders (made in the device's shader list, bound with `GxRs_VertexShader/PixelShader` inside `DNSky::Render` /
+  `DNClouds::Render`; `RsPop` unbinds). Differences from the donor: pixel constants at c20..c25 (not c200), and the dither's
+  pixel position is rebuilt from the clip position (a TEXCOORD) because the translator has no `VPOS`; c25.xy = half the
+  target size. cvars `hdSky` (1; 2 = 3.3.5 look, must equal 0; 3 = test view), `hdSkyGlow`, `hdSkyGlowHorizon`,
+  `hdSkyGlowSize`, `hdSkyCloudSun`, `hdSkyDither`, `hdSkyInfo`. The 4 blobs are named `HdSky-SkyVS/SkyPS/CloudVS/CloudPS`;
+  all four or none (a missing one goes to `hd-pending`, Blizzard sky kept).
+- Still to do: `HdLights`.
 
 **Fixes past the donor.**
 - *Custom lights:* the donor fades fog and grading out inside any light Forever lacks. This server's own lights (IDs 5000+,
@@ -106,6 +130,14 @@ build may need newer ones. Without `forever_data` beside `Wow.exe`, Grade and Fo
 
 ## Building and shaders
 
+- Material shaders: the client compiles the donor HLSL with the system `d3dcompiler_47` and swaps it into the engine's
+  `CGxShader` (`HdShaderSwap`); unknown code goes to `<VulkanShadersRetail>\hd-pending\<name>.bin`. Then
+  `python -I Tools/HdMaterials/install_hd_shaders.py --client "G:/3.3.5a - Dev" --glslang <abs path>/build/tools/glslang/bin/glslang.exe`
+  (absolute glslang path, Windows form) translates them into both shader sets. Offline compiles are byte-identical, so
+  blobs can be compiled ahead (scratch scripts `hd_compile*.py`: regex out the `R"HLSL(...)` pieces, D3DCompile via
+  ctypes with the same macros and `D3DCOMPILE_OPTIMIZATION_LEVEL3`) and dropped into `hd-pending` before running it.
+  Debug a translation with `Tools/VulkanShaders` `bls.translate.main([... '--names', 'X:0', '--extra-pixel', dir, '--print'])`.
+
 - Client: `cmake --build build/retail-satchel --config Release --target WowClient`, then copy
   `bin\Win\WowClientRetailInventory.exe` over `G:\3.3.5a - Dev\Wow.exe` (back it up first, game closed).
 - Shaders: GLSL in `HD/Shaders/` (`Grade`, `Copy`, `Bloom`, `Fog`, `AO` + `XeGTAO.glsl`, `ContactShadow`, `GI`), compiled
@@ -124,11 +156,9 @@ build may need newer ones. Without `forever_data` beside `Wow.exe`, Grade and Fo
 
 ## Next
 
-1. Confirm contact shadows (grass no longer casts) and GI in game; commit with the full-casters fix.
-2. **Material shaders**: terrain, buildings (WMO), grass, sky, grass wind, point lights (`HdTerrain`, `HdMapObj`,
-   `HdDetailDoodad`, `HdSky`, `HdGrassWind`, `HdLights`). The donor injects HLSL into the engine's own shaders and runs it
-   on Vulkan through offline-translated modules (`HdGxShader`); first find how that maps onto our shader translator
-   (`Tools/VulkanShaders`, `Shaders\Vertex|Pixel` BLS).
+1. Check `hdGrassShadow` in game (Goldshire road under the trees, `hdGrassLight 1`), then commit buildings + grass.
+2. **Material shaders left**: point lights (`HdLights`, terrain c16.z already reserved for the count), same method as
+   terrain/buildings/grass. Check the sky in game first (`hdSky 3` test view, `hdSky 2` must match `hdSky 0`).
 3. **Water**: Forever PBR (`HdWater*`) or Cata water (`HdCata*`, `hd/Cata*`). Largest: the Cata mirror replays the frame
    inside the donor's backend, and Cata water needs its `patch-w.mpq`. Lumenveil's water hook in `Liquid::CRenderer::Flush`
    is the likely entry point.

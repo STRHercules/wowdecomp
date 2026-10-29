@@ -1,4 +1,5 @@
 #include "MapObj.h"
+#include "WoW/Source/WorldClient/HD/HdMapObj.h"
 #include <cstdlib>
 #include <malloc.h>
 #include <new>
@@ -593,7 +594,10 @@ void CMapObj::SelectWorldShaders() {
     }
 
     uint32_t vertexPermute = (CMapObj::s_lightingMode != 0) + 2 * (CWorldScene::s_fogPermute + 15 * shadow);
-    CShaderEffect::SetShaders(vertexPermute, CShaderEffect::SelectShadowShader());
+    uint32_t pixelPermute = CShaderEffect::SelectShadowShader();
+    // Not in the original binary: hdWmoLight puts our shader code (Forever lighting on exterior-lit batches) into the pair.
+    HD::MapObjShaders(CShaderEffect::s_curEffect, vertexPermute, pixelPermute, CMapObj::s_lightingMode);
+    CShaderEffect::SetShaders(vertexPermute, pixelPermute);
 }
 
 // VERIFY: 0016a158 manual
@@ -2208,6 +2212,7 @@ void CMapObj::Initialize() {
     CMapObj::s_unifiedShaders[4] = CShaderEffectManager::GetEffect("MapObjUOpaque");
     CMapObj::s_unifiedShaders[5] = CShaderEffectManager::GetEffect("MapObjUEnvMetal");
     CMapObj::s_unifiedShaders[6] = CShaderEffectManager::GetEffect("MapObjUComposite");
+    HD::MapObjShadersStart();  // not in the original binary: compile Azeroth Remastered's building shaders in the background
 
     CMapObj::bPoolsDirty = 1;
     CMapObj::occluderHeap = new (__FILE__, __LINE__) uint32_t(ObjectAllocAddHeap(sizeof(CMapObjOccluder), 128, "MAPOBJOCC", true));
