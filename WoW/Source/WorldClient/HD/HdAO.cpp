@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Azeroth Remastered's HdVulkanAO.cpp on GxEffects. The donor ran in place on its back buffer with its own depth and
 // optional G-buffer normals; here the depth is CopyDepth, the normals always come from the depth (the donor's
-// hdAONormals 0), the world's colour is copied into an RGBA16F storage texture that the apply pass writes and a pass
-// draws back, and the view matrix is made absolute from the engine's camera-relative one. Passes, sizes and constants
+// hdAONormals 0), the apply pass writes the shared frame (HdFrame.h), and the view matrix is made absolute from the engine's camera-relative one. Passes, sizes and constants
 // are the donor's.
 #include "WoW/Source/WorldClient/HD/HdAO.h"
 
@@ -16,6 +15,7 @@
 #include "WoW/Source/Ui/Visuals.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
+#include "WoW/Source/WorldClient/HD/HdFrame.h"
 
 namespace {
 #include "WoW/Source/WorldClient/HD/Shaders/Spirv.inc"
@@ -32,11 +32,9 @@ namespace {
     struct State {
         GxEffects::Device* device = nullptr;
         const GxEffects::Program* programs[kPrograms] = {};
-        const GxEffects::Program* copy = nullptr;
         GxEffects::Texture* z[5] = {};          // the view depth pyramid (R32F, each level half the one before)
         GxEffects::Texture* ao[2] = {};         // AO + packed edges, A then B (the blurs ping-pong)
         GxEffects::Texture* history[2] = {};    // temporal: AO, view depth, frames, valid (one per frame, ping-pong)
-        GxEffects::Texture* frame = nullptr;
         GxEffects::Texture* depth = nullptr;
         uint32_t width = 0, height = 0, aoWidth = 0, aoHeight = 0;
         bool half = false;
@@ -194,7 +192,7 @@ namespace {
             st.device = device;
         }
         if (st.failed) return false;
-        if (!st.copy) {
+        if (!st.programs[0]) {
             const uint32_t* code[kPrograms] = { kAOPrefilter, kAOMip, kAOMainLow, kAOMainMedium, kAOMainHigh, kAOMainUltra, kAOBlur, kAOApply, kAOTemporal };
             const size_t bytes[kPrograms] = { sizeof kAOPrefilter, sizeof kAOMip, sizeof kAOMainLow, sizeof kAOMainMedium, sizeof kAOMainHigh,
                                               sizeof kAOMainUltra, sizeof kAOBlur, sizeof kAOApply, sizeof kAOTemporal };
@@ -203,15 +201,14 @@ namespace {
                 st.programs[i] = device->CreateProgram(code[i], bytes[i], "HD AO");
                 ok = st.programs[i] != nullptr;
             }
-            st.copy = ok ? device->CreateProgram(kCopyFrag, sizeof kCopyFrag, "HD AO copy") : nullptr;
-            if (!st.copy) {
+            if (!ok) {
                 st.failed = true;
                 Info("AO: no compute on this device (programs, RGBA16F or R32F storage)");
                 return false;
             }
         }
         if (st.width != width || st.height != height || st.half != half) {
-            for (GxEffects::Texture** t : { &st.frame, &st.depth, &st.ao[0], &st.ao[1], &st.history[0], &st.history[1], &st.z[0], &st.z[1], &st.z[2], &st.z[3], &st.z[4] }) {
+            for (GxEffects::Texture** t : { &st.depth, &st.ao[0], &st.ao[1], &st.history[0], &st.history[1], &st.z[0], &st.z[1], &st.z[2], &st.z[3], &st.z[4] }) {
                 device->Destroy(*t);
                 *t = nullptr;
             }
@@ -225,7 +222,6 @@ namespace {
                 st.ao[i] = device->CreateStorage(aw, ah, GxEffects::Format::RGBA16F);
                 st.history[i] = device->CreateStorage(aw, ah, GxEffects::Format::RGBA16F);
             }
-            st.frame = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
             st.depth = device->CreateTexture(width, height, GxEffects::Format::Depth, false);
             st.width = width;
             st.height = height;
@@ -237,7 +233,7 @@ namespace {
         for (GxEffects::Texture* t : st.z) {
             if (!t) return false;
         }
-        return st.ao[0] && st.ao[1] && st.history[0] && st.history[1] && st.frame && st.depth;
+        return st.ao[0] && st.ao[1] && st.history[0] && st.history[1] && st.depth;
     }
 }
 
@@ -287,7 +283,8 @@ void HD::AO::World() {
     c.blur[0] = temporal ? float(st.frameNumber % 64) : 0;  // the noise frame; 0 is the fixed pattern
     const uint32_t quality = static_cast<uint32_t>(OptionCVars::Int(s_quality, 0, 3, 1));
 
-    bool ok = device->CopyDepth(st.depth) && device->CopyColor(st.frame);
+    GxEffects::Texture* frame = device->CopyDepth(st.depth) ? HD::Frame::Open(width, height) : nullptr;
+    bool ok = frame != nullptr;
     // Passes 0-4 the depth mips, 5 GTAO, 6-8 denoise, 9 temporal (optional), 10 apply.
     for (uint32_t pass = 0; pass < 11 && ok; ++pass) {
         if (pass == 9 && !temporal) continue;
@@ -303,7 +300,7 @@ void HD::AO::World() {
         if (pass < 5) compute.images[0] = st.z[pass];
         else if (pass < 9) compute.images[0] = pass == 6 || pass == 8 ? st.ao[1] : st.ao[0];
         else if (pass == 9) compute.images[0] = st.history[current];
-        else compute.images[1] = st.frame;
+        else compute.images[1] = frame;
 
         const uint32_t program = pass == 0 ? Prefilter : pass < 5 ? Mip : pass == 5 ? MainLow + quality : pass < 9 ? Blur : pass == 9 ? Temporal : Apply;
         Constants push = c;
@@ -328,10 +325,7 @@ void HD::AO::World() {
         compute.pushBytes = sizeof push;
         ok = device->Dispatch(compute);
     }
-    GxEffects::Pass back;
-    back.program = st.copy;
-    back.textures[0].texture = st.frame;
-    if (!ok || !device->Draw(back)) {
+    if (!HD::Frame::Close() || !ok) {
         Info("AO: a copy, compute or the draw back failed");
         return;
     }

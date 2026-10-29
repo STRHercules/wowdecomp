@@ -4,6 +4,8 @@
 #include <cstddef>
 #include <cstdint>
 
+class CGxTex;
+
 // Not in the original 3.3.5a binary. Full-screen post passes over the world for effects the engine's own Gx
 // pipeline cannot express (float targets, many samplers, a constant file, the world's depth as a texture):
 // Lumenveil's fog, lights and water. A backend that has them returns a device from GxEffects::Get(); the others
@@ -65,6 +67,9 @@ struct Readback;   // a read of a target in flight
 // An empty slot reads (0, 0, 0, 1), as D3D9 reads a stage with no texture.
 struct Binding {
     Texture* texture = nullptr;
+    // Instead of texture: one of the engine's own 2D textures (a render target such as a sun shadow map), sampled as
+    // the engine left it. An engine texture the backend has no image for, or a cube map, reads as an empty slot.
+    CGxTex* engine = nullptr;
     bool linear = false;
     bool wrap = false;
     bool mips = false;      // filter between mip levels (linear); off, level 0 only

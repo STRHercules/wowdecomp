@@ -16,6 +16,8 @@
 // after everything recorded before and before everything after.
 #include "Engine/Source/Gx/GxEffects.h"
 
+#include "Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.h"
+
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Context.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Effects.hpp"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Frame.hpp"
@@ -852,6 +854,18 @@ namespace
                 images[i].sampler     = s.samplers[(textures[i].linear ? 1 : 0) | (textures[i].wrap ? 2 : 0) | (textures[i].mips ? 4 : 0)];
                 images[i].imageView   = t->View();
                 images[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                if (textures[i].engine && !textures[i].texture)
+                {
+                    // Only a live Vulkan device hands out this device (GxEffects::Get), so the engine's is ours. Its
+                    // colour targets rest in SHADER_READ_ONLY_OPTIMAL; ITexTouch keeps the image to the frame's end.
+                    auto* device = static_cast<CGxDeviceVulkan*>(g_theGxDevicePtr);
+                    const texture::Image* image = device->ITexImage(textures[i].engine);
+                    if (image && !image->cube && image->layout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
+                    {
+                        images[i].imageView = image->view;
+                        device->ITexTouch(textures[i].engine);
+                    }
+                }
             }
             VkDescriptorBufferInfo buffer = { slot->uniforms.handle, at, constantBytes };
             VkWriteDescriptorSet writes[2] = {};

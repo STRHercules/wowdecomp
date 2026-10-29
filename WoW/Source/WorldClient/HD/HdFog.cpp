@@ -1,9 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Azeroth Remastered's HdVulkanFog.cpp on GxEffects. The donor graded its back buffer in place with its own depth and
-// the client's sun shadow maps; here the depth is CopyDepth, the world's colour is copied into an RGBA16F storage
-// texture that the composite writes and a pass draws back, and there are no shadow maps yet (the donor's "no shadow
-// maps" path: the fog is lit wherever the sun is up) and no Cata water plane. Layer choice, the constant rows, the
-// march and the blurs are the donor's.
+// Azeroth Remastered's HdVulkanFog.cpp on GxEffects. The donor fogged its back buffer in place with its own depth;
+// here the depth is CopyDepth and the composite writes the shared frame (HdFrame.h). The client's three sun shadow
+// bands are bound as engine textures (the backend's are R32F colour targets: the shader's raw-depth path), and there
+// is no Cata water plane yet. Layer choice, the constant rows, the march and the blurs are the donor's.
 #include "WoW/Source/WorldClient/HD/HdFog.h"
 
 #include <algorithm>
@@ -12,6 +11,8 @@
 
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
 #include "Engine/Source/Gx/GxEffects.h"
+#include "Engine/Source/Services/Texture.h"
+#include "Engine/Source/ShaderEffect/ShadowCache.h"
 #include "WoW/Source/DB/Rec/LightRec.h"
 #include "WoW/Source/Ui/OptionCVars.h"
 #include "WoW/Source/Ui/Visuals.h"
@@ -19,6 +20,7 @@
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
 #include "WoW/Source/WorldClient/HD/HdForever.h"
+#include "WoW/Source/WorldClient/HD/HdFrame.h"
 
 namespace {
 #include "WoW/Source/WorldClient/HD/Shaders/Spirv.inc"
@@ -41,8 +43,6 @@ namespace {
     struct State {
         GxEffects::Device* device = nullptr;
         const GxEffects::Program* programs[kPasses] = {};
-        const GxEffects::Program* copy = nullptr;
-        GxEffects::Texture* frame = nullptr;
         GxEffects::Texture* scatter[2] = {};
         GxEffects::Texture* depth = nullptr;
         uint32_t width = 0;
@@ -55,6 +55,7 @@ namespace {
     CVar* s_density = nullptr;
     CVar* s_sun = nullptr;
     CVar* s_ambient = nullptr;
+    CVar* s_shadow = nullptr;
     CVar* s_debug = nullptr;
     CVar* s_info = nullptr;
     char s_lastInfo[160] = {};
@@ -236,8 +237,27 @@ namespace {
             d = { l.topRate * .01f, l.topHeight + rel, l.bottomRate * .01f, l.bottomHeight + rel };
             e = { std::pow(l.shadow[0], 2.2f) * base, std::pow(l.shadow[1], 2.2f) * base, std::pow(l.shadow[2], 2.2f) * base, l.shadowMul };
         }
-        // r[33]: x shadow maps (none yet), y comparison maps (never here), z how far the sun is up.
+        // r[33]: x shadow maps (set by Shadows), y comparison maps (never here), z how far the sun is up.
         p.r[33].z = Clamp(sz * 4 + .2f, 0, 1);
+    }
+
+    // The donor's Maps: the client's three sun shadow bands, when hdFogShadow is on and the shadow mode draws them (above
+    // Medium), into texture slots 1..3 with their view-to-shadow matrices in r[24..32]. False (no shadows: the fog is lit
+    // wherever the sun is up) when any band has no texture yet: an empty slot would read depth 0, all in shadow.
+    bool Shadows(GxEffects::Compute& compute, Parameters& p) {
+        if (!OptionCVars::Bool(s_shadow, true) || CShadowCache::GetShadowMode() <= SHADOW_MEDIUM) return false;
+        CGxTex* maps[3] = {};
+        for (int i = 0; i < 3; ++i) {
+            const CShadowBand& band = CShadowCache::s_extShadowBands[i];
+            CTexture* texture = band.m_textures[band.m_current];
+            maps[i] = texture ? TextureGetGxTex(texture, 1, nullptr) : nullptr;
+            if (!maps[i] || maps[i]->m_needsCreation) return false;
+        }
+        for (int i = 0; i < 3; ++i) compute.textures[1 + i].engine = maps[i];
+        static_assert(sizeof(CShadowCache::s_shadowMatrices[0]) == sizeof(Row), "a shadow matrix row");
+        std::memcpy(&p.r[24], &CShadowCache::s_shadowMatrices[3], 9 * sizeof(Row));
+        p.r[33].x = 1;
+        return true;
     }
 
     // The programs and the textures for this device and target size. False when they cannot be made (for good on
@@ -250,7 +270,7 @@ namespace {
             st.device = device;
         }
         if (st.failed) return false;
-        if (!st.copy) {
+        if (!st.programs[0]) {
             const uint32_t* code[kPasses] = { kFogSingle, kFogMarch, kFogBlur, kFogComposite };
             const size_t bytes[kPasses] = { sizeof kFogSingle, sizeof kFogMarch, sizeof kFogBlur, sizeof kFogComposite };
             bool ok = device->CanStore(GxEffects::Format::RGBA16F);
@@ -258,26 +278,23 @@ namespace {
                 st.programs[i] = device->CreateProgram(code[i], bytes[i], "HD Fog");
                 ok = st.programs[i] != nullptr;
             }
-            st.copy = ok ? device->CreateProgram(kCopyFrag, sizeof kCopyFrag, "HD Fog copy") : nullptr;
-            if (!st.copy) {
+            if (!ok) {
                 st.failed = true;
                 Info("fog: no compute on this device (programs or RGBA16F storage)");
                 return false;
             }
         }
         if (st.width != width || st.height != height) {
-            device->Destroy(st.frame);
             device->Destroy(st.scatter[0]);
             device->Destroy(st.scatter[1]);
             device->Destroy(st.depth);
-            st.frame = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
             st.scatter[0] = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
             st.scatter[1] = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
             st.depth = device->CreateTexture(width, height, GxEffects::Format::Depth, false);
             st.width = width;
             st.height = height;
         }
-        return st.frame && st.scatter[0] && st.scatter[1] && st.depth;
+        return st.scatter[0] && st.scatter[1] && st.depth;
     }
 }
 
@@ -288,6 +305,7 @@ void HD::Fog::RegisterCVars() {
     s_density = OptionCVars::Register("hdFogDensity", "HD: fog density multiplier, 0..5", "3");
     s_sun = OptionCVars::Register("hdFogSun", "HD: sun scattering multiplier, 0..5", "1");
     s_ambient = OptionCVars::Register("hdFogAmbient", "HD: ambient fog multiplier, 0..5", "4.75");
+    s_shadow = OptionCVars::Register("hdFogShadow", "HD: sun shadow cascades in the fog", "1");
     s_debug = CVar::Register("hdFogDebug", "HD: 1 distance, 2 depth, 3 fog alone, 4 sun shadows", 0, "0", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_info = CVar::Register("hdFogInfo", "HD: fog status", 0, "off", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
 }
@@ -327,13 +345,14 @@ void HD::Fog::World() {
     compute.groupsX = (width + 7) / 8;
     compute.groupsY = (height + 7) / 8;
     compute.textures[0].texture = st.depth;
-    compute.images[0] = st.frame;
     compute.images[1] = st.scatter[0];
     compute.images[2] = st.scatter[1];
+    const bool shadows = Shadows(compute, p);
     compute.constants = reinterpret_cast<const float(*)[4]>(&p);
     compute.constantRows = sizeof p / 16;
 
-    bool ok = device->CopyDepth(st.depth) && device->CopyColor(st.frame);
+    compute.images[0] = device->CopyDepth(st.depth) ? HD::Frame::Open(width, height) : nullptr;
+    bool ok = compute.images[0] != nullptr;
     // The debug views 1, 2 and 4 show raw data: the single pass. The others march, then blur the march's grain.
     if (mode == 1 || mode == 2 || mode == 4) {
         compute.program = st.programs[Single];
@@ -344,12 +363,9 @@ void HD::Fog::World() {
             ok = ok && device->Dispatch(compute);
         }
     }
-    GxEffects::Pass back;
-    back.program = st.copy;
-    back.textures[0].texture = st.frame;
-    if (!ok || !device->Draw(back)) {
+    if (!HD::Frame::Close() || !ok) {
         Info("fog: a copy, compute or the draw back failed");
         return;
     }
-    Info(mode ? "fog: debug view" : "fog: 3 layers / 32 steps, no shadow maps (sun height retained)");
+    Info(mode ? "fog: debug view" : (shadows ? "fog: 3 layers / 32 steps, shadow maps" : "fog: 3 layers / 32 steps, no shadow maps (sun height retained)"));
 }

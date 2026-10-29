@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Azeroth Remastered's HdVulkanGrade.cpp on GxEffects. The donor graded the back buffer in place; here the world's
-// colour is copied into an RGBA16F storage texture (GLSL has no BGRA image format), graded by a compute, and drawn
-// back. LUT choice, the shader's formulas and the cvars are the donor's.
+// Azeroth Remastered's HdVulkanGrade.cpp on GxEffects. The donor graded the back buffer in place; here a compute grades
+// the shared frame (HdFrame.h), which bloom has already written when it is on. LUT choice, the shader's formulas and
+// the cvars are the donor's.
 #include "WoW/Source/WorldClient/HD/HdGrade.h"
 
 #include <algorithm>
@@ -20,6 +20,7 @@
 #include "WoW/Source/WorldClient/DayNight.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdForever.h"
+#include "WoW/Source/WorldClient/HD/HdFrame.h"
 
 namespace {
 #include "WoW/Source/WorldClient/HD/Shaders/Spirv.inc"
@@ -64,10 +65,6 @@ namespace {
     struct State {
         GxEffects::Device* device = nullptr;
         const GxEffects::Program* grade = nullptr;
-        const GxEffects::Program* copy = nullptr;
-        GxEffects::Texture* frame = nullptr;
-        uint32_t width = 0;
-        uint32_t height = 0;
         std::map<int32_t, GxEffects::Texture*> luts;
         std::set<int32_t> missing;
         bool failed = false;
@@ -244,9 +241,8 @@ namespace {
         return texture;
     }
 
-    // The programs and the frame copy for this device and target size. False (logged in hdGradeInfo) when they
-    // cannot be made, for good on this device.
-    bool Ready(GxEffects::Device* device, uint32_t width, uint32_t height) {
+    // The program for this device. False (logged in hdGradeInfo) when it cannot be made, for good on this device.
+    bool Ready(GxEffects::Device* device) {
         State& st = s_state;
         if (device != st.device) {
             // A new device: what the old one made is gone with it.
@@ -256,20 +252,13 @@ namespace {
         if (st.failed) return false;
         if (!st.grade) {
             st.grade = device->CreateProgram(kGradeComp, sizeof kGradeComp, "HD Grade");
-            st.copy = device->CreateProgram(kCopyFrag, sizeof kCopyFrag, "HD Grade copy");
-            if (!st.grade || !st.copy || !device->CanStore(GxEffects::Format::RGBA16F)) {
+            if (!st.grade || !device->CanStore(GxEffects::Format::RGBA16F)) {
                 st.failed = true;
                 Info("grade: no compute on this device (programs or RGBA16F storage)");
                 return false;
             }
         }
-        if (st.width != width || st.height != height) {
-            device->Destroy(st.frame);
-            st.frame = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
-            st.width = width;
-            st.height = height;
-        }
-        return st.frame != nullptr;
+        return true;
     }
 }
 
@@ -295,10 +284,7 @@ void HD::Grade::World() {
         Info("grade: no GxEffects device (Vulkan only)");
         return;
     }
-    if (!Ready(device, width, height)) {
-        if (!s_state.failed) Info("grade: the frame copy could not be made");
-        return;
-    }
+    if (!Ready(device)) return;
 
     LutWeights weights;
     if (s_forced && s_forced->m_intValue > 0) {
@@ -330,16 +316,12 @@ void HD::Grade::World() {
     compute.textures[0].linear = true;
     compute.textures[1].texture = lutB;
     compute.textures[1].linear = true;
-    compute.images[0] = s_state.frame;
+    compute.images[0] = HD::Frame::Open(width, height);
     compute.push = params;
     compute.pushBytes = sizeof params;
 
-    GxEffects::Pass back;
-    back.program = s_state.copy;
-    back.textures[0].texture = s_state.frame;
-
-    if (!device->CopyColor(s_state.frame) || !device->Dispatch(compute) || !device->Draw(back)) {
-        Info("grade: the copy, compute or draw back failed");
+    if (!compute.images[0] || !device->Dispatch(compute)) {
+        Info("grade: the frame copy or the compute failed");
         return;
     }
     char text[240];

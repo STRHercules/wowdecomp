@@ -80,7 +80,8 @@ clients have, all are the same lights (50 with retuned falloff radii). Layouts i
    modules (`BLOOM_PASS` 1..6 via `Compile.py`'s third entry field); the donor's pass 0 (half-size copy) is a scaled
    `CopyColor`, its depth read is `CopyDepth`. cvars: `hdBloom` (1), `hdBloomStrength`, `hdBloomThreshold`, `hdRays` (1),
    `hdRaysStrength`, `hdBloomDebug` (1 ray mask, 2 rays, 3 halo; a red dot marks the sun), `hdBloomInfo`. Needs no data.
-   Bloom and Grade each copy the frame and draw it back; sharing one copy is a later saving.
+   The four effects share one RGBA16F frame (`HD/HdFrame.cpp`): bloom and grading, back to back, share one copy and one
+   draw back (3 copies a frame instead of 4, one full-size texture instead of 4).
    **Fog landed 2026-10-29; its debug views (distance with the sky in red, raw depth) look right in game, the fog itself unseen for lack of data:** `HD/HdFog.cpp`, called before `SpellVisualsTick` (the donor's
    spot: after the liquids and weather, before spells and particles). `Fog.comp` is the donor's shader with bindings
    renumbered, as four modules (`FOG_PASS` 0 single pass for debug views 1/2/4; 1 march, 2 and 3 depth-aware blurs and
@@ -88,8 +89,10 @@ clients have, all are the same lights (50 with retuned falloff radii). Layouts i
    `Lumenveil::OpaqueDone`, shared with Bloom. `HdForever.cpp` loads `hd_forever_fog.txt` too. cvars, the donor pack's
    defaults: `hdFog` (1), `hdFogDensity` (3), `hdFogSun` (1), `hdFogAmbient` (4.75), `hdFogDebug` (1 distance, 2 depth,
    3 fog alone, 4 sun shadow), `hdFogInfo`. **Left out:** the client's sun shadow maps in the fog (`hdFogShadow`, the
-   light shafts): GxEffects cannot bind the engine's shadow textures nor a comparison sampler, so the fog takes the
-   donor's "no shadow maps" path (lit wherever the sun is up). The Cata water plane (stop the ray at the water) waits for
+   light shafts) at first; since 2026-10-29 `GxEffects::Binding::engine` samples an engine texture as it is, and the fog
+   binds the three sun shadow bands (R32F colour targets in this backend: the shader's raw-depth path, no comparison
+   sampler needed) with `s_shadowMatrices[3..11]`, under the donor's conditions (`hdFogShadow` 1, shadow mode above
+   Medium). Checked in game 2026-10-29 with the shared frame: all four effects still draw, the shafts work. The Cata water plane (stop the ray at the water) waits for
    the water port. Like Grade, no fog without `forever_data`; `hdFogDebug 1` and `2` run without it.
    **AO landed 2026-10-29; works in game (visuals 2, with the temporal pass):** `HD/HdAO.cpp`, Intel's XeGTAO as the donor ported it, called
    right after `HD::CaptureCamera()` (after the opaque models, the donor's AfterOpaqueWorld point). `AO.comp` + `XeGTAO.glsl`

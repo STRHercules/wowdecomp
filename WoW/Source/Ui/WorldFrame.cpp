@@ -92,6 +92,7 @@
 #include "WoW/Source/WorldClient/HD/HdBloom.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
 #include "WoW/Source/WorldClient/HD/HdFog.h"
+#include "WoW/Source/WorldClient/HD/HdFrame.h"
 #include "WoW/Source/WorldClient/HD/HdGrade.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/UnitOutlineGather.h"
@@ -1814,6 +1815,7 @@ void CGWorldFrame::OnWorldRender() {
     // world (visuals 2 only).
     HD::Bloom::World();
     HD::Grade::World();
+    HD::Frame::Close();
 
     if (CWorld::enables & 0x20000000) {
         GxMasterEnableSet(GxMasterEnable_PolygonFill, 1);

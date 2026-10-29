@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Azeroth Remastered's HdVulkanBloom.cpp on GxEffects. The donor worked in place on the back buffer; here the
-// half-size copy of the frame is CopyColor, the depth is CopyDepth, and the composite writes the world's colour in an
-// RGBA16F storage texture that a pass draws back. Pass order, sizes, formulas and cvars are the donor's.
+// half-size copy of the frame is CopyColor, the depth is CopyDepth, and the composite writes the shared frame
+// (HdFrame.h), which grading then reads and the world frame draws back. Pass order, sizes, formulas and cvars are the donor's.
 #include "WoW/Source/WorldClient/HD/HdBloom.h"
 
 #include <algorithm>
@@ -16,6 +16,7 @@
 #include "WoW/Source/WorldClient/DayNight.h"
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
+#include "WoW/Source/WorldClient/HD/HdFrame.h"
 
 namespace {
 #include "WoW/Source/WorldClient/HD/Shaders/Spirv.inc"
@@ -40,9 +41,8 @@ namespace {
     struct State {
         GxEffects::Device* device = nullptr;
         const GxEffects::Program* programs[kPasses] = {};
-        const GxEffects::Program* copy = nullptr;
         GxEffects::Texture* images[kImages] = {};
-        GxEffects::Texture* frame = nullptr;
+        GxEffects::Texture* frame = nullptr;   // this frame's HD::Frame, while the composite runs
         GxEffects::Texture* depth = nullptr;
         uint32_t width = 0;
         uint32_t height = 0;
@@ -146,7 +146,7 @@ namespace {
             st.device = device;
         }
         if (st.failed) return false;
-        if (!st.copy) {
+        if (!st.programs[0]) {
             const uint32_t* code[kPasses] = { kBloomBright, kBloomDown, kBloomBlur, kBloomRayMask, kBloomRadial, kBloomComposite };
             const size_t bytes[kPasses] = { sizeof kBloomBright, sizeof kBloomDown, sizeof kBloomBlur, sizeof kBloomRayMask, sizeof kBloomRadial, sizeof kBloomComposite };
             bool ok = device->CanStore(GxEffects::Format::RGBA16F);
@@ -154,8 +154,7 @@ namespace {
                 st.programs[i] = device->CreateProgram(code[i], bytes[i], "HD Bloom");
                 ok = st.programs[i] != nullptr;
             }
-            st.copy = ok ? device->CreateProgram(kCopyFrag, sizeof kCopyFrag, "HD Bloom copy") : nullptr;
-            if (!st.copy) {
+            if (!ok) {
                 st.failed = true;
                 Info("bloom: no compute on this device (programs or RGBA16F storage)");
                 return false;
@@ -166,21 +165,19 @@ namespace {
                 device->Destroy(t);
                 t = nullptr;
             }
-            device->Destroy(st.frame);
             device->Destroy(st.depth);
             st.depth = nullptr;
             st.images[0] = device->CreateTexture(Dimension(width, 2), Dimension(height, 2), GxEffects::Format::BGRA8, true);
             for (uint32_t i = 1; i < kImages; ++i) {
                 st.images[i] = device->CreateStorage(Dimension(width, Divisor(i)), Dimension(height, Divisor(i)), GxEffects::Format::RGBA16F);
             }
-            st.frame = device->CreateStorage(width, height, GxEffects::Format::RGBA16F);
             st.width = width;
             st.height = height;
         }
         for (GxEffects::Texture* t : st.images) {
             if (!t) return false;
         }
-        return st.frame != nullptr;
+        return true;
     }
 
     // One compute over image `dst` (-1: the frame), sampling t0..t2 (point when `pointT1`, for the depth).
@@ -298,12 +295,10 @@ void HD::Bloom::World() {
     const uint32_t ray = rays ? (debug == 1 ? 5 : 6) : halo;
     Set(c.a, bloom ? strength : 0, rays ? rayStrength * (debug > 0 ? 1 : post.visible) : 0, float(debug));
     Set(c.b, post.u, post.v, float(width) / height);
-    ok = ok && device->CopyColor(st.frame) && Run(Composite, -1, st.images[halo], st.images[wide], st.images[ray], c);
-    GxEffects::Pass back;
-    back.program = st.copy;
-    back.textures[0].texture = st.frame;
-    if (!ok || !device->Draw(back)) {
-        Info("bloom: a copy, compute or the draw back failed");
+    st.frame = ok ? HD::Frame::Open(width, height) : nullptr;
+    ok = st.frame && Run(Composite, -1, st.images[halo], st.images[wide], st.images[ray], c);
+    if (!ok) {
+        Info("bloom: a copy or a compute failed");
         return;
     }
     Info(s_rays && s_rays->m_intValue && !rays ? "bloom; rays unavailable (depth, projection or sun)"
