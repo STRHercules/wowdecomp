@@ -1108,8 +1108,11 @@ FMOD_RESULT ChannelI::play(SoundI *sound, bool paused, bool reset, bool startmut
 
     if (sound->mSoundGroup && mSystem)
     {
+        // CoA64: locked, see SoundI::setSoundGroup.
+        FMOD_OS_CriticalSection_Enter(SystemI::gSoundListCrit);
         sound->mSoundGroup->removeNode();
         sound->mSoundGroup->addAfter(&mSystem->mSoundGroupUsedHead);
+        FMOD_OS_CriticalSection_Leave(SystemI::gSoundListCrit);
     }
 
     if (reset)

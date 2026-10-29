@@ -881,6 +881,9 @@ FMOD_RESULT SystemI::updateSoundGroups(int delta)
     SoundGroupI *soundgroup;
     bool         mute = false;
 
+    // CoA64: locked, see SoundI::setSoundGroup (the original walks and relinks these lists unlocked).
+    FMOD_OS_CriticalSection_Enter(gSoundListCrit);
+
     soundgroup = (SoundGroupI *)mSoundGroupUsedHead.getNext();
     while (soundgroup != &mSoundGroupUsedHead)
     {
@@ -904,6 +907,8 @@ FMOD_RESULT SystemI::updateSoundGroups(int delta)
 
         soundgroup = next;
     }
+
+    FMOD_OS_CriticalSection_Leave(gSoundListCrit);
 
     if (mute)
     {
