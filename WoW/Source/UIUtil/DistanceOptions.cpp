@@ -471,7 +471,70 @@ if not WowDecompPerfOverlay then
     Apply()
 end
 )lua";
+    // The Effects page's "Visuals" dropdown: which visual pack draws the world (the `visuals` cvar, see Ui/Visuals.h).
+    // It is a stock-style control, so Okay, Cancel and Defaults treat it like the sliders beside it. It sits in the
+    // empty cells left of Player Textures.
+    static const char visualsScript[] = R"lua(
+if not VideoOptionsFrame or not VideoOptionsEffectsPanelPlayerTexture or WowDecompVisualsDropDown then return end
+
+local panel = VideoOptionsEffectsPanel
+local choices = {
+    { value = "0", text = "Stock (Vulkan)" },
+    { value = "1", text = "Lumenveil" },
+    { value = "2", text = "Azeroth Remastered" },
+}
+
+local dd = CreateFrame("Frame", "WowDecompVisualsDropDown", panel, "UIDropDownMenuTemplate")
+dd:SetPoint("TOPLEFT", VideoOptionsEffectsPanelPlayerTexture, "TOPLEFT", -284, 8)
+UIDropDownMenu_SetWidth(dd, 190)
+
+local function NameOf(value)
+    for _, choice in ipairs(choices) do
+        if choice.value == value then return choice.text end
+    end
+    return choices[2].text
+end
+
+local function Show(self, value)
+    self.shown = value
+    UIDropDownMenu_SetSelectedValue(self, value)
+    UIDropDownMenu_SetText(self, "Visuals: " .. NameOf(value))
+end
+
+UIDropDownMenu_Initialize(dd, function()
+    for _, choice in ipairs(choices) do
+        local info = {}
+        info.text = choice.text
+        info.value = choice.value
+        info.checked = dd.shown == choice.value
+        info.func = function(button)
+            dd.newValue = button.value
+            Show(dd, button.value)
+            if VideoOptionsFrameApply then VideoOptionsFrameApply:Enable() end
+        end
+        UIDropDownMenu_AddButton(info)
+    end
+end)
+
+dd.type = CONTROLTYPE_DROPDOWN
+dd.defaultValue = "1"
+dd.GetValue = function() return GetCVar("visuals") end
+dd.SetValue = function(self, value)
+    self.value = value
+    if GetCVar("visuals") ~= value then SetCVar("visuals", value) end
+    Show(self, value)
+end
+dd.RefreshValue = function(self)
+    self.value = GetCVar("visuals") or "1"
+    self.newValue = nil
+    Show(self, self.value)
+end
+BlizzardOptionsPanel_RegisterControl(dd, panel)
+dd:RefreshValue()
+)lua";
+
     FrameScript_Execute(script, "NativeDistanceOptions", nullptr);
+    FrameScript_Execute(visualsScript, "NativeVisualsDropDown", nullptr);
     FrameScript_Execute(pagesScript, "NativeEsteriaPageHelpers", nullptr);
     FrameScript_Execute(pagesScript2, "NativeEsteriaPages", nullptr);
     FrameScript_Execute(overlayScript, "NativeEsteriaOverlay", nullptr);

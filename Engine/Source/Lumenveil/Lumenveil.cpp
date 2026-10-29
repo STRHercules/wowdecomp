@@ -28,6 +28,7 @@
 #include "Engine/Source/Gx/GxEffects.h"
 #include "Engine/Source/ShaderEffect/ShadowCache.h"
 #include "WoW/Source/Ui/OptionCVars.h"
+#include "WoW/Source/Ui/Visuals.h"
 
 #include "Engine/Source/Lumenveil/Shaders/DebugSpirv.inc"
 
@@ -137,7 +138,7 @@ namespace {
     }
 
     bool Enabled() {
-        return s_started && OptionCVars::Bool(s_cvarEnabled, true) && GlobalConfig().Get().enable;
+        return s_started && Visuals::Current() == Visuals::Lumenveil && OptionCVars::Bool(s_cvarEnabled, true) && GlobalConfig().Get().enable;
     }
 
     bool FogDrawsInPlaceOfStockFog() {
@@ -415,6 +416,7 @@ void Lumenveil::Startup() {
     if (s_started) {
         return;
     }
+    Visuals::Register();
     s_cvarEnabled = OptionCVars::Register("lumenveil", "Lumenveil: fog, light shafts, night lights and water", "1");
     s_cvarDepthView = CVar::Register("lumenveilDepthView", "Lumenveil: show the world depth the effects read", 0, "0", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     // A debug aid: 0 makes every pixel test every lamp (no tile lists); reset to 1 at every start.
