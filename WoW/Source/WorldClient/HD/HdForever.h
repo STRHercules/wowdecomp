@@ -36,6 +36,10 @@ struct ForeverFog {
 
 void RegisterForeverCVars();
 
+// Whether Forever has this light at all (its ID on its map). A light it lacks (one a server or patch added) is no
+// opinion: the grading and the fog take the lights around it instead of fading out there.
+bool ForeverHasLight(const LightRec* light);
+
 // Blend two layers (t = 0 keeps a, 1 gives b); a missing layer (flags 0) fades in or out by density only.
 void LerpFogLayer(ForeverFogLayer& a, const ForeverFogLayer& b, float t);
 // This light's Forever fog for `slot` at `time`, between Forever's time keys. False when it has none.

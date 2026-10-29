@@ -47,6 +47,24 @@ beam), and about 277 shared files differ (core Gx device files included). Two st
    donor's device layer (`GxSeam`, `VkHostLinkApi`), so the size of this spike is a guess. Decide on a swap only after it,
    and only if its performance work (depth pyramid, doodad batching) is worth re-fitting Lumenveil and the Retail work.
 
+## HD world logic
+
+- **HdTime (2026-10-29, works in game):** `HD/HdTime.cpp`, all gated on visuals 2, the donor pack's defaults.
+  `hdTime` (-1, or 0..24 to hold the hour on this screen: the time override that works in mode 2, where
+  `lumenveilTime` does not) in `CGWorldFrame::UpdateDayNight` and the skybox animation minutes; `hdSunPath` (1, the sun
+  where the world light comes from by day) in `DayNight` `SetPlanets`; `hdShadowSun` (1, shadows at the light's real
+  height) in `CShadowQuery::Update`; `hdShadowBillboard` (1, tree leaf cards face the sun in the shadow pass) with the
+  donor's billboard block in `ShadowQuery.cpp`.
+- **Custom lights (2026-10-29):** the donor fades fog and grading out inside a light Forever lacks. This server's own
+  lights (IDs 5000+, from `patch-E.mpq`) are such lights, and where one overlaps a Forever light at full weight (L5000
+  and Stormwind's L77 near the gate) the result flipped with their nearest-first order: no fog, then full fog, a step
+  apart. Nearby lights Forever does not have at all are now skipped (`HD::ForeverHasLight`); lights it has without fog
+  or grading still fade them out, as the donor's. Checked at the gate: the fog stays. `hdFogInfo` lists the lights, settings and weights the fog came from.
+- Next, as surveyed: contact shadows and GI as GxEffects passes (D3D9-only in the donor); then the material shaders
+  (terrain, WMO, grass, sky, grass wind, point lights: the donor injects HLSL into the engine's shaders and runs it on
+  Vulkan through offline-translated modules, `HdGxShader`); water last (Forever PBR or Cata water, its mirror replays the
+  frame inside the donor's backend, and Cata water needs its `patch-w.mpq`).
+
 ## forever_data
 
 The donor's `forever_data` and the scripts that made it are untracked in its repo (`/forever_data/`, `/forever_tools/` in

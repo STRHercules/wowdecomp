@@ -1,5 +1,8 @@
 #include "ShadowQuery.h"
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
+#include <algorithm>
+#include <vector>
+#include "WoW/Source/WorldClient/HD/HdTime.h"
 #include "Engine/Source/ConsoleBase/Types.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include <cmath>
@@ -102,7 +105,8 @@ static void GetViewerPosition(C3Vector* position) {
 void CShadowQuery::Update() {
     C3Vector direction = CMap::s_mapLight->m_light.m_dir;
     int32_t useCullFrustum = CWorldScene::frustumPortalView.m_maxViewDepth >= 0.0f || CWorldScene::s_hasPendingExteriorGroups;
-    float z = direction.z * 5.0f;
+    // Not in the original binary: hdShadowSun 1 casts at the light's real height (original: 5x steeper).
+    float z = direction.z * HD::ShadowHeightScale();
 
     if (z < -1.2f) {
         z = -1.2f;
@@ -320,6 +324,206 @@ int32_t CShadowQuery::QueryCallback(CShadowCacheQueryData& data, uint32_t frame)
     return 1;
 }
 
+// Not in the original binary (Azeroth Remastered, HdTime.h): hdShadowBillboard. Billboarded M2 parts (the leaf cards of big trees) get their bones turned toward the
+// camera in CM2Model::Animate, and the shadow pass reused those bones, so their shadow turned with the camera.
+// During the shadow pass only, turn them toward the sun instead (1), or hide them (2, test), then put the
+// camera bones back for the normal render. 0 = original.
+namespace {
+    struct HdSavedBone {
+        C44Matrix* bone;
+        C44Matrix saved;
+    };
+
+    std::vector<HdSavedBone> s_hdSavedBones;
+    std::vector<CM2Model*> s_hdBillboardModels;
+    std::vector<C44Matrix> s_hdBoneDelta;
+    std::vector<uint8_t> s_hdBoneMoved;
+
+    // Same math as the billboard block of CM2Model::Animate, done in a camera placed at the sun.
+    void HdSunBillboard(C44Matrix& m, uint32_t billboard, const C3Vector& p, const C44Matrix& toSun, const C44Matrix& fromSun) {
+        C44Matrix s = m * toSun;
+        C3Vector& rowA = *reinterpret_cast<C3Vector*>(&s.a0);
+        C3Vector& rowB = *reinterpret_cast<C3Vector*>(&s.b0);
+        C3Vector& rowC = *reinterpret_cast<C3Vector*>(&s.c0);
+        C3Vector scale;
+        scale.x = sqrtf(s.a0 * s.a0 + s.a1 * s.a1 + s.a2 * s.a2);
+        scale.y = sqrtf(s.b0 * s.b0 + s.b1 * s.b1 + s.b2 * s.b2);
+        scale.z = sqrtf(s.c0 * s.c0 + s.c1 * s.c1 + s.c2 * s.c2);
+        C3Vector pivot = p * s;
+
+        switch (billboard) {
+            case 16: {
+                rowA.NormalizeSafe();
+                float x = rowA.x;
+                rowB.x = rowA.y;
+                rowB.y = -x;
+                rowB.z = 0.0f;
+                rowB.NormalizeSafe();
+                float cx = rowA.z * rowB.y - rowB.z * rowA.y;
+                float cy = rowA.x * rowB.z - rowB.x * rowA.z;
+                rowC.x = cx;
+                rowC.y = cy;
+                rowC.z = rowB.x * rowA.y - rowA.x * rowB.y;
+                break;
+            }
+
+            case 32: {
+                rowB.NormalizeSafe();
+                float x = rowB.x;
+                rowA.x = -rowB.y;
+                rowA.y = x;
+                rowA.z = 0.0f;
+                rowA.NormalizeSafe();
+                float cx = rowA.z * rowB.y - rowB.z * rowA.y;
+                float cy = rowA.x * rowB.z - rowB.x * rowA.z;
+                rowC.x = cx;
+                rowC.y = cy;
+                rowC.z = rowB.x * rowA.y - rowA.x * rowB.y;
+                break;
+            }
+
+            case 64: {
+                rowC.NormalizeSafe();
+                float x = rowC.x;
+                rowB.x = rowC.y;
+                rowB.y = -x;
+                rowB.z = 0.0f;
+                rowB.NormalizeSafe();
+                float ax = rowC.y * rowB.z - rowC.z * rowB.y;
+                float ay = rowB.x * rowC.z - rowB.z * rowC.x;
+                rowA.x = ax;
+                rowA.y = ay;
+                rowA.z = rowB.y * rowC.x - rowB.x * rowC.y;
+                break;
+            }
+
+            default: {
+                // 8 (and mixed flags): face the camera, here the sun. The animated twist of case 8 is left out.
+                rowA = C3Vector(0.0f, 0.0f, -1.0f);
+                rowB = C3Vector(1.0f, 0.0f, 0.0f);
+                rowC = C3Vector(0.0f, 1.0f, 0.0f);
+                break;
+            }
+        }
+
+        s.Scale(scale);
+        s.d0 = pivot.x - (s.a0 * p.x + s.b0 * p.y + s.c0 * p.z);
+        s.d1 = pivot.y - (s.a1 * p.x + s.b1 * p.y + s.c1 * p.z);
+        s.d2 = pivot.z - (s.a2 * p.x + s.b2 * p.y + s.c2 * p.z);
+        s.a3 = 0.0f;
+        s.b3 = 0.0f;
+        s.c3 = 0.0f;
+        s.d3 = 1.0f;
+        m = s * fromSun;
+    }
+
+    void HdCollectBillboardModels(const CModelBatchList& list) {
+        for (uint32_t i = 0; i < list.m_count; i++) {
+            CM2Model* model = list.m_batches[i].m_model;
+
+            if (model && model->GetBillboardBoneCount() && model->m_boneMatrices && std::find(s_hdBillboardModels.begin(), s_hdBillboardModels.end(), model) == s_hdBillboardModels.end()) {
+                s_hdBillboardModels.push_back(model);
+            }
+        }
+    }
+
+    // Rewrites the billboard bones (and the bones hanging under them) of the models about to cast; RestoreBillboards undoes it.
+    void HdShadowBillboards(const ShadowQueryBuffers& buffers, const C44Matrix& inverseView, int32_t mode) {
+        s_hdSavedBones.clear();
+        s_hdBillboardModels.clear();
+
+        if (mode <= 0) {
+            return;
+        }
+
+        HdCollectBillboardModels(buffers.m_untextured);
+        HdCollectBillboardModels(buffers.m_textured);
+
+        if (s_hdBillboardModels.empty()) {
+            return;
+        }
+
+        // A camera at the sun, built like the game camera (GxuXformCreateLookAtSgCompat), world up when it can.
+        C3Vector sunDir = CShadowCache::s_sunDir;
+        C3Vector up(0.0f, 0.0f, 1.0f);
+
+        if (sunDir.SquaredMag() < 0.0001f) {
+            return;
+        }
+
+        if (fabsf(sunDir.z) > 0.99f * sqrtf(sunDir.SquaredMag())) {
+            up = C3Vector(1.0f, 0.0f, 0.0f);
+        }
+
+        C44Matrix sunView;
+        GxuXformCreateLookAtSgCompat(C3Vector(0.0f, 0.0f, 0.0f), sunDir, up, sunView);
+        C44Matrix toSun = inverseView * sunView;
+        float toSunDet = toSun.Determinant();
+
+        if (fabsf(toSunDet) < 0.000001f) {
+            return;
+        }
+
+        C44Matrix fromSun = toSun.Inverse(toSunDet);
+
+        for (CM2Model* model : s_hdBillboardModels) {
+            M2Data* data = model->m_shared->m_data;
+            uint32_t count = data->m_bones.m_count;
+            s_hdBoneDelta.resize(count);
+            s_hdBoneMoved.assign(count, 0);
+
+            for (uint32_t i = 0; i < count; i++) {
+                M2CompBone& boneData = data->m_bones[i];
+                uint32_t billboard = boneData.m_flags & 0x78;
+                uint16_t parent = boneData.m_parentIndex;
+                bool parentMoved = parent < count && parent < i && s_hdBoneMoved[parent];
+
+                if (!billboard && !parentMoved) {
+                    continue;
+                }
+
+                C44Matrix& bone = model->m_boneMatrices[i];
+                C44Matrix original = bone;
+                s_hdSavedBones.push_back({ &bone, original });
+
+                if (mode == 2) {
+                    // Test: the billboard parts cast nothing (all their vertices fall on one point).
+                    bone.a0 = bone.a1 = bone.a2 = 0.0f;
+                    bone.b0 = bone.b1 = bone.b2 = 0.0f;
+                    bone.c0 = bone.c1 = bone.c2 = 0.0f;
+                    s_hdBoneMoved[i] = 1;
+                    continue;
+                }
+
+                if (parentMoved) {
+                    // Child of a turned bone: follow it, like Animate does with the parent matrix.
+                    bone = bone * s_hdBoneDelta[parent];
+                }
+
+                if (billboard) {
+                    HdSunBillboard(bone, billboard, boneData.m_pivot, toSun, fromSun);
+                }
+
+                float det = original.Determinant();
+
+                if (fabsf(det) > 0.0000001f) {
+                    s_hdBoneDelta[i] = original.Inverse(det) * bone;
+                    s_hdBoneMoved[i] = 1;
+                }
+            }
+        }
+    }
+
+    void HdRestoreBillboards() {
+        for (auto it = s_hdSavedBones.rbegin(); it != s_hdSavedBones.rend(); ++it) {
+            *it->bone = it->saved;
+        }
+
+        s_hdSavedBones.clear();
+        s_hdBillboardModels.clear();
+    }
+}
+
 // VERIFY: 2abab737 manual
 // OFFSET: 0x007BBC50
 int32_t CShadowQuery::RenderCallback(CShadowCacheQueryData& data, int32_t band, CGxTex* target, CGxTex* colorTarget, C3Vector& direction) {
@@ -425,7 +629,9 @@ int32_t CShadowQuery::RenderCallback(CShadowCacheQueryData& data, int32_t band, 
             s_maxTexturedBatches = buffers.m_textured.m_count;
         }
 
+        HdShadowBillboards(buffers, inverseView, HD::ShadowBillboardMode());  // not in the original binary: hdShadowBillboard
         CM2Model::RenderModelBatchesShadowMap(buffers.m_untextured, buffers.m_textured);
+        HdRestoreBillboards();
     }
 
     g_theGxDevicePtr->RsPop();

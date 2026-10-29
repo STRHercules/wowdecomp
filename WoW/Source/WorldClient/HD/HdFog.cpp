@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
@@ -58,7 +59,16 @@ namespace {
     CVar* s_shadow = nullptr;
     CVar* s_debug = nullptr;
     CVar* s_info = nullptr;
-    char s_lastInfo[160] = {};
+    char s_lastInfo[256] = {};
+    // Which lights the fog came from this frame, for hdFogInfo: "L<id> s<setting>" with each nearby light's weight.
+    char s_sources[160] = {};
+
+    void Source(const LightRec* light, const HD::ForeverFog* fog, float weight) {
+        const size_t used = std::strlen(s_sources);
+        if (used + 24 >= sizeof s_sources) return;
+        std::snprintf(s_sources + used, sizeof s_sources - used, "%sL%d %s%d w%.2f", used ? ", " : "", light->m_id,
+                      fog ? "s" : "none", fog ? fog->setting : 0, weight);
+    }
 
     void Info(const char* value) {
         if (s_info && std::strcmp(s_lastInfo, value)) {
@@ -133,8 +143,9 @@ namespace {
     }
 
     // The fog where the camera is: the zone light, then the nearby area lights blended in by distance (the falloff of
-    // DayNight::BlendAreaLight). Lights Forever does not have fade the fog out. How much Forever fog there is here
-    // (0 none).
+    // DayNight::BlendAreaLight). Lights Forever has without fog fade the fog out; nearby lights it does not have at all
+    // are skipped (a custom light at full weight beside one with fog flipped the fog as their order did). How much Forever
+    // fog there is here (0 none).
     float CurrentForeverFog(HD::ForeverFog& fog) {
         const DayNight::DNInfo& info = DayNight::g_dnInfo;
         const TSGrowableArray<const LightRec*>& lights = DayNight::g_areaLights;
@@ -144,6 +155,8 @@ namespace {
 
         bool have = LightFog(lights.m_data[0], time, storm, fog);
         float strength = have ? 1.0f : 0.0f;
+        s_sources[0] = '\0';
+        Source(lights.m_data[0], have ? &fog : nullptr, 1.0f);
 
         struct Near {
             const LightRec* light;
@@ -165,7 +178,7 @@ namespace {
                 float span = light->m_gameFalloffEnd - light->m_gameFalloffStart;
                 weight = span > 0.0f ? Clamp(1.0f - (distance - light->m_gameFalloffStart) / span, 0.0f, 1.0f) : 0.0f;
             }
-            if (weight <= 0.0f) continue;
+            if (weight <= 0.0f || !HD::ForeverHasLight(light)) continue;
             nearLights[count].light = light;
             nearLights[count].distSq = distSq;
             nearLights[count].weight = weight;
@@ -184,7 +197,9 @@ namespace {
         for (int32_t i = 0; i < count; i++) {
             HD::ForeverFog other;
             float w = nearLights[i].weight;
-            if (LightFog(nearLights[i].light, time, storm, other)) {
+            const bool found = LightFog(nearLights[i].light, time, storm, other);
+            Source(nearLights[i].light, found ? &other : nullptr, w);
+            if (found) {
                 if (!have) {
                     fog = other;
                     have = true;
@@ -319,7 +334,9 @@ void HD::Fog::World() {
     HD::ForeverFog fog = {};
     const float weight = CurrentForeverFog(fog);
     if (weight <= 0 && !mode) {
-        Info("fog: no fog data for this light");
+        char text[sizeof s_lastInfo];
+        std::snprintf(text, sizeof text, "fog: no fog data here (%s)", s_sources);
+        Info(text);
         return;
     }
     GxEffects::Device* device = GxEffects::Get();
@@ -367,5 +384,8 @@ void HD::Fog::World() {
         Info("fog: a copy, compute or the draw back failed");
         return;
     }
-    Info(mode ? "fog: debug view" : (shadows ? "fog: 3 layers / 32 steps, shadow maps" : "fog: 3 layers / 32 steps, no shadow maps (sun height retained)"));
+    char text[sizeof s_lastInfo];
+    std::snprintf(text, sizeof text, "fog %.2f from %s; %s", weight, s_sources,
+                  mode ? "debug view" : (shadows ? "shadow maps" : "no shadow maps (sun height retained)"));
+    Info(text);
 }

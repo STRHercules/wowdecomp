@@ -182,7 +182,7 @@ namespace {
                 float span = light->m_gameFalloffEnd - light->m_gameFalloffStart;
                 weight = span > 0.0f ? Clamp(1.0f - (distance - light->m_gameFalloffStart) / span, 0.0f, 1.0f) : 0.0f;
             }
-            if (weight <= 0.0f) continue;
+            if (weight <= 0.0f || !HD::ForeverHasLight(light)) continue;  // a light Forever lacks: no opinion
             nearLights[count].light = light;
             nearLights[count].distSq = distSq;
             nearLights[count].weight = weight;

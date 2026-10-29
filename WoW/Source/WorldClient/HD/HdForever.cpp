@@ -213,6 +213,13 @@ bool HD::ForeverGradingAt(const LightRec* light, int32_t slot, int32_t time, int
     return true;
 }
 
+bool HD::ForeverHasLight(const LightRec* light) {
+    if (!s_triedLoad) Load();
+    if (!light) return false;
+    auto found = s_lights.find(light->m_id);
+    return found != s_lights.end() && found->second.map == light->m_continentID;
+}
+
 bool HD::ForeverFogAt(const LightRec* light, int32_t slot, int32_t time, ForeverFog* out) {
     if (!s_triedLoad) Load();
     if (!light || slot < 0 || slot > 7) return false;

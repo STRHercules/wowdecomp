@@ -94,6 +94,7 @@
 #include "WoW/Source/WorldClient/HD/HdFog.h"
 #include "WoW/Source/WorldClient/HD/HdFrame.h"
 #include "WoW/Source/WorldClient/HD/HdGrade.h"
+#include "WoW/Source/WorldClient/HD/HdTime.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/UnitOutlineGather.h"
 #include <cfloat>
@@ -1612,6 +1613,9 @@ void CGWorldFrame::UpdateDayNight(float deltaSec) {
             info->m_dayProgression = 0.5f;
         }
     }
+
+    // Not in the original binary: Azeroth Remastered's hdTime (visuals 2 only).
+    HD::ApplyTimeOverride(info);
 
     info->m_weatherIntensity = World::s_weather->m_densityBlend * World::s_weather->m_fogIntensity;
 }

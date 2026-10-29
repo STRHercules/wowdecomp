@@ -1,5 +1,6 @@
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include <cmath>
+#include "WoW/Source/WorldClient/HD/HdTime.h"
 #include <new>
 #include <typeinfo>
 #include <cstdio>
@@ -1204,6 +1205,13 @@ void DayNight::SetPlanets() {
     float cosPhi = CMath::cos_(phi);
     float x = cosPhi * sinTheta;
     float y = sinTheta * sinPhi;
+    if (HD::SunFollowsLight() && info.m_dayProgression >= 0.2013889f && info.m_dayProgression <= 0.9236111f) {
+        // Not in the original binary: hdSunPath 1, by day (4:50 to 22:10, the client's own sun/moon switch) the sun
+        // sits where the world light comes from (SetDirection ran just before); at night it stays under the horizon.
+        x = -info.m_light1.m_dir.x;
+        y = -info.m_light1.m_dir.y;
+        cosTheta = -info.m_light1.m_dir.z;
+    }
     float scale = 12.0f / sqrtf(x * x + cosTheta * cosTheta + y * y);
     planets.m_sun.m_position.x = x * scale + info.m_cameraPos.x;
     planets.m_sun.m_position.y = y * scale + info.m_cameraPos.y;
@@ -1842,7 +1850,7 @@ void DayNight::RenderSky(CPortalView* view) {
         s_skyScene->AdvanceTime(elapsed);
         s_skySceneTimeMs += elapsed;
 
-        int32_t minutes = g_clientGameTime.GetHourAndMinutes();
+        int32_t minutes = HD::OverrideMinutes(g_clientGameTime.GetHourAndMinutes());  // not in the original binary: hdTime
 
         for (int32_t i = 0; i < 3; i++) {
             DayNight::SyncSkyAnimWithTime(info.m_blendSkybox[i], minutes);
