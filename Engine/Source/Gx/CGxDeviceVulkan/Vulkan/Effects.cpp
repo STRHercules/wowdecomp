@@ -10,6 +10,10 @@
 // Per frame slot: a descriptor pool and a ring of uniform memory, reset the first time the slot's
 // frame is touched. Pipelines are cached by (program, colour format, blend, write mask) for the
 // device's life. Objects that go away are retired with the frame that last named them.
+//
+// A compute records outside any render pass too. Its storage textures rest in SHADER_READ_ONLY_OPTIMAL
+// like every other target and go to GENERAL for the dispatch only; the barriers around it order it
+// after everything recorded before and before everything after.
 #include "Engine/Source/Gx/GxEffects.h"
 
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Context.hpp"
@@ -36,6 +40,7 @@ struct GxEffects::Texture
     VkExtent3D        extent = { 0, 0, 1 };
     uint32_t          levels = 1;   ///< a raw image's mip levels
     bool              target = false;
+    bool              storage = false;   ///< a target with STORAGE usage, for Compute::images
     /// A colour texture: the texture module's image. A volume or a depth texture: made here.
     texture::Image    image;
     VkImage           raw     = VK_NULL_HANDLE;
@@ -55,12 +60,16 @@ struct GxEffects::Readback
 struct GxEffects::Program
 {
     VkShaderModule module = VK_NULL_HANDLE;
+    mutable VkPipeline compute = VK_NULL_HANDLE;   ///< made the first time it is dispatched
     char           name[48] = {};
 };
 
 namespace
 {
     constexpr uint32_t kUniformBinding   = GxEffects::kMaxTextures;
+    constexpr uint32_t kImageBinding     = kUniformBinding + 1;
+    constexpr uint32_t kBindings         = kImageBinding + GxEffects::kMaxImages;
+    constexpr VkShaderStageFlags kStages = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT;
     constexpr uint32_t kSetsPerFrame     = 512;
     constexpr VkDeviceSize kUniformRing  = 1u << 20;
     constexpr uint32_t kMaxWorldTargets  = 8;
@@ -125,6 +134,7 @@ namespace
         bool                  warnedSets = false;
         bool                  warnedUniforms = false;
         bool                  warnedDepth = false;
+        bool                  compute = false;   ///< the graphics queue runs computes too
     };
 
     State s;
@@ -211,28 +221,35 @@ namespace
         vi.pCode    = kPresentVert;
         if (!Check(s.dapi->CreateShaderModule(s.device, &vi, nullptr, &s.vert), "vkCreateShaderModule (full-screen triangle)")) return false;
 
-        VkDescriptorSetLayoutBinding bindings[GxEffects::kMaxTextures + 1] = {};
-        for (uint32_t i = 0; i < GxEffects::kMaxTextures; ++i)
+        uint32_t families = 0;
+        h->iapi->GetPhysicalDeviceQueueFamilyProperties(h->physical, &families, nullptr);
+        std::vector<VkQueueFamilyProperties> family(families);
+        h->iapi->GetPhysicalDeviceQueueFamilyProperties(h->physical, &families, family.data());
+        s.compute = h->graphicsFamily < families && (family[h->graphicsFamily].queueFlags & VK_QUEUE_COMPUTE_BIT) != 0;
+
+        // One layout for passes and computes: a binding a module does not use needs no descriptor.
+        VkDescriptorSetLayoutBinding bindings[kBindings] = {};
+        for (uint32_t i = 0; i < kBindings; ++i)
         {
             bindings[i].binding         = i;
-            bindings[i].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            bindings[i].descriptorType  = i < kUniformBinding ? VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER
+                                        : i == kUniformBinding ? VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             bindings[i].descriptorCount = 1;
-            bindings[i].stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+            bindings[i].stageFlags      = kStages;
         }
-        bindings[kUniformBinding].binding         = kUniformBinding;
-        bindings[kUniformBinding].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        bindings[kUniformBinding].descriptorCount = 1;
-        bindings[kUniformBinding].stageFlags      = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
         VkDescriptorSetLayoutCreateInfo li = {};
         li.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        li.bindingCount = GxEffects::kMaxTextures + 1;
+        li.bindingCount = kBindings;
         li.pBindings    = bindings;
         if (!Check(s.dapi->CreateDescriptorSetLayout(s.device, &li, nullptr, &s.setLayout), "vkCreateDescriptorSetLayout")) return false;
 
+        const VkPushConstantRange push = { kStages, 0, GxEffects::kMaxPushBytes };
         VkPipelineLayoutCreateInfo pl = {};
-        pl.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pl.setLayoutCount = 1;
-        pl.pSetLayouts    = &s.setLayout;
+        pl.sType                  = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pl.setLayoutCount         = 1;
+        pl.pSetLayouts            = &s.setLayout;
+        pl.pushConstantRangeCount = 1;
+        pl.pPushConstantRanges    = &push;
         if (!Check(s.dapi->CreatePipelineLayout(s.device, &pl, nullptr, &s.layout), "vkCreatePipelineLayout")) return false;
 
         for (uint32_t i = 0; i < 8; ++i)
@@ -250,16 +267,17 @@ namespace
             if (!Check(s.dapi->CreateSampler(s.device, &si, nullptr, &s.samplers[i]), "vkCreateSampler")) return false;
         }
 
-        const VkDescriptorPoolSize sizes[2] = {
+        const VkDescriptorPoolSize sizes[3] = {
             { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, kSetsPerFrame * GxEffects::kMaxTextures },
             { VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, kSetsPerFrame },
+            { VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, kSetsPerFrame * GxEffects::kMaxImages },
         };
         for (SlotState& slot : s.slots)
         {
             VkDescriptorPoolCreateInfo pi = {};
             pi.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
             pi.maxSets       = kSetsPerFrame;
-            pi.poolSizeCount = 2;
+            pi.poolSizeCount = 3;
             pi.pPoolSizes    = sizes;
             if (!Check(s.dapi->CreateDescriptorPool(s.device, &pi, nullptr, &slot.pool), "vkCreateDescriptorPool")) return false;
             if (!memory::CreateBuffer(kUniformRing, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, memory::Where::Stream, slot.uniforms) || !slot.uniforms.block.mapped)
@@ -451,6 +469,20 @@ namespace
         return e.pipeline;
     }
 
+    VkPipeline ComputePipelineFor(const GxEffects::Program* program)
+    {
+        if (program->compute != VK_NULL_HANDLE) return program->compute;
+        VkComputePipelineCreateInfo info = {};
+        info.sType        = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+        info.stage.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        info.stage.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+        info.stage.module = program->module;
+        info.stage.pName  = "main";
+        info.layout       = s.layout;
+        Check(s.dapi->CreateComputePipelines(s.device, VK_NULL_HANDLE, 1, &info, nullptr, &program->compute), program->name);
+        return program->compute;
+    }
+
     VkFramebuffer MakeFramebuffer(VkRenderPass pass, VkImageView view, VkExtent2D extent)
     {
         VkFramebufferCreateInfo info = {};
@@ -565,12 +597,23 @@ namespace
         public:
         GxEffects::Texture* CreateTexture(uint32_t width, uint32_t height, GxEffects::Format format, bool target) override
         {
+            return Create(width, height, format, target, false);
+        }
+
+        GxEffects::Texture* CreateStorage(uint32_t width, uint32_t height, GxEffects::Format format) override
+        {
+            return Init() && CanStore(format) ? Create(width, height, format, true, true) : nullptr;
+        }
+
+        GxEffects::Texture* Create(uint32_t width, uint32_t height, GxEffects::Format format, bool target, bool storage)
+        {
             if (!Init() || width == 0 || height == 0) return nullptr;
-            auto* t   = new GxEffects::Texture();
-            t->format = format;
-            t->vk     = VkFormatOf(format);
-            t->extent = VkExtent3D{ width, height, 1 };
-            t->target = target && format != GxEffects::Format::Depth;
+            auto* t    = new GxEffects::Texture();
+            t->format  = format;
+            t->vk      = VkFormatOf(format);
+            t->extent  = VkExtent3D{ width, height, 1 };
+            t->target  = target && format != GxEffects::Format::Depth;
+            t->storage = storage && t->target;
             VkCommandBuffer cmd = frame::PrePass();
             bool ok = cmd != VK_NULL_HANDLE;
             if (ok && format == GxEffects::Format::Depth)
@@ -595,7 +638,7 @@ namespace
             }
             else if (ok)
             {
-                ok = t->target ? texture::CreateTarget(width, height, 1, false, t->vk, t->image)
+                ok = t->target ? texture::CreateTarget(width, height, 1, false, t->vk, t->image, t->storage)
                                : texture::CreateMipped(width, height, 1, t->vk, t->image);
                 const float zero[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
                 ok = ok && texture::RecordClear(cmd, t->image, zero);
@@ -762,6 +805,73 @@ namespace
             return p;
         }
 
+        /// A set from the open frame's pool with the textures and constants written; null when the frame is out of sets or constants.
+        VkDescriptorSet MakeSet(const GxEffects::Binding* textures, const float (*constants)[4], uint32_t rowCount)
+        {
+            if (!s.blank)
+            {
+                const uint32_t opaqueBlack = 0xFF000000u;
+                const void* level = &opaqueBlack;
+                s.blank = CreateFilled(1, 1, 1, GxEffects::Format::BGRA8, &level);
+                if (!s.blank) return VK_NULL_HANDLE;
+            }
+
+            SlotState* slot = OpenSlot();
+            VkDescriptorSet set = VK_NULL_HANDLE;
+            VkDescriptorSetAllocateInfo ai = {};
+            ai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            ai.descriptorPool     = slot->pool;
+            ai.descriptorSetCount = 1;
+            ai.pSetLayouts        = &s.setLayout;
+            if (s.dapi->AllocateDescriptorSets(s.device, &ai, &set) != VK_SUCCESS)
+            {
+                if (!s.warnedSets) Write(Warn, "vulkan: effects: more than %u passes and computes in a frame; the rest are skipped (logged once)", kSetsPerFrame);
+                s.warnedSets = true;
+                return VK_NULL_HANDLE;
+            }
+            const VkDeviceSize constantBytes = VkDeviceSize(GxEffects::kMaxConstantRows) * 16;
+            const VkDeviceSize at = (slot->cursor + s.uniformAlign - 1) / s.uniformAlign * s.uniformAlign;
+            if (at + constantBytes > kUniformRing)
+            {
+                if (!s.warnedUniforms) Write(Warn, "vulkan: effects: the constant ring is full; the frame's later passes are skipped (logged once)");
+                s.warnedUniforms = true;
+                return VK_NULL_HANDLE;
+            }
+            auto* rows = static_cast<uint8_t*>(slot->uniforms.block.mapped) + at;
+            if (constants && rowCount) std::memcpy(rows, constants, rowCount * 16u);
+            std::memset(rows + rowCount * 16u, 0, static_cast<size_t>(constantBytes - rowCount * 16u));
+            memory::FlushHost(slot->uniforms.block);
+            slot->cursor = at + constantBytes;
+
+            const uint64_t serial = frame::Serial();
+            VkDescriptorImageInfo images[GxEffects::kMaxTextures] = {};
+            for (uint32_t i = 0; i < GxEffects::kMaxTextures; ++i)
+            {
+                GxEffects::Texture* t = textures[i].texture ? textures[i].texture : s.blank;
+                t->lastUsed          = serial;
+                images[i].sampler     = s.samplers[(textures[i].linear ? 1 : 0) | (textures[i].wrap ? 2 : 0) | (textures[i].mips ? 4 : 0)];
+                images[i].imageView   = t->View();
+                images[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            }
+            VkDescriptorBufferInfo buffer = { slot->uniforms.handle, at, constantBytes };
+            VkWriteDescriptorSet writes[2] = {};
+            writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[0].dstSet          = set;
+            writes[0].dstBinding      = 0;
+            writes[0].descriptorCount = GxEffects::kMaxTextures;
+            writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            writes[0].pImageInfo      = images;
+            writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            writes[1].dstSet          = set;
+            writes[1].dstBinding      = kUniformBinding;
+            writes[1].descriptorCount = 1;
+            writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            writes[1].pBufferInfo     = &buffer;
+            s.dapi->UpdateDescriptorSets(s.device, 2, writes, 0, nullptr);
+
+            return set;
+        }
+
         bool Draw(const GxEffects::Pass& pass) override
         {
             if (!Init() || !pass.program || frame::QueryActive()) return false;
@@ -791,66 +901,8 @@ namespace
             const PassPair* passes = PassesFor(format);
             const VkPipeline pipeline = passes ? PipelineFor(pass.program, pass.points ? pass.vertexProgram : nullptr, format, pass.blend, pass.writeMask) : VK_NULL_HANDLE;
             if (pipeline == VK_NULL_HANDLE) return false;
-            if (!s.blank)
-            {
-                const uint32_t opaqueBlack = 0xFF000000u;
-                const void* level = &opaqueBlack;
-                s.blank = CreateFilled(1, 1, 1, GxEffects::Format::BGRA8, &level);
-                if (!s.blank) return false;
-            }
-
-            SlotState* slot = OpenSlot();
-            VkDescriptorSet set = VK_NULL_HANDLE;
-            VkDescriptorSetAllocateInfo ai = {};
-            ai.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            ai.descriptorPool     = slot->pool;
-            ai.descriptorSetCount = 1;
-            ai.pSetLayouts        = &s.setLayout;
-            if (s.dapi->AllocateDescriptorSets(s.device, &ai, &set) != VK_SUCCESS)
-            {
-                if (!s.warnedSets) Write(Warn, "vulkan: effects: more than %u passes in a frame; the rest are skipped (logged once)", kSetsPerFrame);
-                s.warnedSets = true;
-                return false;
-            }
-            const VkDeviceSize constantBytes = VkDeviceSize(GxEffects::kMaxConstantRows) * 16;
-            const VkDeviceSize at = (slot->cursor + s.uniformAlign - 1) / s.uniformAlign * s.uniformAlign;
-            if (at + constantBytes > kUniformRing)
-            {
-                if (!s.warnedUniforms) Write(Warn, "vulkan: effects: the constant ring is full; the frame's later passes are skipped (logged once)");
-                s.warnedUniforms = true;
-                return false;
-            }
-            auto* rows = static_cast<uint8_t*>(slot->uniforms.block.mapped) + at;
-            if (pass.constants && pass.constantRows) std::memcpy(rows, pass.constants, pass.constantRows * 16u);
-            std::memset(rows + pass.constantRows * 16u, 0, static_cast<size_t>(constantBytes - pass.constantRows * 16u));
-            memory::FlushHost(slot->uniforms.block);
-            slot->cursor = at + constantBytes;
-
-            const uint64_t serial = frame::Serial();
-            VkDescriptorImageInfo images[GxEffects::kMaxTextures] = {};
-            for (uint32_t i = 0; i < GxEffects::kMaxTextures; ++i)
-            {
-                GxEffects::Texture* t = pass.textures[i].texture ? pass.textures[i].texture : s.blank;
-                t->lastUsed          = serial;
-                images[i].sampler     = s.samplers[(pass.textures[i].linear ? 1 : 0) | (pass.textures[i].wrap ? 2 : 0) | (pass.textures[i].mips ? 4 : 0)];
-                images[i].imageView   = t->View();
-                images[i].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-            }
-            VkDescriptorBufferInfo buffer = { slot->uniforms.handle, at, constantBytes };
-            VkWriteDescriptorSet writes[2] = {};
-            writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[0].dstSet          = set;
-            writes[0].dstBinding      = 0;
-            writes[0].descriptorCount = GxEffects::kMaxTextures;
-            writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-            writes[0].pImageInfo      = images;
-            writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            writes[1].dstSet          = set;
-            writes[1].dstBinding      = kUniformBinding;
-            writes[1].descriptorCount = 1;
-            writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            writes[1].pBufferInfo     = &buffer;
-            s.dapi->UpdateDescriptorSets(s.device, 2, writes, 0, nullptr);
+            const VkDescriptorSet set = MakeSet(pass.textures, pass.constants, pass.constantRows);
+            if (set == VK_NULL_HANDLE) return false;
 
             VkClearValue clear = {};
             std::memcpy(clear.color.float32, pass.clearColour, sizeof clear.color.float32);
@@ -882,7 +934,7 @@ namespace
             s.dapi->CmdEndRenderPass(cmd);
             // The engine's draw code caches what it bound on this command buffer; this pass bound its own.
             gxvk::vk::pipelines::ForgetBound();
-            if (pass.target) pass.target->lastUsed = serial;
+            if (pass.target) pass.target->lastUsed = frame::Serial();
             return true;
         }
 
@@ -893,6 +945,96 @@ namespace
             VkFormatProperties props = {};
             h->iapi->GetPhysicalDeviceFormatProperties(h->physical, VkFormatOf(format), &props);
             return (props.optimalTilingFeatures & VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT) != 0;
+        }
+
+        bool CanStore(GxEffects::Format format) override
+        {
+            const context::Handles* h = context::Get();
+            if (!h) return false;
+            // GLSL has no BGRA image format; the others past RGBA16F, RGBA32F and R32F are the extended ones.
+            const bool extended = format == GxEffects::Format::RG16F || format == GxEffects::Format::RG32F || format == GxEffects::Format::R8;
+            if (format == GxEffects::Format::BGRA8 || format == GxEffects::Format::Depth || (extended && !(context::Caps().enabled & kCapStorageImageExt))) return false;
+            const VkFormatFeatureFlags needed = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT | VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT;
+            VkFormatProperties props = {};
+            h->iapi->GetPhysicalDeviceFormatProperties(h->physical, VkFormatOf(format), &props);
+            return (props.optimalTilingFeatures & needed) == needed;
+        }
+
+        bool Dispatch(const GxEffects::Compute& c) override
+        {
+            if (!Init() || !s.compute || !c.program || frame::QueryActive()) return false;
+            if (c.constantRows > GxEffects::kMaxConstantRows || c.pushBytes > GxEffects::kMaxPushBytes || (c.pushBytes && !c.push)) return false;
+            if (c.groupsX == 0 || c.groupsY == 0 || c.groupsZ == 0) return false;
+            for (const GxEffects::Texture* t : c.images)
+            {
+                if (!t) continue;
+                if (!t->storage) return false;
+                for (const GxEffects::Binding& b : c.textures)
+                    if (b.texture == t) return false;
+            }
+            VkCommandBuffer cmd = frame::Outside();
+            if (!cmd) return false;
+            const VkPipeline pipeline = ComputePipelineFor(c.program);
+            if (pipeline == VK_NULL_HANDLE) return false;
+            const VkDescriptorSet set = MakeSet(c.textures, c.constants, c.constantRows);
+            if (set == VK_NULL_HANDLE) return false;
+
+            const uint64_t serial = frame::Serial();
+            VkDescriptorImageInfo images[GxEffects::kMaxImages] = {};
+            VkWriteDescriptorSet writes[GxEffects::kMaxImages] = {};
+            VkImageMemoryBarrier toGeneral[GxEffects::kMaxImages] = {};
+            VkImageMemoryBarrier toRead[GxEffects::kMaxImages] = {};
+            uint32_t n = 0;
+            for (uint32_t i = 0; i < GxEffects::kMaxImages; ++i)
+            {
+                GxEffects::Texture* t = c.images[i];
+                if (!t) continue;
+                t->lastUsed = serial;
+                images[n].imageView   = t->View();
+                images[n].imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+                writes[n].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                writes[n].dstSet          = set;
+                writes[n].dstBinding      = kImageBinding + i;
+                writes[n].descriptorCount = 1;
+                writes[n].descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                writes[n].pImageInfo      = &images[n];
+                VkImageMemoryBarrier& b = toGeneral[n];
+                b.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+                b.srcAccessMask               = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+                b.dstAccessMask               = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+                b.oldLayout                   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                b.newLayout                   = VK_IMAGE_LAYOUT_GENERAL;
+                b.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                b.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+                b.image                       = t->image.handle;
+                b.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                b.subresourceRange.levelCount = 1;
+                b.subresourceRange.layerCount = 1;
+                toRead[n] = b;
+                toRead[n].srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+                toRead[n].dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_READ_BIT
+                                        | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+                toRead[n].oldLayout     = VK_IMAGE_LAYOUT_GENERAL;
+                toRead[n].newLayout     = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                ++n;
+            }
+            if (n) s.dapi->UpdateDescriptorSets(s.device, n, writes, 0, nullptr);
+
+            // The engine's passes and ours wait for nothing in the compute stage, so the compute waits
+            // for every earlier write itself (what it samples included).
+            VkMemoryBarrier before = {};
+            before.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+            before.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_SHADER_WRITE_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+            before.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+            s.dapi->CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &before, 0, nullptr, n, toGeneral);
+            s.dapi->CmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline);
+            s.dapi->CmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, s.layout, 0, 1, &set, 0, nullptr);
+            if (c.pushBytes) s.dapi->CmdPushConstants(cmd, s.layout, kStages, 0, c.pushBytes, c.push);
+            s.dapi->CmdDispatch(cmd, c.groupsX, c.groupsY, c.groupsZ);
+            s.dapi->CmdPipelineBarrier(cmd, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0, 0, nullptr, 0, nullptr, n, toRead);
+            // Push constants are shared with the graphics bind point.
+            gxvk::vk::pipelines::ForgetBound();
+            return true;
         }
 
         bool TargetSize(uint32_t& width, uint32_t& height) override
@@ -998,6 +1140,7 @@ namespace gxvk::vk::effects
         }
         for (GxEffects::Program* p : s.programs)
         {
+            if (p->compute != VK_NULL_HANDLE) s.dapi->DestroyPipeline(s.device, p->compute, nullptr);
             s.dapi->DestroyShaderModule(s.device, p->module, nullptr);
             delete p;
         }

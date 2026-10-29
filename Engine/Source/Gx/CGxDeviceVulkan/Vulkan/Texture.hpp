@@ -74,9 +74,9 @@ namespace gxvk::vk::texture
 
     /**
      * A render target: CreateMipped / CreateCube plus COLOR_ATTACHMENT usage (the format's
-     * COLOR_ATTACHMENT feature checked first).
+     * COLOR_ATTACHMENT feature checked first); with `storage`, STORAGE usage too (its feature checked).
      */
-    bool CreateTarget(uint32_t width, uint32_t height, uint32_t levels, bool cube, VkFormat format, Image& out);
+    bool CreateTarget(uint32_t width, uint32_t height, uint32_t levels, bool cube, VkFormat format, Image& out, bool storage = false);
 
     /**
      * The tightly packed size of a region of `img`'s format: bytes per row (per block row for a BC

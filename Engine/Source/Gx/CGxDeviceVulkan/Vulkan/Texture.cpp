@@ -86,10 +86,10 @@ namespace gxvk::vk::texture
         return CreateImage(size, size, levels, true, format, out);
     }
 
-    bool CreateTarget(uint32_t width, uint32_t height, uint32_t levels, bool cube, VkFormat format, Image& out)
+    bool CreateTarget(uint32_t width, uint32_t height, uint32_t levels, bool cube, VkFormat format, Image& out, bool storage)
     {
         if (cube && (width != height || (s.ready && width > s.maxDimensionCube))) return false;
-        return CreateImage(width, height, levels, cube, format, out, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT);
+        return CreateImage(width, height, levels, cube, format, out, VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | (storage ? VK_IMAGE_USAGE_STORAGE_BIT : 0u));
     }
 
     bool RegionBytes(const Image& img, uint32_t width, uint32_t height, uint64_t& rowBytes, uint32_t& rowCount)

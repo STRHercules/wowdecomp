@@ -23,10 +23,20 @@
 //
 // A pass may instead draw points: a vertex program run `points` times (its index in gl_VertexIndex, no vertex
 // buffer) that writes gl_Position and gl_PointSize, with the same textures and constants as the fragment program.
+//
+// A Compute is a SPIR-V compute module run over `groups` work groups, with the same textures and constants plus:
+//
+//   layout(set = 0, binding = 17..24, rgba16f) uniform image2D iN;   // the compute's storage textures by slot
+//   layout(push_constant) uniform Push { ... };                      // up to kMaxPushBytes
+//
+// Each storage texture is read and written in place (imageLoad / imageStore); the compute must not use an empty
+// image slot. Every write of an earlier pass or compute is visible to it, and its writes to the passes after it.
 namespace GxEffects {
 
 constexpr uint32_t kMaxTextures = 16;
 constexpr uint32_t kMaxConstantRows = 256;
+constexpr uint32_t kMaxImages = 8;
+constexpr uint32_t kMaxPushBytes = 128;
 
 enum class Format : uint32_t {
     BGRA8,      // D3DFMT_A8R8G8B8
@@ -79,6 +89,19 @@ struct Pass {
     float clearColour[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
 };
 
+struct Compute {
+    const Program* program = nullptr;
+    uint32_t groupsX = 1;
+    uint32_t groupsY = 1;
+    uint32_t groupsZ = 1;
+    Binding textures[kMaxTextures];
+    Texture* images[kMaxImages] = {};   // from CreateStorage; none may also be in textures
+    const float (*constants)[4] = nullptr;
+    uint32_t constantRows = 0;
+    const void* push = nullptr;
+    uint32_t pushBytes = 0;
+};
+
 class Device {
     public:
     virtual ~Device() = default;
@@ -86,6 +109,8 @@ class Device {
     // A texture of one level. A target can be drawn into and copied into; the others are filled by Upload.
     // Its contents start as zero. Null when it cannot be made (logged).
     virtual Texture* CreateTexture(uint32_t width, uint32_t height, Format format, bool target) = 0;
+    // A target a Compute can also write as a storage image. Null when the format cannot be (see CanStore).
+    virtual Texture* CreateStorage(uint32_t width, uint32_t height, Format format) = 0;
     // Textures filled once, with `levels` mip levels: levelTexels[i] is level i, tightly packed (a volume's slice
     // after slice), each level half the one before.
     virtual Texture* CreateFilled(uint32_t width, uint32_t height, uint32_t levels, Format format, const void* const* levelTexels) = 0;
@@ -96,13 +121,16 @@ class Device {
     // Replaces the whole level from tightly packed texels.
     virtual bool Upload(Texture* texture, const void* texels) = 0;
 
-    // A fragment or vertex module; which one is up to the pass that uses it.
+    // A fragment, vertex or compute module; which one is up to the pass or compute that uses it.
     virtual Program* CreateProgram(const uint32_t* spirv, size_t bytes, const char* name) = 0;
 
     // Whether a target of this format can be drawn into with a blend other than Opaque.
     virtual bool CanBlend(Format format) = 0;
+    // Whether CreateStorage can make a texture of this format.
+    virtual bool CanStore(Format format) = 0;
 
     virtual bool Draw(const Pass& pass) = 0;
+    virtual bool Dispatch(const Compute& compute) = 0;
 
     // The world's current target: its size, and copies of its colour and depth. CopyColor copies a rectangle of
     // it (a zero width: all of it) onto the whole destination, scaling with a linear or point filter (D3D9's
