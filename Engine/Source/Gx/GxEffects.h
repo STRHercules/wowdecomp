@@ -161,6 +161,12 @@ class Device {
     virtual void ShaderFolder(char* folder, size_t size) = 0;
 };
 
+// Stage `stage` of the engine's own draws (the client's shaders sampling GxRs_Texture0 + stage) reads `texture` instead
+// of the stage's texture, with a point or linear filter and clamped or repeated edges, until it is cleared (null). For
+// the HD materials that read a pass's result (the water reads the world's depth and image). The draw's shader must sample
+// the stage; the texture must not be a target of the draw.
+void SetDrawTexture(uint32_t stage, Texture* texture, bool linear = false, bool wrap = false);
+
 // While on, the engine's draws write depth whatever their own state says (Lumenveil turns it on through the liquid
 // pass, which the client draws without depth writes, so the water surface is in the depth the passes read).
 void ForceDepthWrite(bool on);

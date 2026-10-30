@@ -424,6 +424,13 @@ class Emitter(object):
     def r_frc(self, i):
         self.assign(i.dst, vec='fract(%s)' % self.srcm(i.srcs[0], i.dst))
 
+    # screen-space derivatives (pixel shaders): D3D's dsx / dsy are GLSL's dFdx / dFdy, y down in both
+    def r_dsx(self, i):
+        self.assign(i.dst, vec='dFdx(%s)' % self.srcm(i.srcs[0], i.dst))
+
+    def r_dsy(self, i):
+        self.assign(i.dst, vec='dFdy(%s)' % self.srcm(i.srcs[0], i.dst))
+
     def r_compare(self, i, fn, op):
         d = i.dst
         a, b = self.srcm(i.srcs[0], d), self.srcm(i.srcs[1], d)
@@ -544,6 +551,25 @@ class Emitter(object):
     def r_endloop(self, i):
         self.depth -= 1
         self.line('}')
+
+    def r_rep(self, i):
+        # rep i#: i#.x iterations (no counter register); endrep closes it, break / breakc leave it
+        if len(i.srcs) != 1 or i.srcs[0].rtype != ir.RT_CONSTINT:
+            raise Refused('rep operand')
+        iv = self.base_expr(i.srcs[0])
+        self.loopn += 1
+        n = 'n%d' % self.loopn
+        self.line('for (int %s = 0; %s < %s.x; ++%s) {' % (n, n, iv, n))
+        self.depth += 1
+
+    def r_break(self, i):
+        self.line('break;')
+
+    def r_breakc(self, i):
+        cmpop = {1: '>', 2: '==', 3: '>=', 4: '<', 5: '!=', 6: '<='}.get(i.ctrl & 7)
+        if cmpop is None:
+            raise Refused('breakc with comparison %d' % (i.ctrl & 7))
+        self.line('if (%s %s %s) break;' % (self.comp(i.srcs[0], 0), cmpop, self.comp(i.srcs[1], 0)))
 
     def r_nop(self, i):
         pass
@@ -718,10 +744,11 @@ RULES = {
     5: Emitter.r_mul, 6: Emitter.r_rcp, 7: Emitter.r_rsq, 8: Emitter.r_dp3, 9: Emitter.r_dp4,
     10: Emitter.r_min, 11: Emitter.r_max, 12: Emitter.r_slt, 13: Emitter.r_sge, 14: Emitter.r_exp,
     15: Emitter.r_log, 18: Emitter.r_lrp, 19: Emitter.r_frc, 27: Emitter.r_loop, 29: Emitter.r_endloop,
+    38: Emitter.r_rep, 39: Emitter.r_endloop, 44: Emitter.r_break, 45: Emitter.r_breakc,
     32: Emitter.r_pow, 35: Emitter.r_abs, 36: Emitter.r_nrm, 37: Emitter.r_sincos,
     40: Emitter.r_if_bool, 41: Emitter.r_ifc, 42: Emitter.r_else, 43: Emitter.r_endif,
     46: Emitter.r_mova, 65: Emitter.r_texkill, 66: Emitter.r_texld, 88: Emitter.r_cmp,
-    90: Emitter.r_dp2add, 95: Emitter.r_texldl,
+    90: Emitter.r_dp2add, 91: Emitter.r_dsx, 92: Emitter.r_dsy, 95: Emitter.r_texldl,
 }
 
 

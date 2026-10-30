@@ -1199,6 +1199,36 @@ namespace
 }
 
 void GxEffects::ForceDepthWrite(bool on) { g_forceDepthWrite = on; }
+
+namespace
+{
+    struct DrawOverride
+    {
+        GxEffects::Texture* texture = nullptr;
+        uint32_t            key     = 0;
+    };
+    DrawOverride g_drawOverride[pipelines::kTextureStages];
+}
+
+void GxEffects::SetDrawTexture(uint32_t stage, Texture* texture, bool linear, bool wrap)
+{
+    if (stage >= pipelines::kTextureStages) return;
+    g_drawOverride[stage].texture = texture;
+    // EGxTexFilter 0 Nearest, 1 Linear (no mips); wrap U and V are bits 3 and 4 (Pipelines/Samplers.cpp)
+    g_drawOverride[stage].key = (linear ? 1u : 0u) | (wrap ? (1u << 3) | (1u << 4) : 0u);
+}
+
+bool gxvk::vk::effects::DrawTextureFor(uint32_t stage, DrawTexture& out)
+{
+    if (stage >= pipelines::kTextureStages || !g_drawOverride[stage].texture) return false;
+    GxEffects::Texture* t = g_drawOverride[stage].texture;
+    if (t->View() == VK_NULL_HANDLE) return false;
+    t->lastUsed = frame::Serial();
+    out.view = t->View();
+    out.id   = t->image.id;
+    out.key  = g_drawOverride[stage].key;
+    return true;
+}
 bool GxEffects::DepthWriteForced() { return g_forceDepthWrite; }
 
 GxEffects::Device* GxEffects::Get()

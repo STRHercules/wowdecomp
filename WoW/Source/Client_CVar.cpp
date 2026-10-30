@@ -34,6 +34,7 @@
 #include "WoW/Source/WorldClient/HD/HdMapObj.h"
 #include "WoW/Source/WorldClient/HD/HdDetailDoodad.h"
 #include "WoW/Source/WorldClient/HD/HdSky.h"
+#include "WoW/Source/WorldClient/HD/HdWater.h"
 #include "WoW/Source/UIUtil/Cursor.h"
 #include "WoW/Source/Ui/LootBeam.h"
 #include "WoW/Source/Ui/OptionCVars.h"
@@ -701,6 +702,7 @@ void ClientRegisterConsoleCommands() {
     HD::RegisterMapObjCVars();
     HD::RegisterDetailDoodadCVars();
     HD::RegisterSkyCVars();
+    HD::RegisterWaterCVars();
 
     g_showPerformanceCVar = CVar::Register("showPerformance", "Show the performance overlay (fps, draw calls, cpu)", 1, "0", ShowPerformanceCallback, CATEGORY_GRAPHICS, false, nullptr, false);
 

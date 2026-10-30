@@ -100,6 +100,7 @@
 #include <cstring>
 #include "WoW/Source/Object/ObjectClient/Object_C.h"
 #include "WoW/Source/Game/GameClient/ProjectTex.h"
+#include "WoW/Source/WorldClient/HD/HdWater.h"
 
 // STATIC: 0x00ADEE48
 static const char* s_zonePaths[11] = {
@@ -1931,7 +1932,11 @@ void CWorldScene::RenderLiquidPass() {
     CWorldScene::ApplyFogState();
 
     if ((CWorld::enables & Enable_Water) && CWorldScene::s_liquidRenderer) {
+        // Not in the original binary: hdWater 1 takes the linear world depth and a copy of the world before the liquids
+        // (the camera under water keeps Blizzard's water)
+        HD::WaterBeginLiquidPass(World::SceneCamLiquidStatus(nullptr) != 0);
         CWorldScene::s_liquidRenderer->Flush(CWorldScene::s_activeWorldView, 1);
+        HD::WaterEndLiquidPass();
     }
 
     CMap::RenderWaterRipples();

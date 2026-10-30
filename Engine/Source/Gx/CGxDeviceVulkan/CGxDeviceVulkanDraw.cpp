@@ -8,6 +8,7 @@
 #include <cstring>
 #include "Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.h"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Frame.hpp"
+#include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Effects.hpp"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Gx/GxEffects.h"
 #include "Engine/Source/Gx/CGxDeviceVulkan/Vulkan/Pipelines.hpp"
@@ -196,6 +197,17 @@ void CGxDeviceVulkan::Draw(CGxBatch* batch, int32_t count) {
     for (uint32_t stage = 0; stage < pipelines::kTextureStages; stage++) {
         if (samplerMask & (1u << stage)) {
             this->ITexResolve(static_cast<CGxTex*>(this->m_appRenderStates[GxRs_Texture0 + stage].m_value.m_data.p), stage, d);
+
+            // Not in the original binary: a texture an HD material put on this stage (GxEffects::SetDrawTexture)
+            gxvk::vk::effects::DrawTexture over;
+            if (gxvk::vk::effects::DrawTextureFor(stage, over)) {
+                pipelines::Texture& t = d.textures[stage];
+                t.view = over.view;
+                t.imageId = over.id;
+                t.samplerKey = over.key;
+                t.cube = false;
+                d.textureMask |= 1u << stage;
+            }
         }
     }
 
