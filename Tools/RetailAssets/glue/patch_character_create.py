@@ -26,7 +26,9 @@ import body_triangle
 
 MARKER = "-- Retail race customization (wowdecomp)"
 ENTRY = "Interface" + chr(92) + "GlueXML" + chr(92) + "CharacterCreate.lua"
-ARCHIVES = (Path("Data") / "patch-Z.MPQ", Path("Data") / "enUS" / "patch-enUS-Z.MPQ")
+# Later archives win, and these two carry their own copy of the creator (with the Ethereal portraits): patch them too.
+ARCHIVES = (Path("Data") / "patch-Z.MPQ", Path("Data") / "enUS" / "patch-enUS-Z.MPQ",
+            Path("Data") / "Patch-ZzzzzzzzEthereal.MPQ", Path("Data") / "Patch-ZzzzzzzzzzKyrianData.MPQ")
 BODY_MARKER = "-- Body sliders page (wowdecomp)"
 BODY_PAGE = Path(__file__).with_name("body_page.lua")
 SKIN_MARKER = "-- Creator skin (wowdecomp)"
@@ -194,7 +196,11 @@ def patch_rows(text):
 
 def patch_all(text):
     # The Body page strips from its marker to the end of the file, so the skin is always appended after it.
-    return patch_skin(patch_body_page(patch_pan(patch_rows(patch(text)))))
+    # Other packers (Ethereal portraits) append lines after the skin's closing "end)();"; keep them at the end.
+    skin_at = text.find(SKIN_MARKER)
+    tail = text[text.rindex("end)();") + len("end)();"):] if skin_at >= 0 and "end)();" in text[skin_at:] else ""
+    patched = patch_skin(patch_body_page(patch_pan(patch_rows(patch(text)))))
+    return patched.rstrip("\r\n") + tail if tail.strip() else patched
 
 
 def main():

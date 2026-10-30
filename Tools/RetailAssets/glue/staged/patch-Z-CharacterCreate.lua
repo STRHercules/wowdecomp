@@ -3519,8 +3519,7 @@ local function BuildChrome()
         subtitle:SetPoint("TOP" .. side, title, "BOTTOM" .. side, 0, -4);
         local rule = Solid(chrome, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.6);
         rule:SetSize(340, 1);
-        rule:SetPoint("TOP" .. side, chrome, "TOP" .. side, left and EDGE_X or -EDGE_X, -100);
-        SK[side] = { title = title, subtitle = subtitle };
+        SK[side] = { title = title, subtitle = subtitle, rule = rule, panel = panel, fade = fade };
     end
 
     -- Step indicator: Race, Appearance, Body (the last only for races with the Body page).
@@ -3546,13 +3545,24 @@ local function BuildChrome()
     SK.hint = hint;
 end
 
--- Header text sits after the faction crest on the race page and flush with the rows elsewhere.
-local function PlaceHeaders(crest)
+-- Header text sits flush with the rows. On the race page `slide` (0 to -PANEL_W) moves the left panel, its header
+-- and rule off to the left; the fade and edge line follow the panel by their anchors.
+local function PlaceHeaders(slide)
+    slide = slide or 0;
+    local panel = SK.LEFT.panel;
+    panel:ClearAllPoints();
+    panel:SetPoint("TOPLEFT", SK.chrome, "TOPLEFT", slide, 0);
+    panel:SetPoint("BOTTOMLEFT", SK.chrome, "BOTTOMLEFT", slide, 0);
+    -- Fade the shadow out with the slide. SetAlpha would drop the gradient and leave a white strip; re-set it instead.
+    SK.LEFT.fade:SetGradientAlpha("HORIZONTAL", INK[1], INK[2], INK[3], 0.5 * (1 + slide / PANEL_W), INK[1], INK[2], INK[3], 0);
     for _, side in ipairs({ "LEFT", "RIGHT" }) do
-        local inset = EDGE_X + (crest and 44 or 12);
+        local inset = EDGE_X + 12;
         local header = SK[side];
+        local x = side == "LEFT" and slide or 0;
+        header.rule:ClearAllPoints();
+        header.rule:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and EDGE_X + x or -EDGE_X, -100);
         header.title:ClearAllPoints();
-        header.title:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and inset or -inset, -62);
+        header.title:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and inset + x or -inset, -62);
         header.subtitle:ClearAllPoints();
         header.subtitle:SetPoint("TOP" .. side, header.title, "BOTTOM" .. side, 0, -4);
     end
@@ -3802,8 +3812,107 @@ end
 
 -- ---- race page -----------------------------------------------------------------------------------------------
 
-local GRID_COLUMNS, GRID_TOP = 7, -126;
+-- Portrait centres start here: the tallest portrait (60) clears the header rule at -100.
+local GRID_TOP = -150;
 SK.races, SK.toggles = {}, {};
+
+-- The three playable factions, in tab order. Membership comes from CharacterCreate.raceIndices<key>: the stock
+-- enumeration fills Alliance/Horde from GetFactionForRaceID, and CharacterCreateEnumerateRaces below moves the
+-- Freeborn races out of them.
+local FACTIONS = {
+    { key = "Alliance", name = ALLIANCE or "Alliance", crest = "Interface\\Glues\\CharacterCreate\\AllianceLogo",
+      crop = { 0.2, 0.8, 0.2, 0.8 }, color = { 0.36, 0.60, 1.00 }, dark = { 0.03, 0.09, 0.26 }, hex = "|cff5c99ff" },
+    { key = "Horde", name = HORDE or "Horde", crest = "Interface\\Glues\\CharacterCreate\\HordeLogo",
+      crop = { 0.21, 0.79, 0.2, 0.8 }, color = { 0.92, 0.27, 0.22 }, dark = { 0.24, 0.02, 0.03 }, hex = "|cffeb4538" },
+    { key = "Freeborn", name = "Freeborn", crest = "Interface\\Glues\\CharacterSelect\\FreebornLogo",
+      crop = { 0, 1, 0, 1 }, color = { 0.74, 0.56, 0.98 }, dark = { 0.14, 0.05, 0.26 }, hex = "|cffbd8ffa" },
+};
+
+local function FactionRaces(key)
+    return CharacterCreate["raceIndices" .. key] or {};
+end
+
+local function FactionOfRace(index)
+    for _, faction in ipairs(FACTIONS) do
+        for _, raceIndex in ipairs(FactionRaces(faction.key)) do
+            if raceIndex == index then return faction; end
+        end
+    end
+end
+
+-- Freeborn is a faction of its own: these races leave the Alliance/Horde grids for a Freeborn grid. The server
+-- puts every character of these races on the Freeborn team (both twins of a race; only the Alliance twin is offered).
+local FREEBORN_FILES = { VRYKUL = true, THINHUMAN = true, OGREALLIANCE = true, SETHRAKALLIANCE = true,
+    DRAKONIDALLIANCE = true, SLIMEGIANTALLIANCE = true, CENTAURALLIANCE = true, ETHEREALALLIANCE = true,
+    NAGAHORDE = true, EREDAR = true, GNOLLHORDE = true, SABERONHORDE = true, ARAKKOAHORDE = true };
+local FREEBORN_TWINS = { THINHUMANHORDE = true, OGREHORDE = true, DRAKONIDHORDE = true, SLIMEGIANTHORDE = true,
+    CENTAURHORDE = true, ETHEREALHORDE = true };
+-- Character select only has the localized race name.
+local FREEBORN_NAMES = { ["Sethrak"] = true, ["Vrykul"] = true, ["Forgotten"] = true, ["Ogre"] = true,
+    ["Slime Giant"] = true, ["Centaur"] = true, ["Drakonid"] = true, ["Ethereal"] = true, ["Naga"] = true,
+    ["Eredar"] = true, ["Gnoll"] = true, ["Saberon"] = true, ["Arakkoa"] = true };
+
+local function RaceFile(index)
+    local button = _G["CharacterCreateRaceButton" .. (index or 0)];
+    return strupper(button and button.raceFileString or "");
+end
+
+local function WithoutFreeborn(indices)
+    local kept = {};
+    for _, index in ipairs(indices or {}) do
+        local file = RaceFile(index);
+        if not (FREEBORN_FILES[file] or FREEBORN_TWINS[file]) then kept[#kept + 1] = index; end
+    end
+    return kept;
+end
+
+local enumerateRaces = CharacterCreateEnumerateRaces;
+function CharacterCreateEnumerateRaces(...)
+    enumerateRaces(...);
+    for _, index in ipairs(CharacterCreate.raceIndicesHorde or {}) do
+        for _, texture in ipairs({ _G["CharacterCreateRaceButton" .. index .. "NormalTexture"],
+                                   _G["CharacterCreateRaceButton" .. index .. "PushedTexture"] }) do
+            if texture and texture.GetTexCoord then
+                local ulx, uly, llx, lly, urx, ury, lrx, lry = texture:GetTexCoord();
+                texture:SetTexCoord(urx, ury, lrx, lry, ulx, uly, llx, lly);
+            end
+        end
+    end
+    local freeborn = {};
+    for index = 1, CharacterCreate.numRaces or 0 do
+        local button = _G["CharacterCreateRaceButton" .. index];
+        local file = RaceFile(index);
+        if FREEBORN_FILES[file] then
+            freeborn[#freeborn + 1] = index;
+        elseif FREEBORN_TWINS[file] then
+            button.enable = false;
+            button:SetChecked(nil);
+            button:Disable();
+            button:Hide();
+        end
+    end
+    CharacterCreate.raceIndicesAlliance = WithoutFreeborn(CharacterCreate.raceIndicesAlliance);
+    CharacterCreate.raceIndicesHorde = WithoutFreeborn(CharacterCreate.raceIndicesHorde);
+    CharacterCreate.raceIndicesFreeborn = freeborn;
+    if FREEBORN_TWINS[RaceFile(GetSelectedRace())] and freeborn[1] then SetSelectedRace(freeborn[1]); end
+    -- The team comes from the race now, so the old Freeborn pick is gone for good.
+    local toggle = CharacterCreateFreebornButton;
+    if toggle then toggle:Hide(); toggle.Show = toggle.Hide; end
+    CharacterCreate_PositionRaceButtons();
+end
+CharacterFreeborn_IsSelected = function() return false; end
+
+-- The character-select emblem (and ECS) read Freeborn membership from these hashes; derive them from race.
+function CharacterFreeborn_BadgeHashes()
+    local hashes = {};
+    for index = 1, (GetNumCharacters and GetNumCharacters()) or 0 do
+        local name, race = GetCharacterInfo(index);
+        if name and FREEBORN_NAMES[race] then
+            hashes[tostring(CharacterFreeborn_RecordFor(name) - CharacterFreeborn_RecordBase)] = true;
+        end
+    end
+    return hashes;
+end
 
 local function RacePage()
     return CharacterCreateRaceButtonsContainer and CharacterCreateRaceButtonsContainer:IsShown()
@@ -3818,53 +3927,180 @@ local function SkinRaceButton(button)
     SK.races[button] = true;
 end
 
--- Both factions as 7-wide grids inside their panel, under a header that carries the faction crest.
+-- False once the left pane has slid all the way out.
+local function PaneShown()
+    return (SK.slide or 0) > -PANEL_W;
+end
+
+-- The browsed faction's portraits as one grid in the left panel; the other factions' portraits are hidden. Five
+-- large portraits a row, seven smaller ones once a faction has more than 30 races, so the grid stays on screen.
 local function LayoutRaces()
     if not (SK.on and SK.mode == "race") then return; end
-    local spacing = 340 / GRID_COLUMNS;
-    local size = spacing - 6;
-    local width = CharacterCreateFrame:GetWidth();
-    SK.gridBottom = {};
-    for _, side in ipairs({ "Alliance", "Horde" }) do
-        local indices = side == "Alliance" and CharacterCreate.raceIndicesAlliance or CharacterCreate.raceIndicesHorde;
-        local left = side == "Alliance" and EDGE_X or width - EDGE_X - 340;
+    SK.factionOf = {};
+    for _, faction in ipairs(FACTIONS) do
+        local indices = FactionRaces(faction.key);
+        local columns = #indices > 30 and 7 or 5;
+        local spacing = 340 / columns;
+        local size = spacing - 8;
         local rows = 0;
-        for slot, index in ipairs(indices or {}) do
+        for slot, index in ipairs(indices) do
             local button = _G["CharacterCreateRaceButton" .. index];
             if button then
                 if not SK.races[button] then SkinRaceButton(button); end
-                local column, row = (slot - 1) % GRID_COLUMNS, math.floor((slot - 1) / GRID_COLUMNS);
+                SK.factionOf[button] = faction.key;
+                local column, row = (slot - 1) % columns, math.floor((slot - 1) / columns);
                 rows = math.max(rows, row + 1);
                 button:ClearAllPoints();
                 button:SetSize(size, size);
-                -- Horde fills from the screen edge inward, mirroring the Alliance grid.
-                local x = side == "Alliance" and left + spacing / 2 + column * spacing
-                    or left + 340 - spacing / 2 - column * spacing;
-                button:SetPoint("CENTER", CharacterCreateFrame, "TOPLEFT", x, GRID_TOP - row * spacing);
+                button:SetPoint("CENTER", CharacterCreateFrame, "TOPLEFT",
+                    (SK.slide or 0) + EDGE_X + spacing / 2 + column * spacing, GRID_TOP - row * spacing);
                 button:GetNormalTexture():SetSize(size, size);
                 button:GetPushedTexture():SetSize(size, size);
                 for _, name in ipairs({ "staticTexture", "highlightTexture", "checkedTexture" }) do
                     if button[name] then button[name]:SetSize(size * 112 / 50, size * 112 / 50); end
                 end
+                if faction.key == SK.faction and PaneShown() then button:Show(); else button:Hide(); end
             end
         end
-        SK.gridBottom[side] = GRID_TOP - math.max(rows - 1, 0) * spacing - size / 2;
-
-        local alliance = side == "Alliance";
-        local logo = alliance and CustomizationLogoAlliance or CustomizationLogoHorde;
-        local label = alliance and CustomizationTextAlliance or CustomizationTextHorde;
-        local hitbox = alliance and AllianceLogoFrame or HordeLogoFrame;
-        if logo then
-            logo:ClearAllPoints();
-            logo:SetSize(52, 52);
-            logo:SetPoint("CENTER", CharacterCreateFrame, alliance and "TOPLEFT" or "TOPRIGHT", alliance and EDGE_X + 16 or -(EDGE_X + 16), -74);
-            if hitbox then hitbox:ClearAllPoints(); hitbox:SetSize(40, 40); hitbox:SetPoint("CENTER", logo, "CENTER", 0, 0); end
-        end
-        if label then label:SetAlpha(0); end
+    end
+    -- The faction rail carries the crests; the stock corner crests and captions stay out of the way.
+    for _, region in ipairs({ CustomizationLogoAlliance, CustomizationLogoHorde, CustomizationTextAlliance,
+                              CustomizationTextHorde }) do
+        if region then region:SetAlpha(0); end
+    end
+    for _, hitbox in ipairs({ AllianceLogoFrame, HordeLogoFrame }) do
+        if hitbox then hitbox:EnableMouse(false); end
     end
 end
 
--- Male / Female / Freeborn: glue buttons whose highlight stays lit when picked. Their clicks are the stock ones.
+-- ---- faction rail ------------------------------------------------------------------------------------------
+-- One crest per faction in a slim column on the screen's left edge. A crest shows that faction's races in the left
+-- pane (sliding it in if hidden); the browsed faction's crest slides the pane out, leaving the scene clear.
+
+local RAIL_TOP, RAIL_ICON, RAIL_STEP, SLIDE_TIME = -150, 40, 50, 0.18;
+local UpdateFactionRail;
+
+local function Edge(parent, point, w, h)
+    local edge = Solid(parent, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 1);
+    edge:SetPoint(point, parent, point, 0, 0);
+    if w then edge:SetWidth(w); end
+    if h then edge:SetHeight(h); end
+    return edge;
+end
+
+local function SlidePane(open)
+    SK.paneOpen = open;
+    SK.rail.mover:Show();
+end
+
+local function BuildRailIcon(faction, slot)
+    local icon = CreateFrame("Button", "CreatorSkinFaction" .. faction.key, SK.rail);
+    icon:SetSize(RAIL_ICON, RAIL_ICON);
+    icon:SetPoint("TOPLEFT", SK.chrome, "TOPLEFT", 6, RAIL_TOP + RAIL_ICON / 2 - (slot - 1) * RAIL_STEP);
+    icon.faction = faction;
+    icon.wash = Solid(icon, "BACKGROUND", faction.color[1], faction.color[2], faction.color[3], 0.16);
+    icon.wash:SetAllPoints(icon);
+    icon.edges = { Edge(icon, "TOPLEFT", RAIL_ICON, 1), Edge(icon, "BOTTOMLEFT", RAIL_ICON, 1),
+                   Edge(icon, "TOPLEFT", 1, RAIL_ICON), Edge(icon, "TOPRIGHT", 1, RAIL_ICON) };
+    -- Faction-coloured marker on the outer edge of the browsed crest.
+    icon.bar = Solid(icon, "OVERLAY", faction.color[1], faction.color[2], faction.color[3], 1);
+    icon.bar:SetPoint("TOPLEFT", icon, "TOPLEFT", 1, -1);
+    icon.bar:SetPoint("BOTTOMLEFT", icon, "BOTTOMLEFT", 1, 1);
+    icon.bar:SetWidth(2);
+    local highlight = Solid(icon, "HIGHLIGHT", GOLD[1], GOLD[2], GOLD[3], 0.08);
+    highlight:SetAllPoints(icon);
+    icon.crest = icon:CreateTexture(nil, "ARTWORK");
+    icon.crest:SetSize(RAIL_ICON - 6, RAIL_ICON - 6);
+    icon.crest:SetTexture(faction.crest);
+    icon.crest:SetTexCoord(unpack(faction.crop));
+    icon.crest:SetPoint("CENTER", icon, "CENTER", 0, 0);
+    icon:SetScript("OnClick", function(self)
+        PlaySound("gsCharacterCreationClass");
+        if SK.faction == self.faction.key then
+            SlidePane(not SK.paneOpen);
+        else
+            SK.faction = self.faction.key;
+            pcall(LayoutRaces);
+            if not SK.paneOpen then SlidePane(true); end
+        end
+        pcall(UpdateFactionRail);
+        self:GetScript("OnEnter")(self);
+    end);
+    -- Hover names the faction; the crest is all the rail shows otherwise.
+    icon:SetScript("OnEnter", function(self)
+        local tip = SK.rail.tip;
+        local n = #FactionRaces(self.faction.key);
+        local action = SK.faction ~= self.faction.key and "Show races" or SK.paneOpen and "Hide races" or "Show races";
+        tip.text:SetText(self.faction.hex .. string.upper(self.faction.name) .. "|r  " .. n .. " races  \194\183  " .. action);
+        tip:SetWidth(tip.text:GetStringWidth() + 20);
+        tip:ClearAllPoints();
+        tip:SetPoint("LEFT", self, "RIGHT", 8, 0);
+        tip:Show();
+    end);
+    icon:SetScript("OnLeave", function() SK.rail.tip:Hide(); end);
+    return icon;
+end
+
+local function BuildFactionRail()
+    local rail = CreateFrame("Frame", "CreatorSkinFactionRail", SK.chrome);
+    rail:SetAllPoints(SK.chrome);
+    rail:SetFrameLevel(SK.chrome:GetFrameLevel() + 4);
+    SK.rail = rail;
+    -- A slim ink plate behind the crests, so they read the same with the pane in or out.
+    local plate = Solid(rail, "BACKGROUND", INK[1], INK[2], INK[3], 0.9);
+    plate:SetPoint("TOPLEFT", SK.chrome, "TOPLEFT", 0, RAIL_TOP + RAIL_ICON / 2 + 6);
+    plate:SetSize(52, (#FACTIONS - 1) * RAIL_STEP + RAIL_ICON + 12);
+    local seam = Solid(rail, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.9);
+    seam:SetPoint("TOPLEFT", plate, "TOPRIGHT", 0, 0);
+    seam:SetPoint("BOTTOMLEFT", plate, "BOTTOMRIGHT", 0, 0);
+    seam:SetWidth(1);
+    for slot, faction in ipairs(FACTIONS) do BuildRailIcon(faction, slot); end
+
+    local tip = CreateFrame("Frame", nil, rail);
+    tip:SetHeight(26);
+    tip:SetFrameLevel(rail:GetFrameLevel() + 2);
+    local back = Solid(tip, "BACKGROUND", INK[1], INK[2], INK[3], 0.95);
+    back:SetAllPoints(tip);
+    Edge(tip, "TOPLEFT", nil, 1):SetPoint("TOPRIGHT", tip, "TOPRIGHT", 0, 0);
+    Edge(tip, "BOTTOMLEFT", nil, 1):SetPoint("BOTTOMRIGHT", tip, "BOTTOMRIGHT", 0, 0);
+    tip.text = Text(tip, HEAD_FONT, 12, GOLD);
+    tip.text:SetPoint("LEFT", tip, "LEFT", 10, 0);
+    tip:Hide();
+    rail.tip = tip;
+
+    -- Eases the pane between open (slide 0) and hidden (slide -PANEL_W) over SLIDE_TIME.
+    local mover = CreateFrame("Frame", nil, rail);
+    mover:Hide();
+    mover:SetScript("OnUpdate", function(self, elapsed)
+        if SK.mode ~= "race" then self:Hide(); return; end
+        local target = SK.paneOpen and 0 or -PANEL_W;
+        local step = PANEL_W * elapsed / SLIDE_TIME;
+        local slide = SK.slide or 0;
+        slide = slide < target and math.min(slide + step, target) or math.max(slide - step, target);
+        SK.slide = slide;
+        pcall(PlaceHeaders, slide);
+        pcall(LayoutRaces);
+        if slide == target then self:Hide(); end
+    end);
+    rail.mover = mover;
+    rail:Hide();
+end
+
+function UpdateFactionRail()
+    for _, faction in ipairs(FACTIONS) do
+        local icon = _G["CreatorSkinFaction" .. faction.key];
+        local on = faction.key == SK.faction;
+        icon.wash:SetAlpha(on and SK.paneOpen and 1 or 0);
+        icon.bar:SetAlpha(on and 1 or 0);
+        icon.crest:SetAlpha(on and 1 or 0.6);
+        for _, edge in ipairs(icon.edges) do
+            if on then edge:SetVertexColor(GOLD[1], GOLD[2], GOLD[3], 1);
+            else edge:SetVertexColor(GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.5); end
+        end
+    end
+end
+
+-- Male / Female: glue buttons whose highlight stays lit when picked. Their clicks are the stock ones.
 local function SkinToggle(button, text)
     local normal, pushed = button:GetNormalTexture(), button:GetPushedTexture();
     local skin = { extras = {}, size = { button:GetWidth(), button:GetHeight() },
@@ -3874,7 +4110,7 @@ local function SkinToggle(button, text)
         local texture = button[getter] and button[getter](button);
         if texture then own[texture] = true; end
     end
-    -- Everything else drawn on the button: ring borders and the Freeborn plate and caption.
+    -- Everything else drawn on the button: ring borders.
     for _, region in ipairs({ button:GetRegions() }) do
         local kind = region:GetObjectType();
         if (kind == "Texture" or kind == "FontString") and not own[region] then skin.extras[#skin.extras + 1] = region; end
@@ -3911,7 +4147,7 @@ end
 
 local function LayoutToggles()
     if not (SK.on and SK.mode == "race") then return; end
-    local male, female, freeborn = CharacterCreateGenderButtonMale, CharacterCreateGenderButtonFemale, CharacterCreateFreebornButton;
+    local male, female = CharacterCreateGenderButtonMale, CharacterCreateGenderButtonFemale;
     for _, button in ipairs({ male, female }) do
         if button then
             button:SetSize(130, 38);
@@ -3919,14 +4155,9 @@ local function LayoutToggles()
             button:SetPoint("BOTTOM", CharacterCreateFrame, "BOTTOM", button == male and -66 or 66, 64);
         end
     end
-    if freeborn then
-        freeborn:SetSize(150, 38);
-        freeborn:ClearAllPoints();
-        freeborn:SetPoint("BOTTOM", CharacterCreateFrame, "BOTTOM", 0, 108);
-    end
 end
 
--- The selected race: name, description and racials, under that race's own faction grid.
+-- The selected race: name, faction, description and racials, in the right panel whichever faction is browsed.
 local function BuildCard()
     local card = CreateFrame("Frame", "CreatorSkinRaceCard", SK.chrome);
     card:SetSize(340, 220);
@@ -3936,8 +4167,13 @@ local function BuildCard()
     card.rule:SetPoint("TOPRIGHT", card, "TOPRIGHT", 0, 0);
     card.name = Text(card, HEAD_FONT, 15, GOLD);
     card.name:SetPoint("TOPLEFT", card, "TOPLEFT", 0, -12);
+    card.crest = card:CreateTexture(nil, "ARTWORK");
+    card.crest:SetSize(18, 18);
+    card.faction = Text(card, HEAD_FONT, 12, GOLD);
+    card.crest:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -6);
+    card.faction:SetPoint("LEFT", card.crest, "RIGHT", 6, 0);
     card.description = Text(card, BODY_FONT, 12, TEXT);
-    card.description:SetPoint("TOPLEFT", card.name, "BOTTOMLEFT", 0, -6);
+    card.description:SetPoint("TOPLEFT", card.crest, "BOTTOMLEFT", 0, -8);
     card.description:SetWidth(340);
     card.description:SetJustifyH("LEFT");
     card.traits = {};
@@ -3957,17 +4193,15 @@ local function UpdateCard()
     local card = SK.card;
     local index = GetSelectedRace and GetSelectedRace();
     local button = index and _G["CharacterCreateRaceButton" .. index];
-    if not (button and SK.gridBottom) then card:Hide(); return; end
-    local side = "Horde";
-    for _, allianceIndex in ipairs(CharacterCreate.raceIndicesAlliance or {}) do
-        if allianceIndex == index then side = "Alliance"; end
-    end
-    local width = CharacterCreateFrame:GetWidth();
+    local faction = button and FactionOfRace(index);
+    if not faction then card:Hide(); return; end
     card:ClearAllPoints();
-    card:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPLEFT", side == "Alliance" and EDGE_X or width - EDGE_X - 340,
-        SK.gridBottom[side] - 20);
+    card:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPRIGHT", -EDGE_X, -104);
     local info = button.raceInfo;
     card.name:SetText(string.upper((info and info.Name) or button.name or ""));
+    card.crest:SetTexture(faction.crest);
+    card.crest:SetTexCoord(unpack(faction.crop));
+    card.faction:SetText(faction.hex .. string.upper(faction.name) .. "|r");
     card.description:SetText(info and info.Description or "");
     local last = card.description;
     for i, trait in ipairs(card.traits) do
@@ -3997,8 +4231,14 @@ local function RestoreRace()
         if button.staticTexture then button.staticTexture:Hide(); end
     end
     for button in pairs(SK.toggles) do ApplyToggle(button, false); end
-    if CustomizationTextAlliance then CustomizationTextAlliance:SetAlpha(1); end
-    if CustomizationTextHorde then CustomizationTextHorde:SetAlpha(1); end
+    for _, region in ipairs({ CustomizationLogoAlliance, CustomizationLogoHorde, CustomizationTextAlliance,
+                              CustomizationTextHorde }) do
+        if region then region:SetAlpha(1); end
+    end
+    for _, hitbox in ipairs({ AllianceLogoFrame, HordeLogoFrame }) do
+        if hitbox then hitbox:EnableMouse(true); end
+    end
+    for button in pairs(SK.races) do if SK.factionOf and SK.factionOf[button] then button:Show(); end end
     if SK.positionRaces then SK.positionRaces(); end
     if SK.positionGender then SK.positionGender(); end
 end
@@ -4041,6 +4281,12 @@ end
 local function RaceTick()
     if SK.mode ~= "race" then
         SK.mode = "race";
+        -- Coming onto the race page, browse the selected race's faction; tab clicks change it after that.
+        local selected = FactionOfRace(GetSelectedRace());
+        SK.faction = selected and selected.key or SK.faction or FACTIONS[1].key;
+        -- The pane keeps whatever the player last left it as (open by default).
+        if SK.paneOpen == nil then SK.paneOpen = true; end
+        SK.slide = SK.paneOpen and 0 or -PANEL_W;
         LayoutRaces();
         LayoutToggles();
     end
@@ -4054,12 +4300,21 @@ local function RaceTick()
             button.staticTexture:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]);
             if button:GetChecked() and button:IsShown() then button.staticTexture:Show(); else button.staticTexture:Hide(); end
         end
+        -- The stock code re-shows portraits on enumeration; only the browsed faction's stay up.
+        local browsed = SK.factionOf and SK.factionOf[button] == SK.faction and PaneShown();
+        if browsed and not button:IsShown() then button:Show();
+        elseif not browsed and button:IsShown() then button:Hide(); end
     end
-    PlaceHeaders(true);
-    SK.LEFT.title:SetText(string.upper(ALLIANCE or "Alliance"));
-    SK.RIGHT.title:SetText(string.upper(HORDE or "Horde"));
-    SK.LEFT.subtitle:SetText(#(CharacterCreate.raceIndicesAlliance or {}) .. " races");
-    SK.RIGHT.subtitle:SetText(#(CharacterCreate.raceIndicesHorde or {}) .. " races");
+    if not SK.rail.mover:IsShown() then PlaceHeaders(SK.slide); end
+    SK.rail:Show();
+    UpdateFactionRail();
+    local browsing;
+    for _, faction in ipairs(FACTIONS) do if faction.key == SK.faction then browsing = faction; end end
+    SK.LEFT.title:SetText("CHOOSE A RACE");
+    SK.LEFT.subtitle:SetText(browsing and (browsing.hex .. string.upper(browsing.name) .. "|r  \194\183  "
+        .. #FactionRaces(browsing.key) .. " races") or "");
+    SK.RIGHT.title:SetText("RACE DETAILS");
+    SK.RIGHT.subtitle:SetText("Your current pick");
     SetSteps(1);
     UpdateCard();
 end
@@ -4133,10 +4388,11 @@ local function Tick()
         return;
     end
     if SK.card then SK.card:Hide(); end
+    if SK.rail then SK.rail:Hide(); end
     if not Personalizing() then UpdateFormTabs(false); SK.mode = nil; SetSkin(false); return; end
     SetSkin(true);
     SK.mode = "custom";
-    PlaceHeaders(false);
+    PlaceHeaders(0);
 
     for i = 1, 64 do
         local row = _G["CharacterCustomizationButtonFrame" .. i];
@@ -4184,8 +4440,8 @@ local function SK_Install()
     SkinNameEdit(CharacterCreateLastNameEdit);
     if CharCreatePersonalizeButton then SkinButton(CharCreatePersonalizeButton); end
     BuildCard();
-    for button, text in pairs({ [CharacterCreateGenderButtonMale or 0] = "MALE", [CharacterCreateGenderButtonFemale or 0] = "FEMALE",
-                                [CharacterCreateFreebornButton or 0] = "FREEBORN" }) do
+    BuildFactionRail();
+    for button, text in pairs({ [CharacterCreateGenderButtonMale or 0] = "MALE", [CharacterCreateGenderButtonFemale or 0] = "FEMALE" }) do
         if button ~= 0 then SkinToggle(button, text); end
     end
     -- The stock code re-lays the portraits and gender picks on enumeration and resize; keep the skin's layout.

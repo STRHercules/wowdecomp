@@ -109,23 +109,23 @@ bool SealNativeBootFoot(std::vector<unsigned char>& pixels,int stride=512,int sc
     }
     return true;
 }
-void ExtendNativeClothRegion(std::vector<unsigned char>& pixels,int left,int top,int width,int height) {
+void ExtendNativeClothRegion(std::vector<unsigned char>& pixels,int left,int top,int width,int height,int stride=512) {
     std::vector<int> columns(width,-1);
     for(int x=0;x<width;++x) {
         std::vector<int> rows;
-        for(int y=0;y<height;++y)if(pixels[4*((top+y)*512+left+x)+3]>=160)rows.push_back(y);
+        for(int y=0;y<height;++y)if(pixels[4*((top+y)*stride+left+x)+3]>=160)rows.push_back(y);
         if(rows.empty())continue;columns[x]=x;
         for(int y=0;y<height;++y) {
-            auto* dst=pixels.data()+4*((top+y)*512+left+x);
+            auto* dst=pixels.data()+4*((top+y)*stride+left+x);
             if(dst[3]>=160)continue;
             int nearest=rows[0];for(auto row:rows)if(std::abs(row-y)<std::abs(nearest-y))nearest=row;
-            std::copy_n(pixels.data()+4*((top+nearest)*512+left+x),4,dst);dst[3]=255;
+            std::copy_n(pixels.data()+4*((top+nearest)*stride+left+x),4,dst);dst[3]=255;
         }
     }
     for(int x=0;x<width;++x)if(columns[x]<0) {
         int nearest=-1;for(int i=0;i<width;++i)if(columns[i]>=0&&(nearest<0||std::abs(i-x)<std::abs(nearest-x)))nearest=i;
         if(nearest<0)continue;
-        for(int y=0;y<height;++y)std::copy_n(pixels.data()+4*((top+y)*512+left+nearest),4,pixels.data()+4*((top+y)*512+left+x));
+        for(int y=0;y<height;++y)std::copy_n(pixels.data()+4*((top+y)*stride+left+nearest),4,pixels.data()+4*((top+y)*stride+left+x));
     }
 }
 // Native creatures have a different body UV atlas from player equipment. Bake
@@ -242,7 +242,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
     }
     // The equipment textures are 2x the 512x512 atlas, which the whole-texel fitting map throws away. Rebuild the
     // body at double size: skin and unfitted regions are interpolated, plain armor texels come from the 2x atlas.
-    if(prefs.m_raceID==75&&hires&&hires->size()==1024u*1024u*4u) {
+    if(hires&&hires->size()==1024u*1024u*4u) {
         unsigned const W=map.width*2,H=map.height*2;
         std::vector<unsigned char> big(size_t(W)*H*4);
         auto bilinear=[](unsigned char const* data,unsigned stride,unsigned rows,float fx,float fy,unsigned char* out) {
@@ -386,7 +386,7 @@ void BindSelectorOutfit(CCharacterComponent* c) {
     if(!loaded){KTrace("fail","items not loaded");pendingSelectorBind.insert(c);return;}
     std::vector<unsigned char> pixels(512*512*4);
     auto gloveless=pixels;
-    std::vector<unsigned char> hires;if(race==75)hires.assign(1024u*1024u*4u,0);
+    std::vector<unsigned char> hires(1024u*1024u*4u,0);
     constexpr unsigned counts[]={2,7,1,5,7,3,6,1};
     for(unsigned region=0;region<8;++region) {
         auto const& row=c->m_section[region];
@@ -422,14 +422,16 @@ void BindSelectorOutfit(CCharacterComponent* c) {
     std::shared_ptr<void> robeTexture;
     if(robe||shoes||greaves||gloves||legMeshes) {
         auto garment=pixels;unsigned garmentSize=512;
-        if(race==75&&!hires.empty()){garment=hires;garmentSize=1024;}
-        if(greaves&&!robe&&garmentSize==512) {
+        if(!hires.empty()){garment=hires;garmentSize=1024;}
+        if(greaves&&!robe) {
             // Only seal the lower greave edge. Keep the item's upper alpha
             // silhouette so its cuff appears once, at the body's chart height.
             auto sealed=garment;
-            ExtendNativeClothRegion(sealed,256,320,256,128);
-            for(unsigned y=420;y<448;++y)
-                std::copy_n(sealed.data()+4*(y*512+256),256*4,garment.data()+4*(y*512+256));
+            unsigned const scale=garmentSize/512;
+            ExtendNativeClothRegion(sealed,256*scale,320*scale,256*scale,128*scale,garmentSize);
+            for(unsigned y=420*scale;y<448*scale;++y)
+                std::copy_n(sealed.data()+4*(y*garmentSize+256*scale),256*scale*4,
+                    garment.data()+4*(y*garmentSize+256*scale));
         }
         std::uint64_t garmentHash=14695981039346656037ull;
         for(auto value:garment)garmentHash=(garmentHash^value)*1099511628211ull;
