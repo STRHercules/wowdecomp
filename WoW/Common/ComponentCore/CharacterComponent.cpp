@@ -5743,7 +5743,8 @@ bool CCharacterComponent::Init(ComponentData* data, const char* debug) {
     this->m_handItemDisplayID[2] = 0;
 
     if (static_cast<int32_t>(data->m_preferences.m_raceID) < 0 || static_cast<int32_t>(data->m_preferences.m_raceID) > g_chrRacesDB.m_maxID ||
-        (!RetailRaceOwns(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID) &&
+        (this->m_data.m_preferences.m_raceID != 75 &&
+         !RetailRaceOwns(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID) &&
          !ComponentValidateBase(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID,
             this->m_data.m_preferences.m_sexID, VARIATION_SKIN, 0, this->m_data.m_preferences.m_skinID))) {
         return false;

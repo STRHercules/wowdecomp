@@ -81,30 +81,31 @@ void SelectorOver(unsigned char* dst,unsigned char const* src) {
         dst[channel]=static_cast<unsigned char>(total?(src[channel]*a*255+dst[channel]*prior*(255-a)+total/2)/total:0);
     dst[3]=static_cast<unsigned char>((total+127)/255);
 }
-bool SealNativeBootFoot(std::vector<unsigned char>& pixels) {
+bool SealNativeBootFoot(std::vector<unsigned char>& pixels,int stride=512,int scale=1) {
     // Extend the authored boot colors to the foot chart border. This prevents
     // a transparent edge from exposing the baked foot/shoe underneath the shell.
-    std::array<int,64> rows{};rows.fill(-1);
-    for(int y=0;y<64;++y) {
-        std::array<int,256> valid{};unsigned count=0;
-        auto* row=pixels.data()+4*((448+y)*512+256);
-        for(int x=0;x<256;++x)if(row[4*x+3]>=128)valid[count++]=x;
-        if(!count)continue;
+    int const width=256*scale,height=64*scale,left=256*scale,top=448*scale;
+    std::vector<int> rows(height,-1);
+    for(int y=0;y<height;++y) {
+        std::vector<int> valid;
+        auto* row=pixels.data()+4*((top+y)*stride+left);
+        for(int x=0;x<width;++x)if(row[4*x+3]>=128)valid.push_back(x);
+        if(valid.empty())continue;
         rows[y]=y;
-        auto original=std::vector<unsigned char>(row,row+1024);
-        for(int x=0;x<256;++x) {
+        auto original=std::vector<unsigned char>(row,row+4*width);
+        for(int x=0;x<width;++x) {
             if(row[4*x+3]<128) {
                 int nearest=valid[0];
-                for(unsigned i=1;i<count;++i)if(std::abs(valid[i]-x)<std::abs(nearest-x))nearest=valid[i];
+                for(auto candidate:valid)if(std::abs(candidate-x)<std::abs(nearest-x))nearest=candidate;
                 std::copy_n(original.data()+4*nearest,3,row+4*x);
             }
             row[4*x+3]=255;
         }
     }
     bool any=false;for(auto row:rows)any=any||row>=0;if(!any)return false;
-    for(int y=0;y<64;++y)if(rows[y]<0) {
-        int nearest=-1;for(int i=0;i<64;++i)if(rows[i]>=0&&(nearest<0||std::abs(i-y)<std::abs(nearest-y)))nearest=i;
-        std::copy_n(pixels.data()+4*((448+nearest)*512+256),1024,pixels.data()+4*((448+y)*512+256));
+    for(int y=0;y<height;++y)if(rows[y]<0) {
+        int nearest=-1;for(int i=0;i<height;++i)if(rows[i]>=0&&(nearest<0||std::abs(i-y)<std::abs(nearest-y)))nearest=i;
+        std::copy_n(pixels.data()+4*((top+nearest)*stride+left),4*width,pixels.data()+4*((top+y)*stride+left));
     }
     return true;
 }
@@ -130,7 +131,7 @@ void ExtendNativeClothRegion(std::vector<unsigned char>& pixels,int left,int top
 // Native creatures have a different body UV atlas from player equipment. Bake
 // the equipment into that atlas instead of substituting it for skin or wings.
 bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>& outfit,
-    unsigned& width,unsigned& height,std::vector<unsigned char> const* gloveless=nullptr) {
+    unsigned& width,unsigned& height,std::vector<unsigned char> const* gloveless=nullptr,std::vector<unsigned char> const* hires=nullptr) {
     struct FittingMap {unsigned width=0,height=0;std::vector<unsigned> pixels;std::vector<unsigned char> coverage;};
     static std::array<FittingMap,4> maps;
     auto const& prefs=c->m_data.m_preferences;
@@ -139,7 +140,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
     if(map.pixels.empty()) {
         wchar_t path[128]{};
         swprintf_s(path,L"Data\\Retail\\Assets\\EquipmentFitting\\%u-%u.bin",prefs.m_raceID,prefs.m_sexID);
-        Catalog file=CatalogFile(path);if(!file)return false;
+        Catalog file=CatalogFile(path);if(!file){KTrace("why","fitting map missing %ls",path);return false;}
         unsigned header[6]{};
         bool valid=file.Read(header,sizeof(header),1)==1&&header[0]==0x3146554e&&header[1]==1
             &&header[2]&&header[2]<=1024&&header[3]&&header[3]<=1024&&header[4]==512&&header[5]==512;
@@ -154,7 +155,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
                     || !std::all_of(map.coverage.begin(),map.coverage.end(),[](unsigned char value){return value<=4;}))map.coverage.clear();
             }
         }
-        if(!valid){map=FittingMap{};return false;}
+        if(!valid){KTrace("why","fitting map invalid %ls",path);map=FittingMap{};return false;}
     }
     char const* skinPath=nullptr;
     for(auto const& record:RaceSelections(prefs.m_raceID)) {
@@ -164,7 +165,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
             skinPath=record.path;break;
         }
     }
-    if(!skinPath)return false;
+    if(!skinPath){KTrace("why","no skin record for race=%u sex=%u skin=%u",prefs.m_raceID,prefs.m_sexID,unsigned(prefs.m_skinID));return false;}
     NativePixelSource skin;
     // Keep the authored skin detail and underwear beneath equipped clothing.
     skin.bytes=NativeBlpData(skinPath);
@@ -177,7 +178,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
         if(!detailedSkin.empty())skin.bytes=std::move(detailedSkin);
     }
     unsigned pitch=0;void* decoded=nullptr;
-    if(!skin.Mip(0,pitch,decoded)||skin.Word(12)!=map.width||skin.Word(16)!=map.height)return false;
+    if(!skin.Mip(0,pitch,decoded)||skin.Word(12)!=map.width||skin.Word(16)!=map.height){KTrace("why","skin decode/size mismatch path=%s skin=%ux%u map=%ux%u bytes=%zu",skinPath,skin.Word(12),skin.Word(16),map.width,map.height,skin.bytes.size());return false;}
     std::vector<unsigned char> composed(map.width*map.height*4);
     auto* native=static_cast<unsigned char const*>(decoded);
     auto extended=outfit;
@@ -190,6 +191,7 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
         if(prefs.m_raceID==76&&c->m_itemDisplayID[ITEMSLOT_BOOTS])ExtendNativeClothRegion(extended,256,320,256,128);
     }
     unsigned long long tintSum[3]{};unsigned tintCount=0;
+    std::vector<unsigned char> armor(map.width*map.height,0),plain(map.width*map.height,0);
     if(prefs.m_raceID==76&&c->m_itemDisplayID[ITEMSLOT_BOOTS]) {
         for(unsigned y=448;y<512;++y)for(unsigned x=256;x<512;++x) {
             auto* color=outfit.data()+4*(y*512+x);if(color[3]<128)continue;
@@ -222,19 +224,68 @@ bool SelectorNativeBodyPixels(CCharacterComponent* c,std::vector<unsigned char>&
                 continue;
             }
             auto const* layer=outfit.data()+4*((sample>>16)*512+(sample&65535u));
+            bool direct=true;
             if(gloveless&&c->m_itemDisplayID[ITEMSLOT_GLOVES]&&(sample&65535u)<256&&(sample>>16)>=128&&(sample>>16)<256) {
                 float compression=prefs.m_raceID==75?.82f:.78f;
                 int gloveY=256-int((256-int(sample>>16))/compression);
                 if(gloveY>=128)layer=outfit.data()+4*(gloveY*512+(sample&65535u));
                 else layer=gloveless->data()+4*((sample>>16)*512+(sample&65535u));
+                direct=false;
             }
             if(!map.coverage.empty()&&layer[3]<160) {
                 auto mask=map.coverage[y*map.width+x];
                 if((mask==1&&(sample>>16)<128&&c->m_itemDisplayID[ITEMSLOT_CHEST])||(mask==2&&c->m_itemDisplayID[ITEMSLOT_PANTS]))
-                    layer=extended.data()+4*((sample>>16)*512+(sample&65535u));
+                {layer=extended.data()+4*((sample>>16)*512+(sample&65535u));direct=false;}
             }
-            if(layer[3])SelectorOver(composed.data()+4*(y*map.width+x),layer);
+            if(layer[3]){SelectorOver(composed.data()+4*(y*map.width+x),layer);armor[y*map.width+x]=1;if(direct)plain[y*map.width+x]=1;}
         }
+    }
+    // The equipment textures are 2x the 512x512 atlas, which the whole-texel fitting map throws away. Rebuild the
+    // body at double size: skin and unfitted regions are interpolated, plain armor texels come from the 2x atlas.
+    if(prefs.m_raceID==75&&hires&&hires->size()==1024u*1024u*4u) {
+        unsigned const W=map.width*2,H=map.height*2;
+        std::vector<unsigned char> big(size_t(W)*H*4);
+        auto bilinear=[](unsigned char const* data,unsigned stride,unsigned rows,float fx,float fy,unsigned char* out) {
+            fx=std::clamp(fx,0.f,float(stride-1));fy=std::clamp(fy,0.f,float(rows-1));
+            unsigned x0=unsigned(fx),y0=unsigned(fy),x1=std::min(x0+1,stride-1),y1=std::min(y0+1,rows-1);
+            float ax=fx-x0,ay=fy-y0;
+            for(unsigned k=0;k<4;++k) {
+                float top=data[4*(y0*stride+x0)+k]*(1-ax)+data[4*(y0*stride+x1)+k]*ax;
+                float bottom=data[4*(y1*stride+x0)+k]*(1-ax)+data[4*(y1*stride+x1)+k]*ax;
+                out[k]=static_cast<unsigned char>(top*(1-ay)+bottom*ay+.5f);
+            }
+        };
+        std::vector<unsigned char> skin(size_t(map.width)*map.height*4);
+        for(unsigned y=0;y<map.height;++y)std::copy_n(native+y*pitch,map.width*4,skin.data()+size_t(y)*map.width*4);
+        for(unsigned Y=0;Y<H;++Y)for(unsigned X=0;X<W;++X) {
+            float fx=(X+.5f)/2-.5f,fy=(Y+.5f)/2-.5f;
+            unsigned nx=unsigned(std::clamp(int(fx+.5f),0,int(map.width)-1)),ny=unsigned(std::clamp(int(fy+.5f),0,int(map.height)-1));
+            auto* out=big.data()+4*(size_t(Y)*W+X);
+            if(!plain[ny*map.width+nx]) {
+                bilinear(composed.data(),map.width,map.height,fx,fy,out);out[3]=255;
+                continue;
+            }
+            bilinear(skin.data(),map.width,map.height,fx,fy,out);out[3]=255;
+            float sx=float(map.pixels[ny*map.width+nx]&65535u),sy=float(map.pixels[ny*map.width+nx]>>16);
+            unsigned x0=unsigned(std::clamp(int(std::floor(fx)),0,int(map.width)-2)),y0=unsigned(std::clamp(int(std::floor(fy)),0,int(map.height)-2));
+            bool smooth=true;
+            for(unsigned dy=0;dy<2&&smooth;++dy)for(unsigned dx=0;dx<2;++dx) {
+                unsigned i=(y0+dy)*map.width+x0+dx;
+                if(!plain[i]||std::abs(int(map.pixels[i]&65535u)-int(sx))>3||std::abs(int(map.pixels[i]>>16)-int(sy))>3){smooth=false;break;}
+            }
+            if(smooth) {
+                float ax=std::clamp(fx-x0,0.f,1.f),ay=std::clamp(fy-y0,0.f,1.f);
+                auto at=[&](unsigned dx,unsigned dy,bool horizontal) {
+                    unsigned v=map.pixels[(y0+dy)*map.width+x0+dx];return float(horizontal?(v&65535u):(v>>16));
+                };
+                sx=(at(0,0,true)*(1-ax)+at(1,0,true)*ax)*(1-ay)+(at(0,1,true)*(1-ax)+at(1,1,true)*ax)*ay;
+                sy=(at(0,0,false)*(1-ax)+at(1,0,false)*ax)*(1-ay)+(at(0,1,false)*(1-ax)+at(1,1,false)*ax)*ay;
+            }
+            unsigned char armorPixel[4]{};
+            bilinear(hires->data(),1024,1024,2*sx+.5f,2*sy+.5f,armorPixel);
+            if(armorPixel[3])SelectorOver(out,armorPixel);
+        }
+        width=W;height=H;outfit=std::move(big);return true;
     }
     width=map.width;height=map.height;outfit=std::move(composed);return true;
 }
@@ -309,28 +360,33 @@ void BindSelectorOutfit(CCharacterComponent* c) {
         c->m_data.m_model->SetGeometryVisible(20100,20139,0);
         c->m_data.m_model->SetGeometryVisible(20200,20200,0);
         c->m_data.m_model->SetGeometryVisible(0,0,1);
+        if (race == 75) c->m_data.m_model->SetGeometryVisible(20300,20300,robe?0:1);
         if(race==76&&(robe||std::any_of(gear.begin(),gear.end(),[](unsigned value){return value!=0;})))
             c->m_data.m_model->SetGeometryVisible(3101,3101,1);
         for(unsigned geo:{upperLegGeo,lowerLegGeo,waistGeo,beltGeo})if(geo)c->m_data.m_model->SetGeometryVisible(geo,geo,1);
     };
+    KTrace("bind","race=%u sex=%u robe=%d(chest=%d,legs=%d) shoes=%d gloves=%d(style=%u) legMeshes=%d gear=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u,%u fields=%u,%u,%u,%u,%u",
+        race,c->m_data.m_preferences.m_sexID,robe,chestRobe,legSkirt,shoes,gloves,gloveStyle,legMeshes,gear[0],gear[1],gear[2],gear[3],gear[4],gear[5],gear[6],gear[7],gear[8],gear[9],gear[10],gear[11],fields[0],fields[1],fields[2],fields[3],fields[4]);
     bindLegMeshes();
     if(state.texture && state.gear==gear && state.fields==fields && state.hasRobe==robe && state.hasShoes==shoes && state.hasGreaves==greaves && state.bootStyle==bootStyle&&state.hasGloves==gloves&&state.gloveStyle==gloveStyle) {
         c->m_data.m_model->ReplaceTexture(textureType,reinterpret_cast<CTexture*>(state.texture.get()));
         if(nativeBody) {
             c->m_data.m_model->SetGeometryVisible(1302,1302,robe?1:0);
             c->m_data.m_model->SetGeometryVisible(20002,20034,0);
-            if(shoes)c->m_data.m_model->SetGeometryVisible(20010+bootStyle,20010+bootStyle,1);
+            if(shoes&&!robe)c->m_data.m_model->SetGeometryVisible(20010+bootStyle,20010+bootStyle,1);
             if(greaves)c->m_data.m_model->SetGeometryVisible(20020+bootStyle,20020+bootStyle,1);
             if(gloves)c->m_data.m_model->SetGeometryVisible(20030+gloveStyle,20030+gloveStyle,1);
             if((robe||shoes||greaves||gloves||legMeshes)&&state.robeTexture)c->m_data.m_model->ReplaceTexture(15,reinterpret_cast<CTexture*>(state.robeTexture.get()));
         }
+        if(race==75){KOverrides(c->m_data.m_model);KVisible(c->m_data.m_model,c->m_data.m_preferences.m_sexID);}
         pendingSelectorBind.erase(c);return;
     }
     unsigned dirty=c->m_dirtySections;c->m_dirtySections|=0xff;
     bool loaded=c->ItemsLoaded(1);c->m_dirtySections=dirty;
-    if(!loaded){pendingSelectorBind.insert(c);return;}
+    if(!loaded){KTrace("fail","items not loaded");pendingSelectorBind.insert(c);return;}
     std::vector<unsigned char> pixels(512*512*4);
     auto gloveless=pixels;
+    std::vector<unsigned char> hires;if(race==75)hires.assign(1024u*1024u*4u,0);
     constexpr unsigned counts[]={2,7,1,5,7,3,6,1};
     for(unsigned region=0;region<8;++region) {
         auto const& row=c->m_section[region];
@@ -347,20 +403,27 @@ void BindSelectorOutfit(CCharacterComponent* c) {
             NativePixelSource source;
             if(!SelectorLayerPixels(row.m_layerTex[layer],source)){Trace("Native outfit layer decode failed component=%p region=%u layer=%u",c,region,layer);pendingSelectorBind.insert(c);return;}
             auto const& data=source.levels[0];unsigned w=source.Word(12),h=source.Word(16);
+            if(race==75)KTrace("layer","region=%u layer=%u item=%u source=%ux%u rect=%dx%d",region,layer,row.m_layerItemDisplayId[layer],w,h,int(rect.m_size.x),int(rect.m_size.y));
             for(unsigned y=0;y<unsigned(rect.m_size.y);++y)for(unsigned x=0;x<unsigned(rect.m_size.x);++x) {
                 SelectorOver(pixels.data()+4*((rect.m_pos.y+y)*512+rect.m_pos.x+x),
                     data.data()+4*((y*h/rect.m_size.y)*w+x*w/rect.m_size.x));
+                if(!hires.empty())for(unsigned sy=0;sy<2;++sy)for(unsigned sx=0;sx<2;++sx) {
+                    unsigned hx=x*2+sx,hy=y*2+sy;
+                    SelectorOver(hires.data()+4*((2*rect.m_pos.y+hy)*1024+2*rect.m_pos.x+hx),
+                        data.data()+4*((hy*h/(2*rect.m_size.y))*w+hx*w/(2*rect.m_size.x)));
+                }
                 if(!gear[ITEMSLOT_GLOVES]||row.m_layerItemDisplayId[layer]!=gear[ITEMSLOT_GLOVES])
                     SelectorOver(gloveless.data()+4*((rect.m_pos.y+y)*512+rect.m_pos.x+x),
                         data.data()+4*((y*h/rect.m_size.y)*w+x*w/rect.m_size.x));
             }
         }
     }
-    if(nativeBody&&race==75&&gear[ITEMSLOT_BOOTS])SealNativeBootFoot(pixels);
+    if(nativeBody&&race==75&&gear[ITEMSLOT_BOOTS]){SealNativeBootFoot(pixels);if(!hires.empty())SealNativeBootFoot(hires,1024,2);}
     std::shared_ptr<void> robeTexture;
     if(robe||shoes||greaves||gloves||legMeshes) {
-        auto garment=pixels;
-        if(greaves&&!robe) {
+        auto garment=pixels;unsigned garmentSize=512;
+        if(race==75&&!hires.empty()){garment=hires;garmentSize=1024;}
+        if(greaves&&!robe&&garmentSize==512) {
             // Only seal the lower greave edge. Keep the item's upper alpha
             // silhouette so its cuff appears once, at the body's chart height.
             auto sealed=garment;
@@ -372,33 +435,35 @@ void BindSelectorOutfit(CCharacterComponent* c) {
         for(auto value:garment)garmentHash=(garmentHash^value)*1099511628211ull;
         char garmentPath[160]{};
         sprintf_s(garmentPath,"Data\\Retail\\Cache\\Appearance\\Equipment\\garment-v2-%016llx.blp",static_cast<unsigned long long>(garmentHash));
-        if((robeTexture=NativeTexture(garmentPath,garment,512,512))==nullptr) {
-            pendingSelectorBind.insert(c);return;
+        if((robeTexture=NativeTexture(garmentPath,garment,garmentSize,garmentSize))==nullptr) {
+            KTrace("fail","garment texture failed");pendingSelectorBind.insert(c);return;
         }
     }
     unsigned width=512,height=512;
-    if(nativeBody&&!SelectorNativeBodyPixels(c,pixels,width,height,&gloveless)) {
-        pendingSelectorBind.insert(c);return;
+    if(nativeBody&&!SelectorNativeBodyPixels(c,pixels,width,height,&gloveless,hires.empty()?nullptr:&hires)) {
+        KTrace("fail","SelectorNativeBodyPixels failed (see why)");pendingSelectorBind.insert(c);return;
     }
     std::uint64_t hash=14695981039346656037ull;
     for(auto value:pixels)hash=(hash^value)*1099511628211ull;
+    if(race==75){char tag[64];sprintf_s(tag,"body-sex%u-robe%d-gloves%d-skin%u",c->m_data.m_preferences.m_sexID,robe?1:0,gloves?1:0,unsigned(fields[0]));KDump(tag,pixels,width,height);}
     char path[160]{};
     if(nativeBody)sprintf_s(path,"Data\\Retail\\Cache\\Appearance\\Equipment\\native-v3-%u-%u-%016llx.blp",race,c->m_data.m_preferences.m_sexID,static_cast<unsigned long long>(hash));
     else sprintf_s(path,"DHCache\\Outfits\\v2-%u-%016llx.blp",race,static_cast<unsigned long long>(hash));
     auto texture=NativeTexture(path,pixels,width,height);
-    if(!texture){pendingSelectorBind.insert(c);return;}
+    if(!texture){KTrace("fail","native texture create failed");pendingSelectorBind.insert(c);return;}
     state.gear=gear;state.fields=fields;state.texture=texture;state.robeTexture=robeTexture;state.hasRobe=robe;state.hasShoes=shoes;state.hasGreaves=greaves;state.bootStyle=bootStyle;state.hash=hash;
     state.hasGloves=gloves;state.gloveStyle=gloveStyle;
     c->m_data.m_model->ReplaceTexture(textureType,reinterpret_cast<CTexture*>(texture.get()));
     if(nativeBody) {
         c->m_data.m_model->SetGeometryVisible(1302,1302,robe?1:0);
         c->m_data.m_model->SetGeometryVisible(20002,20034,0);
-        if(shoes)c->m_data.m_model->SetGeometryVisible(20010+bootStyle,20010+bootStyle,1);
+        if(shoes&&!robe)c->m_data.m_model->SetGeometryVisible(20010+bootStyle,20010+bootStyle,1);
         if(greaves)c->m_data.m_model->SetGeometryVisible(20020+bootStyle,20020+bootStyle,1);
         if(gloves)c->m_data.m_model->SetGeometryVisible(20030+gloveStyle,20030+gloveStyle,1);
         if(robeTexture)c->m_data.m_model->ReplaceTexture(15,reinterpret_cast<CTexture*>(robeTexture.get()));
     }
+    if(race==75){KOverrides(c->m_data.m_model);KVisible(c->m_data.m_model,c->m_data.m_preferences.m_sexID);}
     pendingSelectorBind.erase(c);
+    KTrace("fail","bound ok %ux%u path=%s",width,height,path);
     Trace("Native outfit bound component=%p fields=%u,%u,%u,%u,%u type1=%p path=%s",c,fields[0],fields[1],fields[2],fields[3],fields[4],texture.get(),path);
 }
-

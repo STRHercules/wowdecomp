@@ -6,7 +6,7 @@
 namespace Retail {
 // Ethereal inherited an NPC barefoot flag, but its player body has complete shoe surfaces.
 inline bool BareFeet(uint32_t gameRace, uint32_t raceFlags) {
-    return gameRace != 77 && gameRace != 78 && (raceFlags & 2) != 0;
+    return gameRace != 75 && gameRace != 77 && gameRace != 78 && (raceFlags & 2) != 0;
 }
 // Nightborne anatomy uses the installed Night Elf helmet family; only the new Ethereal needs this file alias.
 inline uint32_t HelmetModelRace(uint32_t gameRace) { return gameRace == 77 || gameRace == 78 ? 4 : gameRace; }

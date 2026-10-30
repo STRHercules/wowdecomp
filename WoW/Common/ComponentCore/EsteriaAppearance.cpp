@@ -147,6 +147,121 @@ void Trace(const char* format, ...) {
     lines++;
 }
 
+void KTrace(const char* tag, const char* format, ...) {
+    // Kyrian diagnostics: logs only when a tag's message changes, beside the executable.
+    static std::unordered_map<std::string, std::string> last;
+    char message[512] = {};
+    va_list args;
+    va_start(args, format);
+    vsnprintf(message, sizeof(message), format, args);
+    va_end(args);
+    auto& previous = last[tag];
+    char path[MAX_PATH] = {};
+    if (previous == message || !GetModuleFileNameA(nullptr, path, MAX_PATH)) {
+        return;
+    }
+    previous = message;
+    char* slash = strrchr(path, '\\');
+    if (!slash) {
+        return;
+    }
+    strcpy(slash + 1, "EsteriaKyrian.log");
+    FILE* file = nullptr;
+    if (!fopen_s(&file, path, "a") && file) {
+        fprintf(file, "[%s] %s\n", tag, message);
+        fclose(file);
+    }
+}
+
+void KDump(const char* name, const std::vector<unsigned char>& pixels, unsigned width, unsigned height) {
+    // Kyrian diagnostics: raw 32-bit TGA of a composed atlas (channel order as held in memory), beside the exe.
+    char path[MAX_PATH] = {};
+    if (pixels.size() < size_t(width) * height * 4 || !GetModuleFileNameA(nullptr, path, MAX_PATH)) {
+        return;
+    }
+    char* slash = strrchr(path, '\\');
+    if (!slash) {
+        return;
+    }
+    sprintf_s(slash + 1, MAX_PATH - (slash + 1 - path), "Logs\\kyrian-%s.tga", name);
+    FILE* file = nullptr;
+    if (fopen_s(&file, path, "wb") || !file) {
+        return;
+    }
+    unsigned char header[18] = { 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, static_cast<unsigned char>(width & 255), static_cast<unsigned char>(width >> 8),
+        static_cast<unsigned char>(height & 255), static_cast<unsigned char>(height >> 8), 32, 0x28 };
+    fwrite(header, 1, sizeof(header), file);
+    fwrite(pixels.data(), 1, size_t(width) * height * 4, file);
+    fclose(file);
+}
+
+void KVisible(CM2Model* model, unsigned sex) {
+    // Kyrian diagnostics: which skin sections (index:geoset id) are drawn after the last bind.
+    if (!model || !model->m_shared || !model->m_shared->m_skinData || !model->m_skinSections) {
+        return;
+    }
+    M2SkinProfile* skin = model->m_shared->m_skinData;
+    char text[480] = {};
+    size_t used = 0;
+    for (uint32_t i = 0; i < skin->m_skinSections.m_count && used + 16 < sizeof(text); i++) {
+        if (model->m_skinSections[i]) {
+            used += sprintf_s(text + used, sizeof(text) - used, "%u:%u ", i, skin->m_skinSections[i].m_skinSectionId & 0xFFFF);
+        }
+    }
+    KTrace("vis", "sex=%u %s", sex, text);
+}
+
+void KOverrides(CM2Model* model) {
+    // Kyrian diagnostics: Logs\\kyrian-geosets.txt holds lines such as "hide 20300" or "show 1302-1302" applied after every bind.
+    char path[MAX_PATH] = {};
+    if (!model || !GetModuleFileNameA(nullptr, path, MAX_PATH)) {
+        return;
+    }
+    char* slash = strrchr(path, '\\');
+    if (!slash) {
+        return;
+    }
+    sprintf_s(slash + 1, MAX_PATH - (slash + 1 - path), "Logs\\kyrian-geosets.txt");
+    FILE* file = nullptr;
+    static unsigned calls = 0;
+    if (fopen_s(&file, path, "r") || !file) {
+        if (++calls <= 40) {
+            KTrace("ovr", "call=%u no file at %s", calls, path);
+        }
+        return;
+    }
+    unsigned applied = 0;
+    char verb[16] = {};
+    unsigned first = 0;
+    unsigned last = 0;
+    char line[128] = {};
+    while (fgets(line, sizeof(line), file)) {
+        if (strncmp(line, "hidesec", 7) == 0 || strncmp(line, "showsec", 7) == 0) {
+            // By skin-section index (the "vis" log's first number), for sections that share geoset id 0.
+            unsigned index = 0;
+            if (sscanf_s(line + 7, "%u", &index) == 1 && model->m_shared && model->m_shared->m_skinData
+                && index < model->m_shared->m_skinData->m_skinSections.m_count) {
+                model->m_skinSections[index] = line[0] == 's' ? 1 : 0;
+                model->UnoptimizeVisibleGeometry();
+                applied++;
+            }
+            continue;
+        }
+        int count = sscanf_s(line, "%15s %u-%u", verb, unsigned(sizeof(verb)), &first, &last);
+        if (count == 2) {
+            last = first;
+        }
+        if (count >= 2) {
+            model->SetGeometryVisible(first, last, strcmp(verb, "show") == 0 ? 1 : 0);
+            applied++;
+        }
+    }
+    fclose(file);
+    if (++calls <= 40) {
+        KTrace("ovr", "call=%u applied=%u", calls, applied);
+    }
+}
+
 std::vector<Selection> ReadSelections(const wchar_t* name) {
     std::vector<Selection> result;
     Catalog file = CatalogFile(name);
@@ -281,7 +396,7 @@ Fields13 CurrentFields(CharacterPreferences& prefs) {
         fields[i] = static_cast<uint8_t>(*PreferenceField(prefs, i));
     }
 
-    return fields;
+    return prefs.m_raceID == 75 ? CreatureAppearance::DecodeKyrian(prefs.m_sexID, fields) : fields;
 }
 
 bool ValidFields(uint32_t race, uint32_t gender, const Fields13& fields) {
@@ -294,6 +409,7 @@ bool ValidFields(uint32_t race, uint32_t gender, const Fields13& fields) {
     if (CreatureAppearance::Uses(race)) {
         std::array<uint8_t, 5> appearance = {};
         std::copy_n(fields.begin(), appearance.size(), appearance.begin());
+        if (race == 75) appearance = CreatureAppearance::EncodeKyrian(gender, appearance);
         return zeroFrom(5) && CreatureAppearance::Validate(race, gender, appearance);
     }
 
@@ -361,6 +477,7 @@ void ApplyCatalog(CCharacterComponent* character, const Options& options, const 
     CM2Model* model = character->m_data.m_model;
 
     Fields13 fields = FieldsOf(character);
+    if (race == 75) KTrace("catalog", "sex=%u logical=%u,%u,%u,%u,%u wire=%u,%u,%u,%u,%u valid=%d records=%zu gear=%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", gender, fields[0], fields[1], fields[2], fields[3], fields[4], prefs.m_skinID, prefs.m_faceId, prefs.m_hairStyleId, prefs.m_hairColorId, prefs.m_facialHairId, ValidFields(race, gender, fields) ? 1 : 0, records.size(), character->m_itemDisplayID[0], character->m_itemDisplayID[1], character->m_itemDisplayID[2], character->m_itemDisplayID[3], character->m_itemDisplayID[4], character->m_itemDisplayID[5], character->m_itemDisplayID[6], character->m_itemDisplayID[7], character->m_itemDisplayID[8], character->m_itemDisplayID[9]);
 
     if (!ValidFields(race, gender, fields)) {
         fields = {};
@@ -486,6 +603,7 @@ void ApplyCatalog(CCharacterComponent* character, const Options& options, const 
             }
 
             selectedGeosets[record.target] = value;
+            if (race == 75) KTrace(("geo" + std::to_string(record.target)).c_str(), "group=%u value=%u", record.target, value);
             if (record.target < 19) {
                 character->m_data.m_geosets[record.target] = value;
             } else {
@@ -518,6 +636,7 @@ void ApplyCatalog(CCharacterComponent* character, const Options& options, const 
 
 const wchar_t* TextureBank(uint32_t race) {
     switch (race) {
+        case 75: return L"EsteriaKyrianTextures.bin";
         case 20: return L"EsteriaVulperaTextures.bin";
         case 50:
         case 51: return L"EsteriaHaranirTextures.bin";
@@ -1493,8 +1612,9 @@ Fields13 FieldsOf(CCharacterComponent* character) {
 
 void StoreFields(CCharacterComponent* character, const Fields13& fields) {
     CharacterPreferences& prefs = character->m_data.m_preferences;
+    const auto wire = prefs.m_raceID == 75 ? CreatureAppearance::EncodeKyrian(prefs.m_sexID, fields) : fields;
     for (uint32_t i = 0; i < 5; i++) {
-        *PreferenceField(prefs, i) = fields[i];
+        *PreferenceField(prefs, i) = wire[i];
     }
 
     std::array<uint8_t, 8> extra = {};
@@ -2019,13 +2139,13 @@ void EsteriaSectionArguments(int32_t race, int32_t sex, int32_t variation, int32
         return;
     }
 
-    if (CreatureAppearance::Uses(race)) {
+    if (race == 75 || race == 20 || race == 50 || race == 51) {
+        *style = 0;
+        *color = 0;
         return;
     }
 
-    if (race == 20 || race == 50 || race == 51) {
-        *style = 0;
-        *color = 0;
+    if (CreatureAppearance::Uses(race)) {
         return;
     }
 

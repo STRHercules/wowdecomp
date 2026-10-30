@@ -1214,9 +1214,24 @@ void CGUnit_C::UpdateDisplayInfo(int32_t force) {
     sExtensionMgr->OnUnitDisplayInfoUpdated(this);
 }
 
+namespace KyrianFlightAnimation { void Trace(const char* event, CGUnit_C* unit, uint32_t phase, uint32_t state); }
+
 // VERIFY: 8b1cb3ff auto
 // OFFSET: 0x0071FD80
 int32_t CGUnit_C::Animate(float elapsed) {
+    this->UpdateKyrianFlightTransition();
+    if (this->IsActiveMover() && this->UsesNativeKyrianFlightModel()) {
+        // Kyrian diagnostics: log every change of the root animation while flying or hovering.
+        static uint32_t lastRoot = 0xFFFFFFFF;
+        const uint32_t root = this->GetCurrentBaseAnimId();
+        if (root != lastRoot) {
+            lastRoot = root;
+            KyrianFlightAnimation::Trace("root", this, root, this->m_animationState);
+        }
+    }
+    // A stationary player is not on the movers list until takeoff requests flight.
+    if (this->m_kyrianTakeoffLiftState) this->UpdateKyrianTakeoffLift(OsGetAsyncTimeMs());
+
     if (this->m_vehiclePassenger) {
         this->m_vehiclePassenger->UpdateModel();
         this->UpdateMountTransitionModel();
@@ -1225,7 +1240,7 @@ int32_t CGUnit_C::Animate(float elapsed) {
 
     CMovement_C* movement = this->m_movement;
 
-    if ((movement->m_flags & 0x2200000) && ((movement->m_flags & 0x3) || (this->m_animStateFlags & 0x7))) {
+    if (!this->m_kyrianFlightTransition && (movement->m_flags & 0x2200000) && ((movement->m_flags & 0x3) || (this->m_animStateFlags & 0x7))) {
         C44Matrix matrix;
 
         if (this->m_obj->m_guid == CGUnit_C::s_activeMover) {
@@ -4100,9 +4115,274 @@ int32_t AnimationData::FindIdByBehaviorAndTier(uint32_t behavior, int32_t tier, 
     return 0;
 }
 
+namespace KyrianFlightAnimation {
+    constexpr uint32_t TakeoffStart = 1472;
+    constexpr uint32_t TakeoffFinish = 1474;
+    constexpr uint32_t LandStart = 1476;
+    constexpr uint32_t LandFinish = 1478;
+    constexpr uint32_t Wings = 111101;
+    constexpr uint32_t Descent = 111103;
+    constexpr uint32_t LiftPending = 1;
+    constexpr uint32_t LiftFlightRequested = 2;
+    constexpr uint32_t LiftAscending = 3;
+    constexpr float TakeoffLiftHeight = 3.0f;
+    constexpr uint32_t TakeoffLiftTimeout = 4000;
+
+    void Trace(const char* event, CGUnit_C* unit, uint32_t phase, uint32_t state) {
+        static uint32_t entries = 0;
+        static uint32_t lastProgress = 0;
+        if (!unit->IsActiveMover() || entries >= 800) return;
+        const uint32_t now = OsGetAsyncTimeMs();
+        if (!strcmp(event, "progress")) {
+            if (now - lastProgress < 500) return;
+            lastProgress = now;
+        }
+        CM2Model* model = unit->GetObjectModel();
+        if (!model || !model->IsLoaded(0, 0)) return;
+        char path[MAX_PATH] = {};
+        const DWORD length = GetModuleFileNameA(nullptr, path, MAX_PATH);
+        if (!length || length >= MAX_PATH) return;
+        char* slash = strrchr(path, '\\');
+        if (!slash) return;
+        strcpy_s(slash + 1, MAX_PATH - (slash - path) - 1, "KyrianHoverAnimation.log");
+        FILE* file = nullptr;
+        if (fopen_s(&file, path, "a") || !file) return;
+        ++entries;
+        M2BoneSequenceInfo sequence = {};
+        model->GetBoneSequenceInfo(0xFFFFFFFF, sequence);
+        fprintf(file, "tick=%u event=%s phase=%u state=%08x movement=%08x active=%u time=%u speed=%.3f finished=%d complete=%d\n",
+            now, event, phase, state, unit->m_movementData.m_flags,
+            sequence.m_sequenceId, sequence.m_time, sequence.m_speed, sequence.m_finished, sequence.m_complete);
+        fclose(file);
+    }
+
+    bool IsTransition(uint32_t anim) {
+        return anim == TakeoffStart || anim == TakeoffFinish || anim == LandStart || anim == LandFinish;
+    }
+
+    bool IsIdleOrMovement(uint32_t anim) {
+        const uint32_t ground = anim >= ANIM_FLY_STAND && anim <= ANIM_FLY_STAND + ANIM_SPELL_KNEEL_END ?
+            anim - ANIM_FLY_STAND : anim;
+        return IsLocomotionAnimId(ground) || IsWeaponReadyAnim(ground) || ground == ANIM_STAND ||
+            ground == ANIM_SWIM_IDLE || ground == ANIM_HOVER || ground == ANIM_FALL ||
+            ground == ANIM_JUMP_START || ground == ANIM_JUMP_END || ground == ANIM_JUMP_LAND_RUN ||
+            anim == ANIM_FLY_CUSTOM_SPELL_09 ||
+            anim == ANIM_TO_FLY || anim == ANIM_TO_GROUND;
+    }
+}
+
+bool CGUnit_C::UsesNativeKyrianFlightModel(CM2Model* model) const {
+    CM2Model* body = this->GetObjectModel();
+    return (this->m_obj->m_type & TYPEMASK_PLAYER) && this->m_unit->m_unitFieldBytes0[0] == 75 &&
+        this->m_unit->m_unitFieldDisplayid == this->m_unit->m_unitFieldNativedisplayid &&
+        !this->IsMounted() && !(this->m_vehiclePassenger && this->m_vehiclePassenger->m_state) &&
+        body && (!model || model == body) && body->IsLoaded(0, 0);
+}
+
+void CGUnit_C::StartKyrianFlightTransition(uint32_t animId) {
+    if (!this->UsesNativeKyrianFlightModel() || this->IsDeadOrAttachmentDying() ||
+        (this->m_unit->m_unitFieldFlags & 0x40000) || this->m_unit->m_unitChannelSpell ||
+        (this->m_animationState & 0x400) || !this->GetObjectModel()->HasSequence(animId)) {
+        this->m_kyrianFlightTransition = 0;
+        return;
+    }
+
+    this->m_kyrianFlightTransition = animId;
+    this->PlayBaseAnimation(animId, 0x4);
+    // A model/animation lock can decline the request. Never leave movement visuals locked.
+    if (this->GetCurrentBaseAnimId() != animId) this->m_kyrianFlightTransition = 0;
+    KyrianFlightAnimation::Trace("start", this, this->m_kyrianFlightTransition, this->m_animationState);
+}
+
+void CGUnit_C::UpdateKyrianFlightTransition() {
+    // An interrupted callback can clear our marker while the root still holds
+    // the takeoff sequence. Recover that completed root as well.
+    const bool takeoffRoot = !this->m_kyrianFlightTransition && !this->m_kyrianLandingPending &&
+        this->UsesNativeKyrianFlightModel() && this->HasAuraBySpellId(KyrianFlightAnimation::Wings) &&
+        this->GetCurrentBaseAnimId() == KyrianFlightAnimation::TakeoffFinish;
+    if (!this->m_kyrianFlightTransition && !this->m_kyrianLandingPending && !takeoffRoot) return;
+    if (!this->UsesNativeKyrianFlightModel() || this->IsDeadOrAttachmentDying() ||
+        (this->m_unit->m_unitFieldFlags & 0x40000) || this->m_unit->m_unitChannelSpell ||
+        (this->m_animationState & 0x400) || (this->m_movementData.m_flags & MOVEMENTFLAG_SWIMMING)) {
+        this->m_kyrianFlightTransition = 0;
+        this->m_kyrianLandingPending = false;
+        this->m_kyrianTouchdown = false;
+        if (this->m_worldModel && this->m_worldModel->IsLoaded(0, 0)) this->UpdateBaseAnimation(0, -1);
+        return;
+    }
+
+    // A stationary flyer may receive no further movement animation refresh.
+    // Use the authored clip's completion state as well as its end callback.
+    if (this->m_kyrianFlightTransition == KyrianFlightAnimation::TakeoffFinish || takeoffRoot) {
+        KyrianFlightAnimation::Trace("progress", this, this->m_kyrianFlightTransition, this->m_animationState);
+        M2BoneSequenceInfo sequence = {};
+        if (this->GetObjectModel()->GetBoneSequenceInfo(0xFFFFFFFF, sequence) &&
+            sequence.m_sequenceId == KyrianFlightAnimation::TakeoffFinish &&
+            (sequence.m_finished || sequence.m_complete)) {
+            this->FinishKyrianTakeoff();
+            return;
+        }
+    }
+
+    // The server's landing emote (or Descent removal) confirms touchdown.
+    if (this->m_kyrianLandingPending && this->m_kyrianTouchdown && !this->m_kyrianFlightTransition) {
+        this->m_kyrianLandingPending = false;
+        this->StartKyrianFlightTransition(KyrianFlightAnimation::LandFinish);
+    }
+}
+
+void CGUnit_C::FinishKyrianTakeoff() {
+    KyrianFlightAnimation::Trace("finish-before", this, this->m_kyrianFlightTransition, this->m_animationState);
+    this->m_kyrianFlightTransition = 0;
+    this->StopKyrianTakeoffLift(OsGetAsyncTimeMs());
+    if (this->m_awaitingEndAnimId == KyrianFlightAnimation::TakeoffFinish) this->m_awaitingEndAnimId = -1;
+    if (this->m_pendingAnimId == KyrianFlightAnimation::TakeoffFinish) this->m_pendingAnimId = -1;
+
+    // CMSG_MOVE_SET_FLY sets the jump-start latch while our authored takeoff
+    // suppresses the ordinary jump clip. Its behavior-37 end callback cannot
+    // clear the latch, so release it here before selecting idle or locomotion.
+    // Otherwise ChooseMovementAnim keeps rejecting forward/backward flight.
+    this->m_animationState &= ~0x800000u;
+
+    // Match the normal liftoff callback cleanup when completion is observed first.
+    const uint32_t behavior = GetAnimBehaviorId(KyrianFlightAnimation::TakeoffFinish);
+    if (behavior == 192 || behavior == 200) this->m_animationState &= ~0x40000;
+    // Movement refreshes during the protected clip can consume these dirty bits.
+    // Refresh the whole body so an idle flyer cannot hold the final takeoff frame.
+    this->m_animationState |= 0x70;
+    this->UpdateBaseAnimation(0, -1);
+    KyrianFlightAnimation::Trace("finish-selected", this, this->m_kyrianFlightTransition, this->m_animationState);
+    // The selector may retain a full-body one-shot even after its completion.
+    // Replace only that stale root; keep any newly selected upper-body action.
+    if (this->GetCurrentBaseAnimId() == KyrianFlightAnimation::TakeoffFinish &&
+        this->UsesNativeKyrianFlightModel() && !this->IsDeadOrAttachmentDying() &&
+        !(this->m_unit->m_unitFieldFlags & 0x40000) &&
+        this->HasAuraBySpellId(KyrianFlightAnimation::Wings) &&
+        !this->HasAuraBySpellId(KyrianFlightAnimation::Descent) &&
+        (this->m_movementData.m_flags & MOVEMENTFLAG_FLYING)) {
+        const uint32_t movement = this->m_movementData.m_flags;
+        const uint32_t requested = (movement & MOVEMENTFLAG_BACKWARD) ? ANIM_SWIM_BACKWARDS :
+            (movement & (MOVEMENTFLAG_FORWARD | MOVEMENTFLAG_STRAFE_LEFT | MOVEMENTFLAG_STRAFE_RIGHT)) ?
+                ANIM_SWIM : ANIM_SWIM_IDLE;
+        const uint32_t flight = this->ResolveAnimForModel(requested, nullptr);
+        if (this->GetObjectModel()->HasSequence(flight)) {
+            this->SetKeyBoneSequence(this->GetObjectModel(), 0xFFFFFFFF, flight,
+                0, 0, 1.0f, 1, 1, 0);
+            KyrianFlightAnimation::Trace("finish-flight-fallback", this, this->m_kyrianFlightTransition, this->m_animationState);
+        }
+    }
+}
+
+void CGUnit_C::StopKyrianTakeoffLift(uint32_t time) {
+    const bool ascending = this->m_kyrianTakeoffLiftState == KyrianFlightAnimation::LiftAscending;
+    this->m_kyrianTakeoffLiftState = 0;
+    if (ascending && this->IsActiveMover()) {
+        this->OnAscendDescendStopLocal(time);
+        // Re-send any real vertical input after stopping the automatic ascent.
+        // No synthetic key is held, so releasing Space still stops normally.
+        if (CGInputControl* input = CGInputControl::GetActive()) {
+            input->m_flags &= ~INPUT_ASCEND_DESCEND_PLAYER_SENT;
+        }
+    }
+}
+
+void CGUnit_C::UpdateKyrianTakeoffLift(uint32_t time) {
+    if (!this->m_kyrianTakeoffLiftState) return;
+
+    const uint32_t flags = this->m_movementData.m_flags;
+    CGInputControl* input = CGInputControl::GetActive();
+    const bool takingOff = this->m_kyrianFlightTransition == KyrianFlightAnimation::TakeoffStart ||
+        this->m_kyrianFlightTransition == KyrianFlightAnimation::TakeoffFinish;
+    if (!this->IsActiveMover() || !this->UsesNativeKyrianFlightModel() || !takingOff ||
+        this->IsDeadOrAttachmentDying() || !this->CanMove() || this->IsOnSpline() ||
+        (flags & (MOVEMENTFLAG_ROOT | MOVEMENTFLAG_PENDING_ROOT | MOVEMENTFLAG_ONTRANSPORT | MOVEMENTFLAG_SWIMMING)) ||
+        (this->m_kyrianTakeoffLiftState != KyrianFlightAnimation::LiftPending &&
+            !this->HasAuraBySpellId(KyrianFlightAnimation::Wings)) ||
+        this->HasAuraBySpellId(KyrianFlightAnimation::Descent) ||
+        time - this->m_kyrianTakeoffLiftStartTime >= KyrianFlightAnimation::TakeoffLiftTimeout ||
+        this->GetPosition().z >= this->m_kyrianTakeoffLiftOriginZ + KyrianFlightAnimation::TakeoffLiftHeight ||
+        (input && (input->m_flags & (INPUT_ASCEND_PLAYER_KEY | INPUT_DESCEND_PLAYER_KEY)))) {
+        this->StopKyrianTakeoffLift(time);
+        return;
+    }
+
+    // Start the real rise at the authored push-off, after TakeOffStart finishes.
+    // Wait for the server's flight permission and its normal movement ACK first.
+    if (this->m_kyrianFlightTransition != KyrianFlightAnimation::TakeoffFinish ||
+        !this->HasAuraBySpellId(KyrianFlightAnimation::Wings) || !(flags & MOVEMENTFLAG_CAN_FLY)) return;
+
+    if (!(flags & MOVEMENTFLAG_FLYING)) {
+        if (this->m_kyrianTakeoffLiftState == KyrianFlightAnimation::LiftPending) {
+            this->OnFlightLocal(time, 1);
+            CGUnit_C::s_flightStatusTime = time;
+            this->m_kyrianTakeoffLiftState = KyrianFlightAnimation::LiftFlightRequested;
+        }
+        return;
+    }
+
+    if (this->m_kyrianTakeoffLiftState != KyrianFlightAnimation::LiftAscending) {
+        // The normal movement queue supplies collision checks and server updates.
+        this->OnAscendDescendStartLocal(time, 1);
+        this->m_kyrianTakeoffLiftState = KyrianFlightAnimation::LiftAscending;
+    }
+}
+
 // VERIFY: fea936b3 manual
 // OFFSET: 0x007176F0
 uint32_t CGUnit_C::ResolveAnimForModel(uint32_t animId, CM2Model* model) {
+    // The racial uses native Kyrian flight actions, including the safe descent.
+    CM2Model* hoverModel = model ? model : this->GetObjectModel();
+    const bool nativeKyrian = this->UsesNativeKyrianFlightModel(hoverModel);
+    constexpr uint32_t kyrianBackwardFlight = ANIM_FLY_CUSTOM_SPELL_09;
+    if (nativeKyrian && this->HasAuraBySpellId(KyrianFlightAnimation::Wings) &&
+        (this->m_movementData.m_flags & MOVEMENTFLAG_FLYING) && IsWeaponSpecialAnim(animId)) {
+        // The female's authored winged ability is the user-selected clip.
+        // Only weapon specials enter here; auto-attacks and casts keep their
+        // normal flying families, and grounded abilities are unaffected.
+        if (hoverModel->HasSequence(ANIM_FLY_CUSTOM_SPELL_02)) return ANIM_FLY_CUSTOM_SPELL_02;
+        const uint32_t aerialSpecial = animId <= ANIM_SPELL_KNEEL_END ? animId + ANIM_FLY_STAND : animId;
+        if (hoverModel->HasSequence(aerialSpecial)) return aerialSpecial;
+        // The male lacks 443 and the flying special family. Keep him winged
+        // with the matching native weapon swing instead of a ground special.
+        const uint32_t swing = GetAnimBehaviorId(animId) == ANIM_SPECIAL_2H ?
+            ANIM_FLY_ATTACK_2HL : ANIM_FLY_ATTACK_1H;
+        if (hoverModel->HasSequence(swing)) return swing;
+    }
+    if (nativeKyrian && (this->HasAuraBySpellId(111101) || this->HasAuraBySpellId(111103)) &&
+        (animId <= ANIM_SPELL_KNEEL_END || animId == ANIM_HOVER ||
+         animId == ANIM_FLY_WALKBACKWARDS || animId == ANIM_FLY_SWIM_BACKWARDS)) {
+        // Use the user-selected winged pose for backward locomotion, never for
+        // attacks/casts while moving backward or ordinary ground movement.
+        if ((animId == ANIM_WALKBACKWARDS || animId == ANIM_SWIM_BACKWARDS ||
+             animId == ANIM_FLY_WALKBACKWARDS || animId == ANIM_FLY_SWIM_BACKWARDS) &&
+            hoverModel->HasSequence(kyrianBackwardFlight)) return kyrianBackwardFlight;
+        // Player flight requests swim locomotion in Wrath; use the authored
+        // flying poses instead of FlySwim, which these bodies do not provide.
+        uint32_t locomotion = ANIM_COUNT;
+        switch (animId) {
+            case ANIM_SWIM_IDLE: case ANIM_HOVER: case ANIM_FALL:
+                locomotion = ANIM_FLY_STAND;
+                break;
+            case ANIM_SWIM: case ANIM_SWIM_LEFT: case ANIM_SWIM_RIGHT:
+                locomotion = ANIM_FLY_RUN;
+                break;
+            case ANIM_SWIM_BACKWARDS:
+                locomotion = ANIM_FLY_WALKBACKWARDS;
+                break;
+            default: break;
+        }
+        if (locomotion != ANIM_COUNT && hoverModel->HasSequence(locomotion)) return locomotion;
+        // Wrath's ground action family 0..142 has matching flying actions at +229.
+        const uint32_t flyingAction = animId == ANIM_HOVER ? ANIM_FLY_STAND :
+            animId <= ANIM_SPELL_KNEEL_END ? animId + ANIM_FLY_STAND : animId;
+        if (hoverModel->HasSequence(flyingAction)) return flyingAction;
+        // Both authored bodies lack these two aerial actions. Retain winged
+        // combat using their available swings, with ordinary fallback otherwise.
+        if (animId == ANIM_ATTACK_UNARMED && hoverModel->HasSequence(ANIM_FLY_ATTACK_1H))
+            return ANIM_FLY_ATTACK_1H;
+        if (animId == ANIM_ATTACK_2H && hoverModel->HasSequence(ANIM_FLY_ATTACK_2HL))
+            return ANIM_FLY_ATTACK_2HL;
+    }
     int32_t tier = this->m_animTier;
 
     if (!(this->m_modelFlags & 0x40000) || (this->m_modelFlags & 0x20000) || !this->GetObjectModel() || !this->GetObjectModel()->IsLoaded(0, 0)) {
@@ -5081,6 +5361,16 @@ void CGUnit_C::PlayBaseAnimation(uint32_t animId, int32_t flags) {
         return;
     }
 
+    const bool kyrianTransition = this->UsesNativeKyrianFlightModel() && KyrianFlightAnimation::IsTransition(animId);
+    if (this->m_kyrianFlightTransition && !kyrianTransition) {
+        // Idle/movement refreshes must not replace a half-played transition.
+        // Combat, casting, death and other explicit actions can interrupt it.
+        if (KyrianFlightAnimation::IsIdleOrMovement(animId) && !this->IsDeadOrAttachmentDying()) return;
+        this->m_kyrianFlightTransition = 0;
+        this->m_kyrianLandingPending = false;
+        this->m_kyrianTouchdown = false;
+    }
+
     if (this->GetObjectModel()->m_lastAnimTime || (this->GetVehicleRec() && this->m_vehicle->IsSpecialBoneAnimPlaying())) {
         return;
     }
@@ -5164,6 +5454,14 @@ void CGUnit_C::PlayBaseAnimation(uint32_t animId, int32_t flags) {
 
     if (0.0f != info.m_moveSpeed && IsLocomotionAnimId(anim) && (this->m_movementData.m_flags & 0xC0000F)) {
         speed = this->m_movementData.GetBaseSpeed(0) / fabsf(info.m_moveSpeed);
+        // Native donor bodies are display-scaled. GetSequenceInfo's scaled
+        // displacement would accelerate their run to 1.68x at normal speed.
+        // Use player world speed for cadence without compensating body scale.
+        const auto race = this->m_unit->m_unitFieldBytes0[0];
+        if ((this->m_obj->m_type & TYPEMASK_PLAYER) && race == 75 &&
+            this->m_unit->m_unitFieldDisplayid == this->m_unit->m_unitFieldNativedisplayid &&
+            (anim == ANIM_RUN || anim == ANIM_WALK))
+            speed = this->m_movementData.GetBaseSpeed(0) / (anim == ANIM_RUN ? 7.0f : 2.5f) * (anim == ANIM_RUN ? 0.8f : 1.0f);
 
         if (info.m_duration) {
             M2BoneSequenceInfo current;
@@ -5394,6 +5692,16 @@ void CGUnit_C::PlayBaseAnimation(uint32_t animId, int32_t flags) {
             baseSlot.m_time = 0;
             keepBase = 0;
         }
+    }
+
+    if (kyrianTransition) {
+        updateBase = 1;
+        updateTorso = 0;
+        keepBase = 0;
+        baseSlot = newSlot;
+        // Wings and body must follow the same authored transition, including after a cast.
+        if (this->m_torsoKeyBone != -1)
+            this->UnsetKeyBoneSequence(this->m_worldModel, this->m_torsoKeyBone, 1, 0, 0);
     }
 
     if (vehicleBoneAnim) {
@@ -14522,6 +14830,8 @@ void CGUnit_C::AddAuraSlot(uint8_t slot) {
 // VERIFY: 5bbee06d manual
 // OFFSET: 0x0072F5D0
 void CGUnit_C::OnAuraUpdate(CDataStore* msg, bool updateAll) {
+    const bool hadKyrianWings = this->HasAuraBySpellId(KyrianFlightAnimation::Wings);
+    const bool hadKyrianDescent = this->HasAuraBySpellId(KyrianFlightAnimation::Descent);
     uint32_t time = OsGetAsyncTimeMs();
     uint32_t oldCount = this->GetAuraCount();
     AuraData* oldAuras = static_cast<AuraData*>(alloca(sizeof(AuraData) * oldCount));
@@ -14612,6 +14922,27 @@ void CGUnit_C::OnAuraUpdate(CDataStore* msg, bool updateAll) {
                 UnitCombatLogAuraRefreshed(this, &aura, aura.m_spellId, aura.m_flags >> 7);
             }
         }
+    }
+
+    if (this->UsesNativeKyrianFlightModel()) {
+        const bool wings = this->HasAuraBySpellId(KyrianFlightAnimation::Wings);
+        const bool descent = this->HasAuraBySpellId(KyrianFlightAnimation::Descent);
+        if (hadKyrianWings && !wings) {
+            this->StopKyrianTakeoffLift(time);
+            this->m_kyrianLandingPending = true;
+            // Aura additions are queued but removals are immediate. Descent may
+            // arrive after Wings disappears; its absence cannot imply touchdown.
+            this->m_kyrianTouchdown = false;
+            this->StartKyrianFlightTransition(KyrianFlightAnimation::LandStart);
+        }
+        if (hadKyrianDescent && !descent && !wings) {
+            this->m_kyrianTouchdown = true;
+            if (!this->m_kyrianLandingPending && this->m_kyrianFlightTransition != KyrianFlightAnimation::LandFinish) {
+                this->m_kyrianLandingPending = true;
+                this->StartKyrianFlightTransition(KyrianFlightAnimation::LandStart);
+            }
+        }
+        this->UpdateKyrianFlightTransition();
     }
 
     WOWGUID guid = this->m_obj->m_guid;
@@ -15433,6 +15764,11 @@ void CGUnit_C::AnimEndCallback(CM2Model* model, uint32_t boneId, uint32_t sequen
 // VERIFY: a0318ed7 manual
 // OFFSET: 0x0073BBD0
 void CGUnit_C::AnimEndHandler(CM2Model* model, uint32_t boneId, uint32_t sequenceId, int32_t interrupted, uint32_t time) {
+    if (interrupted && model == this->GetObjectModel() && boneId == 0xFFFFFFFF &&
+        this->m_kyrianFlightTransition == sequenceId) {
+        KyrianFlightAnimation::Trace("interrupted", this, this->m_kyrianFlightTransition, this->m_animationState);
+        this->m_kyrianFlightTransition = 0;
+    }
     if (this->m_vehiclePassenger && this->m_vehiclePassenger->m_state) {
         this->m_vehiclePassenger->OnAnimEnd(boneId);
     }
@@ -15556,6 +15892,22 @@ void CGUnit_C::AnimEndHandler(CM2Model* model, uint32_t boneId, uint32_t sequenc
 // VERIFY: 9cc99e71 manual
 // OFFSET: 0x0073B510
 void CGUnit_C::OnBaseAnimEnd(CM2Model* model, uint32_t boneId, uint32_t sequenceId) {
+    if (this->UsesNativeKyrianFlightModel(model) && this->m_kyrianFlightTransition == sequenceId) {
+        if (sequenceId == KyrianFlightAnimation::TakeoffFinish) {
+            this->FinishKyrianTakeoff();
+            return;
+        }
+        this->m_kyrianFlightTransition = 0;
+        if (sequenceId == KyrianFlightAnimation::TakeoffStart &&
+            this->HasAuraBySpellId(KyrianFlightAnimation::Wings) &&
+            !this->HasAuraBySpellId(KyrianFlightAnimation::Descent)) {
+            this->StartKyrianFlightTransition(KyrianFlightAnimation::TakeoffFinish);
+            if (this->m_kyrianFlightTransition) return;
+        }
+        this->UpdateKyrianFlightTransition();
+        if (!this->m_kyrianFlightTransition) this->UpdateBaseAnimation(16, -1);
+        return;
+    }
     CVehiclePassenger_C* passenger = this->m_vehiclePassenger;
 
     if (passenger && passenger->m_state == 3 && this->m_unit->m_unitFieldHealth > 0) {
@@ -16555,6 +16907,34 @@ void CGUnit_C::PlayEmoteAnimation(uint32_t emote) {
     }
 
     if (!flight && this->IsInCombat()) {
+        return;
+    }
+
+    if (anim == ANIM_LIFT_OFF && this->UsesNativeKyrianFlightModel() &&
+        this->GetObjectModel()->HasSequence(KyrianFlightAnimation::TakeoffStart) &&
+        this->GetObjectModel()->HasSequence(KyrianFlightAnimation::TakeoffFinish)) {
+        this->m_kyrianLandingPending = false;
+        this->m_kyrianTouchdown = false;
+        this->StartKyrianFlightTransition(KyrianFlightAnimation::TakeoffStart);
+        this->StopKyrianTakeoffLift(OsGetAsyncTimeMs());
+        if (this->IsActiveMover() && this->m_kyrianFlightTransition &&
+            !this->HasAuraBySpellId(KyrianFlightAnimation::Descent)) {
+            this->m_kyrianTakeoffLiftOriginZ = this->GetPosition().z;
+            this->m_kyrianTakeoffLiftStartTime = OsGetAsyncTimeMs();
+            this->m_kyrianTakeoffLiftState = KyrianFlightAnimation::LiftPending;
+        }
+        return;
+    }
+
+    if (anim == ANIM_LAND && this->UsesNativeKyrianFlightModel()) {
+        this->m_kyrianTouchdown = true;
+        // An immediate ground landing can add/remove Descent before it is sent.
+        // Preserve the start/finish pair even when no descent aura was observed.
+        if (!this->m_kyrianLandingPending && this->m_kyrianFlightTransition != KyrianFlightAnimation::LandFinish) {
+            this->m_kyrianLandingPending = true;
+            this->StartKyrianFlightTransition(KyrianFlightAnimation::LandStart);
+        }
+        this->UpdateKyrianFlightTransition();
         return;
     }
 
@@ -18092,6 +18472,7 @@ void CGUnit_C::PlaySpellVisualKit_PlayAnims(const SpellRec* spell, const SpellVi
 // VERIFY: c1ea52b3 manual
 // OFFSET: 0x00736640
 void CGUnit_C::PlayWoundAnimKit(int32_t crit) {
+    if (this->IsActiveMover() && this->UsesNativeKyrianFlightModel()) KyrianFlightAnimation::Trace("wound", this, crit ? 1 : 0, this->m_animationState);
     if (this->IsDeadOrAttachmentDying() || !this->m_worldModel || !this->m_worldModel->IsLoaded(0, 0) || this->DoNotPlayWoundAnim()) {
         return;
     }
@@ -21585,6 +21966,7 @@ void CGUnit_C::UpdateSwimmingStatus(uint32_t time, int32_t a3) {
 // VERIFY: c709791a manual
 // OFFSET: 0x0073A890
 void CGUnit_C::UpdateFlightStatus(uint32_t time) {
+    if (this->m_kyrianTakeoffLiftState) this->UpdateKyrianTakeoffLift(OsGetAsyncTimeMs());
     uint32_t flags = this->m_movementData.m_flags;
 
     if (!(flags & 0x1000000)) {
@@ -21610,7 +21992,10 @@ void CGUnit_C::UpdateFlightStatus(uint32_t time) {
             float collisionHeight = this->m_movementData.m_collisionHeight;
 
             if (bound - 2.0f < this->GetPosition().z + collisionHeight) {
-                if (!this->GetVehicleRec() || !this->m_vehicle->HasHighPriorityAnim()) {
+                // Kyrian's own wings carry them to the flight bound; the stock bump/wound clip there reads as damage.
+                if (this->IsActiveMover() && this->UsesNativeKyrianFlightModel()) {
+                    KyrianFlightAnimation::Trace("bound", this, 0, this->m_animationState);
+                } else if (!this->GetVehicleRec() || !this->m_vehicle->HasHighPriorityAnim()) {
                     this->PlayBaseAnimation(45, 0);
                     this->PlayWoundAnimKit(0);
                 }
@@ -21640,7 +22025,7 @@ void CGUnit_C::UpdateFlightStatus(uint32_t time) {
         }
     }
 
-    if (time - CGUnit_C::s_flightStatusTime > 2000 && this->m_obj->m_guid == CGUnit_C::s_activeMover && this->GetHeightAboveGround() < 1.5f && (!(this->m_obj->m_type & TYPEMASK_PLAYER) || !static_cast<CGPlayer_C*>(this)->IsCommentatorUberOrInArena())) {
+    if (!this->m_kyrianTakeoffLiftState && time - CGUnit_C::s_flightStatusTime > 2000 && this->m_obj->m_guid == CGUnit_C::s_activeMover && this->GetHeightAboveGround() < 1.5f && (!(this->m_obj->m_type & TYPEMASK_PLAYER) || !static_cast<CGPlayer_C*>(this)->IsCommentatorUberOrInArena())) {
         this->m_movementData.OnFlightLocal(time, 0);
     }
 }

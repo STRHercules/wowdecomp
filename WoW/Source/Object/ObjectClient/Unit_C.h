@@ -391,6 +391,15 @@ class CGUnit_C : public CGObject_C, public CGUnit {
     /* 0FD8 */ WOWGUID m_highestThreatGuid;
     /* 0FE0 */ TSHashTable<UnitThreat, CHashKeyGUID> m_threats;
 
+    // The server's Hover auras remain authoritative for flight/landing permission.
+
+    uint32_t m_kyrianFlightTransition = 0;
+    bool m_kyrianLandingPending = false;
+    bool m_kyrianTouchdown = false;
+    uint32_t m_kyrianTakeoffLiftState = 0;
+    uint32_t m_kyrianTakeoffLiftStartTime = 0;
+    float m_kyrianTakeoffLiftOriginZ = 0.0f;
+
     virtual void GetAFKText(char* buffer, uint32_t size) const;
     virtual void GetDNDText(char* buffer, uint32_t size) const;
     virtual void GetGMText(char* buffer, uint32_t size) const;
@@ -752,6 +761,12 @@ class CGUnit_C : public CGObject_C, public CGUnit {
     void RefreshDataPointers();
     void InitializeActivePlayerComponent();
     void PlayBaseAnimation(uint32_t animId, int32_t flags);
+    bool UsesNativeKyrianFlightModel(CM2Model* model = nullptr) const;
+    void StartKyrianFlightTransition(uint32_t animId);
+    void UpdateKyrianFlightTransition();
+    void FinishKyrianTakeoff();
+    void UpdateKyrianTakeoffLift(uint32_t time);
+    void StopKyrianTakeoffLift(uint32_t time);
     void SetAnimType(uint8_t animTier);
     void RegisterScript(uint32_t flags);
     void UnregisterScript(uint32_t flags);
