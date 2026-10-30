@@ -60,6 +60,7 @@ namespace {
     CVar* s_body = nullptr;
     CVar* s_reflect = nullptr;
     CVar* s_color = nullptr;
+    CVar* s_shore = nullptr;
     CVar* s_info = nullptr;
     char s_lastInfo[400] = "";
 
@@ -368,6 +369,7 @@ void HD::RegisterWaterCVars() {
     s_body = CVar::Register("hdWaterBody", "HD: strength of the water's own colour, 1 = Forever", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_reflect = CVar::Register("hdWaterReflect", "HD: screen-space reflections of the world on the water, 1 = on (Forever), 0 = sky only", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_color = CVar::Register("hdWaterColor", "HD: water colour, 1 = the game's own colours (follow the hour, dark at night), 0 = Forever's scattering", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_shore = CVar::Register("hdWaterShore", "HD: yards over which the water fades in from the shore (ours: Forever fades over 0.5; steep banks need more)", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_info = CVar::Register("hdWaterInfo", "HD: hdWater status (read only)", 0, "off", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
 }
 
@@ -510,6 +512,8 @@ static bool BindWater(Liquid::CMaterialSettings* settings, CGxShader* clientVert
         c[80 + k] = powf(Clamp((&amb.x)[k], 0.0f, 4.0f), 2.2f);
         c[84 + k] = powf(Clamp((&dif.x)[k], 0.0f, 4.0f), 2.2f);
     }
+    // c34.x: 1 / the shore fade distance (hdWaterShore, yards)
+    c[88] = 1.0f / Clamp(s_shore ? s_shore->m_floatValue : 2.0f, 0.1f, 20.0f);
     // c16..c37 as they are; the model-view and sun rows (the donor's c12..c15) at c38..c41
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, c + 16, kConstCount - 4);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 38, c, 4);

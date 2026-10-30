@@ -542,7 +542,8 @@ R"HLSL(    // single scattering (%412-522)
     float fh = min(max(1.0 - min(max(dot(H, V), 0.0), 1.0), 0.0), 1.0);
     float envW = 1.0 - (pow(fh, 5.0) * 0.98 + 0.02) * sunVis;
     // compose with the soft shoreline (%623-644)
-    float k = saturate(d * 2.0);
+    float k = saturate(d * cWaves.x);  // HD: the shore fade over 1 / cWaves.x yards (hdWaterShore), smoothed
+    k = k * k * (3.0 - 2.0 * k);
     float3 Tbg = T * bg;
     float3 add = (Tbg - bg) + body + (foamLit - Tbg) * G2.w + sunSpec + envW * env;
     dbgD = d;
@@ -1144,7 +1145,8 @@ float3 ForeverWater(float2 uv, float zW, float3 V, float4 G1, float4 G2, float4 
     float fh = min(max(1.0 - min(max(dot(H, V), 0.0), 1.0), 0.0), 1.0);
     float envW = 1.0 - (pow(fh, 5.0) * 0.98 + 0.02) * sunVis;
     // compose with the soft shoreline (%623-644)
-    float k = saturate(d * 2.0);
+    float k = saturate(d * cWaves.x);  // HD: the shore fade over 1 / cWaves.x yards (hdWaterShore), smoothed
+    k = k * k * (3.0 - 2.0 * k);
     float3 Tbg = T * bg;
     float3 add = (Tbg - bg) + body + (foamLit - Tbg) * G2.w + sunSpec + envW * env;
     dbgD = d;
@@ -1169,12 +1171,12 @@ float FoamWeight(float dz, float4 f)
 // linear with a square (gamma 2) to save slots.
 float4 FoamTex(float2 uv)
 {
-    float a = saturate(tex2D(lakeTex, uv).a * 2.5 - 1.375);
+)HLSL"
+R"HLSL(    float a = saturate(tex2D(lakeTex, uv).a * 2.5 - 1.375);
     return float4((a * a).xxx, a);
 }
 
-)HLSL"
-R"HLSL(float4 mainPbr(float3 iT : TEXCOORD4, float3 iB : TEXCOORD5, float3 iN : TEXCOORD6, float4 iUvA : TEXCOORD0,
+float4 mainPbr(float3 iT : TEXCOORD4, float3 iB : TEXCOORD5, float3 iN : TEXCOORD6, float4 iUvA : TEXCOORD0,
             float4 iUvB : TEXCOORD1, float4 iUvC : TEXCOORD2, float3 iWorld : TEXCOORD3, float4 iView : TEXCOORD7,
             float iFog : FOG) : COLOR0
 {

@@ -25,6 +25,7 @@ namespace Liquid {
 //   hdWaterBody     strength of the water's own colour, 1 = Forever's (0 to 5)
 //   hdWaterReflect  reflections of the world, 1 = on, 0 = sky only (0 to 1)
 //   hdWaterColor    1 = the game's own water colours (follow the hour), 0 = Forever's scattering
+//   hdWaterShore    yards over which the water fades in from the shore (default 2; Forever's own is 0.5)
 //   hdWaterInfo     read only, status: /run print(GetCVar("hdWaterInfo"))
 namespace HD {
 
