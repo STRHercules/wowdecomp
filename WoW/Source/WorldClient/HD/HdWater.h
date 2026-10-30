@@ -4,6 +4,8 @@
 
 #include <cstdint>
 
+class CGxShader;
+
 namespace Liquid {
     class CMaterialSettings;
 }
@@ -37,7 +39,10 @@ void WaterEndLiquidPass();
 // binds ours with their constants and returns true, or returns false (off, not ready, no depth) and the caller binds
 // Blizzard's. lightCount: the vertex shader permutation the client picked.
 bool WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightCount);
-// After its Draw when WaterBindProcWater returned true.
+// The same for the 3.3.5 water material (Liquid::CMaterialWater and CMaterialWaterNoSpec: this client's lakes), with the
+// material's own client shaders (their shader model is checked). hdWater 2 leaves these to Blizzard.
+bool WaterBindLake(Liquid::CMaterialSettings* settings, CGxShader* clientVertex, CGxShader* clientPixel);
+// After its Draw when WaterBindProcWater or WaterBindLake returned true.
 void WaterAfterDraw();
 
 // Every liquid material's Render: counts the draws by material for hdWaterInfo (1 water, 2 water without specular, 3 water

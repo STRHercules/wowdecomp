@@ -43,9 +43,9 @@ namespace {
     const int32_t kConstCount = 26;
 
     enum { StateIdle, StateCompiling, StateReady, StateFailed };
-    enum { Sh_VS, Sh_PS, Sh_PS335, Sh_Count };
-    const char* const kName[Sh_Count] = { "HdWater:VS", "HdWater:PS", "HdWater:PS335" };
-    const char* const kFile[Sh_Count] = { "HdWater-VS", "HdWater-PS", "HdWater-PS335" };
+    enum { Sh_VS, Sh_PS, Sh_PS335, Sh_LakeVS, Sh_LakePS, Sh_Count };
+    const char* const kName[Sh_Count] = { "HdWater:VS", "HdWater:PS", "HdWater:PS335", "HdWater:LakeVS", "HdWater:LakePS" };
+    const char* const kFile[Sh_Count] = { "HdWater-VS", "HdWater-PS", "HdWater-PS335", "HdWater-LakeVS", "HdWater-LakePS" };
 
     typedef HRESULT(WINAPI* D3DCompileFn)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 
@@ -157,6 +157,8 @@ namespace {
             { HdWaterShaders::kVertexShader, "vs_3_0", nullptr },
             { HdWaterShaders::kPixelShader, "ps_3_0", "0" },
             { HdWaterShaders::kPixelShader, "ps_3_0", "1" },
+            { HdWaterShaders::kLakeVertexShader, "vs_3_0", nullptr },
+            { HdWaterShaders::kLakePixelShader, "ps_3_0", "0" },
         };
         for (int32_t i = 0; i < Sh_Count; i++) {
             D3D_SHADER_MACRO macros[2] = {};
@@ -202,7 +204,7 @@ namespace {
         }
         CGxShader* made[Sh_Count] = {};
         for (int32_t i = 0; i < Sh_Count; i++) {
-            EGxShTarget target = i == Sh_VS ? GxSh_Vertex : GxSh_Pixel;
+            EGxShTarget target = i == Sh_VS || i == Sh_LakeVS ? GxSh_Vertex : GxSh_Pixel;
             CGxShader* shader = g_theGxDevicePtr->m_shaderList[target].Ptr(kName[i]);
             if (!shader) {
                 shader = g_theGxDevicePtr->m_shaderList[target].New(kName[i], 0, 0);
@@ -439,15 +441,14 @@ void HD::WaterEndLiquidPass() {
     s_passActive = false;
 }
 
-bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightCount) {
+// The procedural water (lake and sea in the donor's data) and the 3.3.5 water material (lake = true: this client's lakes)
+// share everything but the shader pair.
+static bool BindWater(Liquid::CMaterialSettings* settings, CGxShader* clientVertex, CGxShader* clientPixel, bool lake) {
     s_drawBound = false;
     s_calls++;
     int32_t mode = s_mode ? Mode() : 0;
     if (mode == 0 || !settings || !s_shaders[Sh_VS] || Visuals::Current() != Visuals::AzerothRemastered) return false;
-    if (lightCount > 3) lightCount = 3;
     // only over the shader model 3 code
-    CGxShader* clientPixel = Liquid::CMaterialProcWater::s_pixelShader;
-    CGxShader* clientVertex = Liquid::CMaterialProcWater::s_vertexShaders[lightCount];
     if (!clientPixel || !clientVertex || clientPixel->m_code.Count() < 4 || clientVertex->m_code.Count() < 4 ||
         *reinterpret_cast<const uint32_t*>(clientPixel->m_code.m_data) != 0xFFFF0300u ||
         *reinterpret_cast<const uint32_t*>(clientVertex->m_code.m_data) != 0xFFFE0300u) {
@@ -456,6 +457,7 @@ bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightC
     }
 
     if (mode != 1) {
+        if (lake) return false;  // hdWater 2 has no copy of the lake material's shaders
         // hdWater 2: our vertex shader and our copy of the 3.3.5 pixel shader, the client's constants and states
         g_theGxDevicePtr->RsSet(GxRs_VertexShader, s_shaders[Sh_VS]);
         g_theGxDevicePtr->RsSet(GxRs_PixelShader, s_shaders[Sh_PS335]);
@@ -511,8 +513,8 @@ bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightC
     // c16..c37 as they are; the model-view and sun rows (the donor's c12..c15) at c38..c41
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, c + 16, kConstCount - 4);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 38, c, 4);
-    g_theGxDevicePtr->RsSet(GxRs_VertexShader, s_shaders[Sh_VS]);
-    g_theGxDevicePtr->RsSet(GxRs_PixelShader, s_shaders[Sh_PS]);
+    g_theGxDevicePtr->RsSet(GxRs_VertexShader, s_shaders[lake ? Sh_LakeVS : Sh_VS]);
+    g_theGxDevicePtr->RsSet(GxRs_PixelShader, s_shaders[lake ? Sh_LakePS : Sh_PS]);
     // the shader mixes the world behind the water itself and writes alpha 1: keep the target's alpha (glow);
     // write the water's depth, so what is drawn after sees the surface
     g_theGxDevicePtr->RsSet(GxRs_ColorWrite, 7);
@@ -524,6 +526,15 @@ bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightC
     s_drawBound = true;
     s_drawsPbr++;
     return true;
+}
+
+bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightCount) {
+    if (lightCount > 3) lightCount = 3;
+    return BindWater(settings, Liquid::CMaterialProcWater::s_vertexShaders[lightCount], Liquid::CMaterialProcWater::s_pixelShader, false);
+}
+
+bool HD::WaterBindLake(Liquid::CMaterialSettings* settings, CGxShader* clientVertex, CGxShader* clientPixel) {
+    return BindWater(settings, clientVertex, clientPixel, true);
 }
 
 void HD::WaterAfterDraw() {

@@ -186,8 +186,12 @@ void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::I
         lightCount = 3;
     }
 
-    g_theGxDevicePtr->RsSet(GxRs_VertexShader, Liquid::CMaterialWater::s_vertexShaders[lightCount]);
-    g_theGxDevicePtr->RsSet(GxRs_PixelShader, Liquid::CMaterialWater::s_pixelShader);
+    // Not in the original binary: hdWater draws this material with Azeroth Remastered's lake shaders (false = Blizzard's)
+    bool hdWater = HD::WaterBindLake(settings, Liquid::CMaterialWater::s_vertexShaders[lightCount], Liquid::CMaterialWater::s_pixelShader);
+    if (!hdWater) {
+        g_theGxDevicePtr->RsSet(GxRs_VertexShader, Liquid::CMaterialWater::s_vertexShaders[lightCount]);
+        g_theGxDevicePtr->RsSet(GxRs_PixelShader, Liquid::CMaterialWater::s_pixelShader);
+    }
 
     CGxBuf* vertexBuf = nullptr;
     CGxBuf* indexBuf = nullptr;
@@ -201,6 +205,7 @@ void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::I
     GxPrimVertexPtr(vertexBuf, GxVBF_PNCT2);
     g_theGxDevicePtr->PrimIndexPtr(indexBuf);
     g_theGxDevicePtr->Draw(&batch, 1);
+    if (hdWater) HD::WaterAfterDraw();
     g_theGxDevicePtr->RsPop();
 }
 
@@ -266,8 +271,12 @@ void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liq
         lightCount = 3;
     }
 
-    g_theGxDevicePtr->RsSet(GxRs_VertexShader, Liquid::CMaterialWaterNoSpec::s_vertexShaders[lightCount]);
-    g_theGxDevicePtr->RsSet(GxRs_PixelShader, Liquid::CMaterialWaterNoSpec::s_pixelShader);
+    // Not in the original binary: hdWater draws this material with Azeroth Remastered's lake shaders (false = Blizzard's)
+    bool hdWater = HD::WaterBindLake(settings, Liquid::CMaterialWaterNoSpec::s_vertexShaders[lightCount], Liquid::CMaterialWaterNoSpec::s_pixelShader);
+    if (!hdWater) {
+        g_theGxDevicePtr->RsSet(GxRs_VertexShader, Liquid::CMaterialWaterNoSpec::s_vertexShaders[lightCount]);
+        g_theGxDevicePtr->RsSet(GxRs_PixelShader, Liquid::CMaterialWaterNoSpec::s_pixelShader);
+    }
 
     CGxBuf* vertexBuf = nullptr;
     CGxBuf* indexBuf = nullptr;
@@ -281,6 +290,7 @@ void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liq
     GxPrimVertexPtr(vertexBuf, GxVBF_PNCT2);
     g_theGxDevicePtr->PrimIndexPtr(indexBuf);
     g_theGxDevicePtr->Draw(&batch, 1);
+    if (hdWater) HD::WaterAfterDraw();
     g_theGxDevicePtr->RsPop();
 }
 
