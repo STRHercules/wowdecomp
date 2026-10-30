@@ -367,3 +367,28 @@ void WaterRipple::Create(const C3Vector& pos, float facing, float size, float al
     ripple->InitRipple(pos, -facing, size, alpha, duration, growth, type);
     s_activeRipples.LinkToTail(ripple);
 }
+
+// Not in the original binary: the ripples CMap::RenderWaterRipples drew last frame (it advances their size and alpha and
+// unlinks the finished ones), read only, for Azeroth Remastered's ripples on the water (HD/HdWaterRipples.cpp).
+int32_t WaterRipple::HdActiveRipples(float* out, int32_t max) {
+    int32_t count = 0;
+
+    for (CWaterRipple* ripple = s_activeRipples.Head(); ripple && count < max; ripple = s_activeRipples.Next(ripple)) {
+        if (ripple->m_endTime <= FrameTime::s_curTimeSec || ripple->m_alpha <= 0.0f) {
+            continue;
+        }
+
+        float* o = out + count * 8;
+        o[0] = ripple->m_position.x;
+        o[1] = ripple->m_position.y;
+        o[2] = ripple->m_size;
+        o[3] = ripple->m_alpha;
+        o[4] = ripple->m_rotation;
+        o[5] = static_cast<float>(ripple->m_type);
+        o[6] = ripple->m_growth;
+        o[7] = ripple->m_position.z;
+        count++;
+    }
+
+    return count;
+}

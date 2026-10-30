@@ -31,7 +31,9 @@
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include "WoW/Source/WorldClient/HD/HdCamera.h"
 #include "WoW/Source/WorldClient/HD/HdShaderSwap.h"
+#include "WoW/Source/WorldClient/HD/HdWaterRipples.h"
 #include "WoW/Source/WorldClient/HD/HdWaterShaders.h"
+#include "WoW/Source/WorldClient/HD/HdWaterWaves.h"
 
 namespace {
 #include "WoW/Source/WorldClient/HD/Shaders/Spirv.inc"
@@ -43,9 +45,9 @@ namespace {
     const int32_t kConstCount = 26;
 
     enum { StateIdle, StateCompiling, StateReady, StateFailed };
-    enum { Sh_VS, Sh_PS, Sh_PS335, Sh_LakeVS, Sh_LakePS, Sh_Count };
-    const char* const kName[Sh_Count] = { "HdWater:VS", "HdWater:PS", "HdWater:PS335", "HdWater:LakeVS", "HdWater:LakePS" };
-    const char* const kFile[Sh_Count] = { "HdWater-VS", "HdWater-PS", "HdWater-PS335", "HdWater-LakeVS", "HdWater-LakePS" };
+    enum { Sh_VS, Sh_PS, Sh_PS335, Sh_LakeVS, Sh_LakePS, Sh_PSFft, Sh_LakePSFft, Sh_Count };
+    const char* const kName[Sh_Count] = { "HdWater:VS", "HdWater:PS", "HdWater:PS335", "HdWater:LakeVS", "HdWater:LakePS", "HdWater:PSFft", "HdWater:LakePSFft" };
+    const char* const kFile[Sh_Count] = { "HdWater-VS", "HdWater-PS", "HdWater-PS335", "HdWater-LakeVS", "HdWater-LakePS", "HdWater-PSFft", "HdWater-LakePSFft" };
 
     typedef HRESULT(WINAPI* D3DCompileFn)(LPCVOID, SIZE_T, LPCSTR, const D3D_SHADER_MACRO*, ID3DInclude*, LPCSTR, LPCSTR, UINT, UINT, ID3DBlob**, ID3DBlob**);
 
@@ -77,6 +79,9 @@ namespace {
     Targets s_targets;
     bool s_passActive = false;
     bool s_drawBound = false;
+    bool s_fftBound = false;  // the wave cascades and ripples are on stages 8..12 for the current draw
+    const float kWhitecapThreshold = 0.75f;  // Jacobian under which the FFT crests foam (ours, not Forever's)
+    const float kWhitecapGain = 4.0f;
     float s_invWidth = 0.0f;
     float s_invHeight = 0.0f;
     const char* s_passNote = "";
@@ -153,19 +158,25 @@ namespace {
             s_state.store(StateFailed);
             return;
         }
-        struct Job { const char* source; const char* profile; const char* original; };
+        struct Job { const char* source; const char* profile; const char* original; const char* fft; };
         const Job jobs[Sh_Count] = {
-            { HdWaterShaders::kVertexShader, "vs_3_0", nullptr },
-            { HdWaterShaders::kPixelShader, "ps_3_0", "0" },
-            { HdWaterShaders::kPixelShader, "ps_3_0", "1" },
-            { HdWaterShaders::kLakeVertexShader, "vs_3_0", nullptr },
-            { HdWaterShaders::kLakePixelShader, "ps_3_0", "0" },
+            { HdWaterShaders::kVertexShader, "vs_3_0", nullptr, nullptr },
+            { HdWaterShaders::kPixelShader, "ps_3_0", "0", nullptr },
+            { HdWaterShaders::kPixelShader, "ps_3_0", "1", nullptr },
+            { HdWaterShaders::kLakeVertexShader, "vs_3_0", nullptr, nullptr },
+            { HdWaterShaders::kLakePixelShader, "ps_3_0", "0", nullptr },
+            { HdWaterShaders::kPixelShader, "ps_3_0", "0", "1" },      // FFT waves and ripples (hdWaterWaves 1)
+            { HdWaterShaders::kLakePixelShader, "ps_3_0", "0", "1" },
         };
         for (int32_t i = 0; i < Sh_Count; i++) {
-            D3D_SHADER_MACRO macros[2] = {};
+            D3D_SHADER_MACRO macros[3] = {};
             if (jobs[i].original) {
                 macros[0].Name = "HD_ORIGINAL";
                 macros[0].Definition = jobs[i].original;
+            }
+            if (jobs[i].fft) {
+                macros[1].Name = "HD_FFT";
+                macros[1].Definition = jobs[i].fft;
             }
             ID3DBlob* code = nullptr;
             ID3DBlob* errors = nullptr;
@@ -370,6 +381,8 @@ void HD::RegisterWaterCVars() {
     s_reflect = CVar::Register("hdWaterReflect", "HD: screen-space reflections of the world on the water, 1 = on (Forever), 0 = sky only", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_color = CVar::Register("hdWaterColor", "HD: water colour, 1 = the game's own colours (follow the hour, dark at night), 0 = Forever's scattering", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_shore = CVar::Register("hdWaterShore", "HD: yards over which the water fades in from the shore (ours: Forever fades over 0.5; steep banks need more)", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    HD::WaterWavesEnabled();      // registers hdWaterWaves, hdWaterWaveScale
+    HD::WaterRipplesRegister();   // registers hdWaterRipples, hdWaterRippleStrength
     s_info = CVar::Register("hdWaterInfo", "HD: hdWater status (read only)", 0, "off", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
 }
 
@@ -434,6 +447,7 @@ void HD::WaterBeginLiquidPass(bool cameraInLiquid) {
     }
     s_invWidth = 1.0f / width;
     s_invHeight = 1.0f / height;
+    HD::WaterRipplesRender(device);  // this frame's ripples around the camera (only for the FFT variant)
     s_passNote = "Forever PBR water";
     s_passActive = true;
 }
@@ -512,13 +526,30 @@ static bool BindWater(Liquid::CMaterialSettings* settings, CGxShader* clientVert
         c[80 + k] = powf(Clamp((&amb.x)[k], 0.0f, 4.0f), 2.2f);
         c[84 + k] = powf(Clamp((&dif.x)[k], 0.0f, 4.0f), 2.2f);
     }
-    // c34.x: 1 / the shore fade distance (hdWaterShore, yards)
-    c[88] = 1.0f / Clamp(s_shore ? s_shore->m_floatValue : 2.0f, 0.1f, 20.0f);
+    // c35.z: 1 / the shore fade distance (hdWaterShore, yards)
+    c[94] = 1.0f / Clamp(s_shore ? s_shore->m_floatValue : 2.0f, 0.1f, 20.0f);
+    // HD: FFT waves: this water type's cascades stepped to now (c34 their tiling, c35.xy the whitecap threshold and gain),
+    // and the ripple texture (c36, c37; strength 0 when there are none)
+    bool fft = HD::WaterWavesUpdate(GxEffects::Get(), s_lastPbr);
+    if (fft) {
+        HD::WaterWavesTiling(&c[88]);
+        c[92] = kWhitecapThreshold;
+        c[93] = kWhitecapGain;
+        HD::WaterRipplesConstants(&c[96]);
+    }
+    // the lake shader's body colour: the game's own water colours, shallow and deep (the river pair, or the ocean pair)
+    const DayNight::CurrentLight& water = DayNight::g_dnInfo.m_bands;
+    const int32_t pair = s_lastPbr == 1250 ? 0 : 1;
+    const CImVector& shallow = water.m_waterColors[pair * 2];
+    const CImVector& deep = water.m_waterColors[pair * 2 + 1];
+    const float lakeColours[8] = { shallow.r * (1.0f / 255.0f), shallow.g * (1.0f / 255.0f), shallow.b * (1.0f / 255.0f), 0.0f,
+                            deep.r * (1.0f / 255.0f), deep.g * (1.0f / 255.0f), deep.b * (1.0f / 255.0f), 0.0f };
     // c16..c37 as they are; the model-view and sun rows (the donor's c12..c15) at c38..c41
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, c + 16, kConstCount - 4);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 38, c, 4);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 42, lakeColours, 2);  // c42, c43: the lake shader's colours
     g_theGxDevicePtr->RsSet(GxRs_VertexShader, s_shaders[lake ? Sh_LakeVS : Sh_VS]);
-    g_theGxDevicePtr->RsSet(GxRs_PixelShader, s_shaders[lake ? Sh_LakePS : Sh_PS]);
+    g_theGxDevicePtr->RsSet(GxRs_PixelShader, s_shaders[lake ? (fft ? Sh_LakePSFft : Sh_LakePS) : (fft ? Sh_PSFft : Sh_PS)]);
     // the shader mixes the world behind the water itself and writes alpha 1: keep the target's alpha (glow);
     // write the water's depth, so what is drawn after sees the surface
     g_theGxDevicePtr->RsSet(GxRs_ColorWrite, 7);
@@ -527,6 +558,16 @@ static bool BindWater(Liquid::CMaterialSettings* settings, CGxShader* clientVert
     g_theGxDevicePtr->RsSet(GxRs_Texture7, static_cast<void*>(nullptr));
     GxEffects::SetDrawTexture(6, s_targets.linear, false, false);
     GxEffects::SetDrawTexture(7, s_targets.scene, false, false);
+    s_fftBound = fft;
+    if (fft) {
+        // s8..s11 the wave cascades (trilinear, repeating tiles), s12 the ripples (linear, clamped)
+        for (int32_t i = 0; i < HD::WaterWaveCascades; i++) {
+            g_theGxDevicePtr->RsSet(static_cast<EGxRenderState>(GxRs_Texture8 + i), static_cast<void*>(nullptr));
+            GxEffects::SetDrawTexture(8 + i, HD::WaterWavesTexture(i), true, true, true);
+        }
+        g_theGxDevicePtr->RsSet(GxRs_Texture12, static_cast<void*>(nullptr));
+        GxEffects::SetDrawTexture(12, HD::WaterRipplesTexture(), true, false, false);
+    }
     s_drawBound = true;
     s_drawsPbr++;
     return true;
@@ -546,6 +587,10 @@ void HD::WaterAfterDraw() {
     s_drawBound = false;
     GxEffects::SetDrawTexture(6, nullptr);
     GxEffects::SetDrawTexture(7, nullptr);
+    if (s_fftBound) {
+        for (int32_t i = 8; i <= 12; i++) GxEffects::SetDrawTexture(i, nullptr);
+    }
+    s_fftBound = false;
 }
 
 void HD::WaterSeen(int32_t kind) {

@@ -1210,12 +1210,12 @@ namespace
     DrawOverride g_drawOverride[pipelines::kTextureStages];
 }
 
-void GxEffects::SetDrawTexture(uint32_t stage, Texture* texture, bool linear, bool wrap)
+void GxEffects::SetDrawTexture(uint32_t stage, Texture* texture, bool linear, bool wrap, bool mips)
 {
     if (stage >= pipelines::kTextureStages) return;
     g_drawOverride[stage].texture = texture;
-    // EGxTexFilter 0 Nearest, 1 Linear (no mips); wrap U and V are bits 3 and 4 (Pipelines/Samplers.cpp)
-    g_drawOverride[stage].key = (linear ? 1u : 0u) | (wrap ? (1u << 3) | (1u << 4) : 0u);
+    // EGxTexFilter 0 Nearest, 1 Linear (no mips), 4 LinearMipLinear; wrap U and V are bits 3 and 4 (Pipelines/Samplers.cpp)
+    g_drawOverride[stage].key = (mips ? 4u : (linear ? 1u : 0u)) | (wrap ? (1u << 3) | (1u << 4) : 0u);
 }
 
 bool gxvk::vk::effects::DrawTextureFor(uint32_t stage, DrawTexture& out)

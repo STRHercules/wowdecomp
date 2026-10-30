@@ -40,6 +40,10 @@ class WaterRipple {
 
     static void Destroy();
     static void Initialize();
+
+    // Not in the original binary: Azeroth Remastered's water ripples (HD/HdWaterRipples.cpp) read the live ripples: up to max
+    // of them, 8 floats each (x, y, size, alpha, rotation, directional, growth, z); returns how many were written.
+    static int32_t HdActiveRipples(float* out, int32_t max);
 };
 
 #endif

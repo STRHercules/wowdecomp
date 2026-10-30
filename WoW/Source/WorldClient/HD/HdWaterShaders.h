@@ -542,7 +542,7 @@ R"HLSL(    // single scattering (%412-522)
     float fh = min(max(1.0 - min(max(dot(H, V), 0.0), 1.0), 0.0), 1.0);
     float envW = 1.0 - (pow(fh, 5.0) * 0.98 + 0.02) * sunVis;
     // compose with the soft shoreline (%623-644)
-    float k = saturate(d * cWaves.x);  // HD: the shore fade over 1 / cWaves.x yards (hdWaterShore), smoothed
+    float k = saturate(d * cWaves2.z);  // HD: the shore fade over 1 / cWaves2.z yards (hdWaterShore), smoothed
     k = k * k * (3.0 - 2.0 * k);
     float3 Tbg = T * bg;
     float3 add = (Tbg - bg) + body + (foamLit - Tbg) * G2.w + sunSpec + envW * env;
@@ -1145,7 +1145,7 @@ float3 ForeverWater(float2 uv, float zW, float3 V, float4 G1, float4 G2, float4 
     float fh = min(max(1.0 - min(max(dot(H, V), 0.0), 1.0), 0.0), 1.0);
     float envW = 1.0 - (pow(fh, 5.0) * 0.98 + 0.02) * sunVis;
     // compose with the soft shoreline (%623-644)
-    float k = saturate(d * cWaves.x);  // HD: the shore fade over 1 / cWaves.x yards (hdWaterShore), smoothed
+    float k = saturate(d * cWaves2.z);  // HD: the shore fade over 1 / cWaves2.z yards (hdWaterShore), smoothed
     k = k * k * (3.0 - 2.0 * k);
     float3 Tbg = T * bg;
     float3 add = (Tbg - bg) + body + (foamLit - Tbg) * G2.w + sunSpec + envW * env;
@@ -1292,9 +1292,13 @@ float4 mainPbr(float3 iT : TEXCOORD4, float3 iB : TEXCOORD5, float3 iN : TEXCOOR
 
 
 // ---------------------------------------------------------------------------------------------------------------
-// HD lake water: the 3.3.5 water material (CMaterialWater) has no normal maps or vertex waves we can use, so the
-// slopes are a few gentle travelling waves from the world position and the time, and the foam a soft noise on the
-// shore bands. Everything else is ForeverWater() above.
+// HD lake water: the 3.3.5 water material (CMaterialWater) has no normal maps or vertex waves, so the slopes are the FFT
+// cascades and the ripples (HD_FFT 1) or, without them, a few gentle travelling waves from the world position and the
+// time; the foam is a soft noise on the shore bands; the game's own colours (the day / night river and ocean water
+// colours, shallow to deep) are the body colour like on the procedural water. Everything else is ForeverWater() above.
+float4 cLakeShallow : register(c42);  // HD: the game's shallow water colour (gamma), w unused
+float4 cLakeDeep    : register(c43);  // HD: the game's deep water colour (gamma)
+
 float2 LakeSlope(float2 p, float t)
 {
     float2 S = float2(0.0, 0.0);
@@ -1315,7 +1319,22 @@ float4 main(float3 iWorld : TEXCOORD3, float4 iView : TEXCOORD7, float iFog : FO
     float3 V = normalize(-Pv);
     float t = cFog335.w;
 
+#if HD_FFT
+    float4 w0 = tex2D(fft0, iWorld.xy * cWaves.x);
+    float4 w1 = tex2D(fft1, iWorld.xy * cWaves.y);
+    float4 w2 = tex2D(fft2, iWorld.xy * cWaves.z);
+    float4 w3 = tex2D(fft3, iWorld.xy * cWaves.w);
+    float2 S = w0.xy + w1.xy + w2.xy + w3.xy;
+    float4 rip = tex2D(ripples, iWorld.xy * cRipples.xy + cRipples.zw);
+    S += float2(rip.r - rip.g, rip.b - rip.a) * (0.5 * cRipples2.x);
+    float waveH = w0.z + w1.z + w2.z + w3.z;
+    float jac = 1.0 - ((1.0 - w0.w) + (1.0 - w1.w) + (1.0 - w2.w) + (1.0 - w3.w));
+    float whitecap = saturate((cWaves2.x - jac) * cWaves2.y);
+#else
     float2 S = LakeSlope(iWorld.xy, t);
+    float waveH = 0.0;
+    float whitecap = 0.0;
+#endif
     float2 sx = ddx(S);
     float2 sy = ddy(S);
     float4 G3 = float4(S, dot(S, S) + dot(sx, sx) + dot(sy, sy), dot(S, S));
@@ -1323,11 +1342,13 @@ float4 main(float3 iWorld : TEXCOORD3, float4 iView : TEXCOORD7, float iFog : FO
     float sceneZ = SceneDepthAt(uv);
     float dz = max(0.0, sceneZ - zW);
     float fn = saturate(0.5 + 0.9 * sin(iWorld.x * 0.9 + t * 0.6) * sin(iWorld.y * 1.1 - t * 0.5));
-    float fw = (FoamWeight(dz, cType[4]) + FoamWeight(dz, cType[5])) * fn;
+    float fw = saturate((FoamWeight(dz, cType[4]) + FoamWeight(dz, cType[5])) * fn + whitecap);
     float4 G2 = saturate(float4(fw * fw, fw * fw, fw * fw, fw));
-    float4 G1 = float4(cScreen.z, 0.0, 0.0, 0.0);
+    float4 G1 = float4(cScreen.z, waveH, whitecap, whitecap);
 
     float4 bodyK = float4(cSky[1].www, 1.0);
+    // the game's colour at this depth, made linear with a square (gamma 2) like the procedural water's ramp
+    float3 ramp = lerp(cLakeShallow.rgb, cLakeDeep.rgb, saturate(dz * 0.1));
     float dbgD;
     float3 dbgBody;
     float3 dbgRefl;
@@ -1336,7 +1357,7 @@ float4 main(float3 iWorld : TEXCOORD3, float4 iView : TEXCOORD7, float iFog : FO
     float3 col = ForeverWater(uv, zW, V, G1, G2, G3, sceneZ, cModelView3[0].xyz, cModelView3[1].xyz,
                               cModelView3[2].xyz, cSunView.xyz, cDiffuseLin.rgb, cScreen.w, cInterior.rgb,
                               cType[0], cType[1], cType[2] * bodyK, cType[3] * bodyK, cType[6],
-                              float3(0.0, 0.0, 0.0), 0.0, dbgD, dbgBody, dbgRefl, dbgRough, dbgBg);
+                              ramp * ramp * bodyK.x, cInterior.w, dbgD, dbgBody, dbgRefl, dbgRough, dbgBg);
     float dbg = cSky[0].w;
     if (dbg > 0.5) {
         col = saturate(dbgD * 0.1).xxx;

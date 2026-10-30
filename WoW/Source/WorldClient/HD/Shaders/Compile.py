@@ -46,6 +46,7 @@ OUTPUTS = [
         ("GI.comp", "kGIBlur", "GI_PASS=1"),
         ("GI.comp", "kGIApply", "GI_PASS=2"),
         ("WaterDepth.frag", "kWaterDepthFrag"),
+        ("WaterRipples.frag", "kWaterRipplesFrag"),
     ]),
 ]
 
