@@ -19,6 +19,7 @@ function W.new(name, parent, kind)
     return o
 end
 function W:Show() self._shown = true end
+function W:SetAlpha(a) self._alpha = a end
 function W:Hide() self._shown = false end
 function W:IsShown() return self._shown end
 function W:IsVisible()
@@ -51,6 +52,15 @@ function W:GetHighlightTexture() return nil end
 function W:GetCheckedTexture() return nil end
 function W:GetFrameLevel() return 1 end
 function W:GetStringWidth() return 100 end
+function W:GetLeft() return self._left or 0 end
+function W:SetFrameStrata(s) self._strata = s end
+function W:GetFrameStrata() return self._strata or "MEDIUM" end
+function W:SetClampedToScreen(v) self._clamped = v end
+function W:GetChildren()
+    local kids = {}
+    for _, o in ipairs(created) do if o._parent == self and o._kind ~= "Texture" and o._kind ~= "FontString" then kids[#kids + 1] = o end end
+    return unpack(kids)
+end
 function W:SetTexCoord(a, b, c, d, e, f, g, h)
     if e == nil then self._tc = { a, c, a, d, b, c, b, d } else self._tc = { a, b, c, d, e, f, g, h } end
 end
@@ -63,6 +73,7 @@ strupper = string.upper
 SEX_MALE, SEX_FEMALE = 2, 3
 function GetSelectedSex() return SEX_FEMALE end
 function EA_IS_RETAIL() return false end
+function EA_ACTIVE() return false end
 function CycleCharCustomization() return 0 end
 ALLIANCE, HORDE = "Alliance", "Horde"
 
@@ -79,6 +90,19 @@ for _, n in ipairs({ "CharCreateOkayButton", "CharCreateBackButton", "CharacterC
     W.new(n, CharacterCreateFrame, "Button")
 end
 CharCreateOkayButton:Hide()  -- not personalizing
+CharacterCreateGenderButtonsContainer = W.new("CharacterCreateGenderButtonsContainer", CharacterCreateFrame)
+for i = 1, 8 do
+    local row = W.new("CharacterCustomizationButtonFrame" .. i, CharacterCreateFrame, "Frame")
+    W.new("CharacterCustomizationButtonFrame" .. i .. "Text", row, "FontString")
+    W.new("CharacterCustomizationButtonFrame" .. i .. "Background", row, "Texture")
+    for _, part in ipairs({ "RightButton", "LeftButton", "ChoiceButton" }) do
+        W.new("CharacterCustomizationButtonFrame" .. i .. part, row, "Button")
+    end
+    row:Hide()
+end
+refreshes = 0
+function CharacterCreate_UpdateHairCustomization() refreshes = refreshes + 1 end
+function CharacterCustomization_CloseChoices() end
 
 -- 22 Alliance, 19 Horde, 13 Freeborn picks + 6 hidden twins, roughly as the live client enumerates them.
 files = {}
@@ -106,6 +130,12 @@ function CharacterCreateEnumerateRaces()
         local b = _G["CharacterCreateRaceButton" .. i]
         b.raceFileString = f[1]; b.enable = true; b:Show(); b:SetChecked(i == selected and 1 or nil)
         b._nt:SetTexCoord(0, 1, 0, 1); b._pt:SetTexCoord(0, 1, 0, 1)   -- stock re-sets coords every enumeration
+        -- stock hover: a TOOLTIP-strata frame on CharacterCreateFrame, pinned to a fixed spot by faction
+        b:SetScript("OnEnter", function(self)
+            self.tip = self.tip or W.new(nil, CharacterCreateFrame, "Frame")
+            self.tip:SetFrameStrata("TOOLTIP"); self.tip.text = self.tip.text or W.new(nil, self.tip, "FontString")
+            self.tip:ClearAllPoints(); self.tip:SetPoint("LEFT", CharacterCreateFrame, "LEFT", 160, 50); self.tip:Show()
+        end)
         table.insert(f[2] == "Alliance" and CharacterCreate.raceIndicesAlliance or CharacterCreate.raceIndicesHorde, i)
     end
 end
@@ -141,7 +171,14 @@ local function mirrored(i) local c = { _G["CharacterCreateRaceButton" .. i .. "N
 check(mirrored(23) and mirrored(42 + 8) and not mirrored(1) and not mirrored(42), "Horde-born portraits (incl. Freeborn Naga) mirrored, Alliance not")
 CharacterCreateEnumerateRaces()
 check(mirrored(23) and not mirrored(1), "mirroring does not stack across enumerations")
-check(CreatorSkinRaceCard:IsShown() and CreatorSkinRaceCard._points[1][1] == "TOPRIGHT", "race card in right panel")
+check(CreatorSkinRaceCard:IsShown() and CreatorSkinRaceCard._points[1][1] == "TOPRIGHT", "race card shown in the right panel")
+CharacterCreateRaceButton3._scripts.OnEnter(CharacterCreateRaceButton3)
+local tp = CharacterCreateRaceButton3.tip._points[1]
+check(CharacterCreateRaceButton3.tip._clamped and tp[1] == "TOPLEFT" and tp[2] == CharacterCreateRaceButton3,
+      "race tooltip re-anchored beside the pane and clamped to screen")
+CharacterCreateEnumerateRaces(); CharacterCreateRaceButton3._scripts.OnEnter(CharacterCreateRaceButton3)
+check(CharacterCreateRaceButton3.tip._points[1][2] == CharacterCreateRaceButton3, "tooltip fix survives re-enumeration")
+check(CreatorSkinFactionRail.tip._clamped, "faction hover label clamped to screen")
 
 tabs[3]._scripts.OnClick(tabs[3])
 check(shown(1, 41) == 0 and shown(42, 54) == 13 and shown(55, #files) == 0, "Freeborn tab: 13 Freeborn portraits, no twins")
@@ -169,7 +206,10 @@ check(tabs[1]._points[1][4] + tabs[1]._w <= 55, "rail fits in the left margin")
 
 -- the browsed crest slides the pane out and back
 tabs[1]._scripts.OnClick(tabs[1]); fire()
-check(shown(1, #files) == 0 and SK_slide_probe == nil, "browsed crest hides the pane and its portraits")
+check(shown(1, #files) == 0, "browsed crest hides the pane and its portraits")
+local function panelX(o) return o._points[1][4] end
+local cardAnchor = CreatorSkinRaceCard._points[1][2]
+check(panelX(cardAnchor) == 440 and cardAnchor._points[1][1] == "TOPRIGHT", "details panel (and the race card on it) slid out right")
 check(CreatorSkinFactionRail:IsShown(), "rail stays visible with the pane hidden")
 tabs[3]._scripts.OnClick(tabs[3]); fire()
 check(shown(42, 54) == 13, "another crest slides the pane back in with that faction")
@@ -181,6 +221,30 @@ tabs[3]._scripts.OnClick(tabs[3]); fire()
 CharacterCreate.personalizationMode = true; CharCreateOkayButton:Show(); CharacterCreateRaceButtonsContainer:Hide()
 fire()
 check(not CreatorSkinFactionRail:IsShown(), "rail hidden on Appearance page")
+for i = 1, 6 do _G["CharacterCustomizationButtonFrame" .. i]:Show() end   -- stock shows the page's rows
+CharacterCreateGenderButtonsContainer:Hide()                               -- stock hides gender in personalization
+fire()
+check(CreatorSkinPanelTab:IsShown(), "panel tab shown on Appearance page")
+check(CharacterCreateGenderButtonsContainer:IsShown(), "gender picks shown on Appearance page")
+local gp = CharacterCreateGenderButtonMale._points[1]
+check(gp[1] == "BOTTOM" and gp[5] == 134, "gender picks sit above the name fields")
+CreatorSkinPanelTab._scripts.OnClick(CreatorSkinPanelTab); fire()
+local rowsShown = 0 for i = 1, 8 do if _G["CharacterCustomizationButtonFrame" .. i]:IsShown() then rowsShown = rowsShown + 1 end end
+check(rowsShown == 0, "panel tab hides the option rows")
+check(SK_unused == nil and CreatorSkinRaceCard._points[1][2]._points[1][4] == 440, "panels slid out")
+fire()
+check(rowsShown == 0 and not CharacterCustomizationButtonFrame1:IsShown(), "rows stay hidden while collapsed")
+local before = refreshes
+CreatorSkinPanelTab._scripts.OnClick(CreatorSkinPanelTab); fire()
+rowsShown = 0 for i = 1, 8 do if _G["CharacterCustomizationButtonFrame" .. i]:IsShown() then rowsShown = rowsShown + 1 end end
+check(rowsShown == 6 and refreshes > before, "panel tab brings back exactly the page's rows and refreshes them")
+check(CreatorSkinRaceCard._points[1][2]._points[1][4] == 0, "panels back in")
+-- leaving for the race page restores everything and hides the tab
+CharacterCreate.personalizationMode = false; CharCreateOkayButton:Hide(); CharacterCreateRaceButtonsContainer:Show()
+fire()
+check(not CreatorSkinPanelTab:IsShown() and CreatorSkinFactionRail:IsShown(), "race page: tab hidden, rail back")
+check(CharacterCreateGenderButtonMale._points[1][5] == 64, "gender picks back at the race page spot")
+check(CharacterCustomizationButtonFrame1._alpha == nil or CharacterCustomizationButtonFrame1._alpha == 1, "row alpha restored")
 return table.concat(out, "\n")
 ''')
 print(results)

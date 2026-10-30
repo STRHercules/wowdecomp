@@ -3545,24 +3545,33 @@ local function BuildChrome()
     SK.hint = hint;
 end
 
--- Header text sits flush with the rows. On the race page `slide` (0 to -PANEL_W) moves the left panel, its header
--- and rule off to the left; the fade and edge line follow the panel by their anchors.
+-- Header text sits flush with the rows. On the race page `slide` (0 to -PANEL_W) moves both side panels out, the
+-- left one to the left and the right one to the right, with their headers and rules; the fades, edge lines and the
+-- race card follow their panel by their anchors.
 local function PlaceHeaders(slide)
     slide = slide or 0;
-    local panel = SK.LEFT.panel;
-    panel:ClearAllPoints();
-    panel:SetPoint("TOPLEFT", SK.chrome, "TOPLEFT", slide, 0);
-    panel:SetPoint("BOTTOMLEFT", SK.chrome, "BOTTOMLEFT", slide, 0);
-    -- Fade the shadow out with the slide. SetAlpha would drop the gradient and leave a white strip; re-set it instead.
-    SK.LEFT.fade:SetGradientAlpha("HORIZONTAL", INK[1], INK[2], INK[3], 0.5 * (1 + slide / PANEL_W), INK[1], INK[2], INK[3], 0);
+    -- Fade the shadows out with the slide. SetAlpha would drop the gradient and leave a white strip; re-set it instead.
+    local shadow = 0.5 * (1 + slide / PANEL_W);
+    for _, side in ipairs({ "LEFT", "RIGHT" }) do
+        local panel = SK[side].panel;
+        local x = side == "LEFT" and slide or -slide;
+        panel:ClearAllPoints();
+        panel:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, x, 0);
+        panel:SetPoint("BOTTOM" .. side, SK.chrome, "BOTTOM" .. side, x, 0);
+        if side == "LEFT" then
+            SK.LEFT.fade:SetGradientAlpha("HORIZONTAL", INK[1], INK[2], INK[3], shadow, INK[1], INK[2], INK[3], 0);
+        else
+            SK.RIGHT.fade:SetGradientAlpha("HORIZONTAL", INK[1], INK[2], INK[3], 0, INK[1], INK[2], INK[3], shadow);
+        end
+    end
     for _, side in ipairs({ "LEFT", "RIGHT" }) do
         local inset = EDGE_X + 12;
         local header = SK[side];
-        local x = side == "LEFT" and slide or 0;
+        local x = side == "LEFT" and slide or -slide;
         header.rule:ClearAllPoints();
-        header.rule:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and EDGE_X + x or -EDGE_X, -100);
+        header.rule:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and EDGE_X + x or -EDGE_X + x, -100);
         header.title:ClearAllPoints();
-        header.title:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and inset + x or -inset, -62);
+        header.title:SetPoint("TOP" .. side, SK.chrome, "TOP" .. side, side == "LEFT" and inset + x or -inset + x, -62);
         header.subtitle:ClearAllPoints();
         header.subtitle:SetPoint("TOP" .. side, header.title, "BOTTOM" .. side, 0, -4);
     end
@@ -3722,6 +3731,17 @@ local function SkinNameEdit(edit)
     underline:SetHeight(1);
     underline:SetPoint("BOTTOMLEFT", edit, "BOTTOMLEFT", 12, 6);
     underline:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -10, 6);
+    -- Soft plate behind the field and its caption, so the name reads against any scene.
+    local plate = Solid(edit, "BACKGROUND", INK[1], INK[2], INK[3], 0.72);
+    plate:SetPoint("TOPLEFT", edit, "TOPLEFT", 4, 22);
+    plate:SetPoint("BOTTOMRIGHT", edit, "BOTTOMRIGHT", -2, -2);
+    for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+                            { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+        local line = Solid(edit, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.55);
+        line:SetPoint(side[1], plate, side[1], 0, 0);
+        line:SetPoint(side[2], plate, side[2], 0, 0);
+        if side[1] == "TOPLEFT" and side[2] == "BOTTOMLEFT" or side[1] == "TOPRIGHT" then line:SetWidth(1); else line:SetHeight(1); end
+    end
 end
 
 -- ---- body page -----------------------------------------------------------------------------------------------
@@ -3795,9 +3815,9 @@ local function SkinBodyPage()
             button:ClearAllPoints();
         end
     end
-    -- Each sits at the inner end of its panel header, clear of the title.
-    if BodyShapeResetButton then BodyShapeResetButton:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPLEFT", EDGE_X + 340, -56); end
-    if BodyShapeRandomButton then BodyShapeRandomButton:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPRIGHT", -(EDGE_X + 340), -56); end
+    -- Level with Back and Accept, each just inside its neighbour.
+    if BodyShapeResetButton then BodyShapeResetButton:SetPoint("LEFT", CharCreateBackButton, "RIGHT", 16, 0); end
+    if BodyShapeRandomButton then BodyShapeRandomButton:SetPoint("RIGHT", CharCreateOkayButton, "LEFT", -16, 0); end
     SK.bodySkinned = true;
 end
 
@@ -3866,9 +3886,41 @@ local function WithoutFreeborn(indices)
     return kept;
 end
 
+-- The stock race tooltips are anchored to fixed screen spots by faction and grow when right-clicked, so they can run
+-- off screen. After the stock hover/right-click handler, put the shown one beside the left pane, level with the
+-- portrait, and clamp it to the screen.
+local function PlaceRaceTooltip(button)
+    local frameLeft = CharacterCreateFrame:GetLeft() or 0;
+    for _, child in ipairs({ CharacterCreateFrame:GetChildren() }) do
+        if child.text and child:IsShown() and child:GetFrameStrata() == "TOOLTIP" then
+            child:SetClampedToScreen(true);
+            child:ClearAllPoints();
+            child:SetPoint("TOPLEFT", button, "TOPLEFT", PANEL_W + 16 - ((button:GetLeft() or frameLeft) - frameLeft), 0);
+        end
+    end
+end
+
+-- Wraps a stock race button handler once; the stock enumeration sets fresh handlers each time, which drops the wrap.
+local function AfterRaceHandler(button, event)
+    local handler = button:GetScript(event);
+    if not handler or handler == button["skin" .. event] then return; end
+    button["skin" .. event] = function(self, ...)
+        handler(self, ...);
+        pcall(PlaceRaceTooltip, self);
+    end;
+    button:SetScript(event, button["skin" .. event]);
+end
+
 local enumerateRaces = CharacterCreateEnumerateRaces;
 function CharacterCreateEnumerateRaces(...)
     enumerateRaces(...);
+    for index = 1, CharacterCreate.numRaces or 0 do
+        local button = _G["CharacterCreateRaceButton" .. index];
+        if button then
+            AfterRaceHandler(button, "OnEnter");
+            AfterRaceHandler(button, "OnMouseDown");
+        end
+    end
     for _, index in ipairs(CharacterCreate.raceIndicesHorde or {}) do
         for _, texture in ipairs({ _G["CharacterCreateRaceButton" .. index .. "NormalTexture"],
                                    _G["CharacterCreateRaceButton" .. index .. "PushedTexture"] }) do
@@ -3975,7 +4027,8 @@ end
 
 -- ---- faction rail ------------------------------------------------------------------------------------------
 -- One crest per faction in a slim column on the screen's left edge. A crest shows that faction's races in the left
--- pane (sliding it in if hidden); the browsed faction's crest slides the pane out, leaving the scene clear.
+-- pane (sliding both panes in if hidden); the browsed faction's crest slides the race and details panes out, leaving
+-- the scene clear.
 
 local RAIL_TOP, RAIL_ICON, RAIL_STEP, SLIDE_TIME = -150, 40, 50, 0.18;
 local UpdateFactionRail;
@@ -3988,9 +4041,69 @@ local function Edge(parent, point, w, h)
     return edge;
 end
 
+-- Open/closed is remembered per page kind: the race page and the customization pages.
+local function PanesOpen()
+    if SK.mode == "custom" then return SK.customOpen ~= false; end
+    return SK.paneOpen ~= false;
+end
+
 local function SlidePane(open)
-    SK.paneOpen = open;
-    SK.rail.mover:Show();
+    if SK.mode == "custom" then SK.customOpen = open; else SK.paneOpen = open; end
+    SK.mover:Show();
+end
+
+-- Customization rows, the body page and the randomize button are pinned to the screen, not to the panels, so they
+-- fade out with the slide; once the panels are gone the rows are hidden and the body page stops taking the mouse
+-- (its own driver keeps it shown).
+local function SetMouseTree(frame, on, saved)
+    for _, child in ipairs({ frame:GetChildren() }) do
+        if on then
+            if saved[child] then child:EnableMouse(true); saved[child] = nil; end
+        elseif child:IsMouseEnabled() then
+            saved[child] = true;
+            child:EnableMouse(false);
+        end
+        SetMouseTree(child, on, saved);
+    end
+end
+
+local function FadeCustom(slide)
+    local alpha = 1 + slide / PANEL_W;
+    SK.hiddenRows = SK.hiddenRows or {};
+    local restored = false;
+    for i = 1, 64 do
+        local row = _G["CharacterCustomizationButtonFrame" .. i];
+        if row then
+            if alpha <= 0 then
+                if row:IsShown() then SK.hiddenRows[row] = true; row:Hide(); end
+            else
+                if SK.hiddenRows[row] then SK.hiddenRows[row] = nil; row:Show(); restored = true; end
+                row:SetAlpha(alpha);
+            end
+        end
+    end
+    -- Option counts can change while hidden (a gender switch); let the stock refresh settle which rows belong.
+    if restored and CharacterCreate_UpdateHairCustomization then CharacterCreate_UpdateHairCustomization(); end
+    if BodyShapePanel then
+        BodyShapePanel:SetAlpha(alpha);
+        SK.bodyMouse = SK.bodyMouse or {};
+        if alpha <= 0 and not SK.bodyMouseOff then SK.bodyMouseOff = true; SetMouseTree(BodyShapePanel, false, SK.bodyMouse);
+        elseif alpha > 0 and SK.bodyMouseOff then SK.bodyMouseOff = nil; SetMouseTree(BodyShapePanel, true, SK.bodyMouse); end
+    end
+    if alpha <= 0 and CharacterCustomization_CloseChoices then CharacterCustomization_CloseChoices(); end
+end
+
+-- Leaving the customization pages: give back alpha and mouse, forget hidden rows (the stock page switch owns them now).
+local function RestoreCustom()
+    SK.hiddenRows = {};
+    for i = 1, 64 do
+        local row = _G["CharacterCustomizationButtonFrame" .. i];
+        if row then row:SetAlpha(1); end
+    end
+    if BodyShapePanel then
+        BodyShapePanel:SetAlpha(1);
+        if SK.bodyMouseOff then SK.bodyMouseOff = nil; SetMouseTree(BodyShapePanel, true, SK.bodyMouse or {}); end
+    end
 end
 
 local function BuildRailIcon(faction, slot)
@@ -4017,11 +4130,11 @@ local function BuildRailIcon(faction, slot)
     icon:SetScript("OnClick", function(self)
         PlaySound("gsCharacterCreationClass");
         if SK.faction == self.faction.key then
-            SlidePane(not SK.paneOpen);
+            SlidePane(not PanesOpen());
         else
             SK.faction = self.faction.key;
             pcall(LayoutRaces);
-            if not SK.paneOpen then SlidePane(true); end
+            if not PanesOpen() then SlidePane(true); end
         end
         pcall(UpdateFactionRail);
         self:GetScript("OnEnter")(self);
@@ -4030,7 +4143,7 @@ local function BuildRailIcon(faction, slot)
     icon:SetScript("OnEnter", function(self)
         local tip = SK.rail.tip;
         local n = #FactionRaces(self.faction.key);
-        local action = SK.faction ~= self.faction.key and "Show races" or SK.paneOpen and "Hide races" or "Show races";
+        local action = SK.faction ~= self.faction.key and "Show races" or PanesOpen() and "Hide races" or "Show races";
         tip.text:SetText(self.faction.hex .. string.upper(self.faction.name) .. "|r  " .. n .. " races  \194\183  " .. action);
         tip:SetWidth(tip.text:GetStringWidth() + 20);
         tip:ClearAllPoints();
@@ -4063,34 +4176,61 @@ local function BuildFactionRail()
     back:SetAllPoints(tip);
     Edge(tip, "TOPLEFT", nil, 1):SetPoint("TOPRIGHT", tip, "TOPRIGHT", 0, 0);
     Edge(tip, "BOTTOMLEFT", nil, 1):SetPoint("BOTTOMRIGHT", tip, "BOTTOMRIGHT", 0, 0);
+    tip:SetClampedToScreen(true);
     tip.text = Text(tip, HEAD_FONT, 12, GOLD);
     tip.text:SetPoint("LEFT", tip, "LEFT", 10, 0);
     tip:Hide();
     rail.tip = tip;
 
-    -- Eases the pane between open (slide 0) and hidden (slide -PANEL_W) over SLIDE_TIME.
-    local mover = CreateFrame("Frame", nil, rail);
+    -- Eases the panels between open (slide 0) and hidden (slide -PANEL_W) over SLIDE_TIME. On the chrome, not the
+    -- rail, so it also runs on the customization pages.
+    local mover = CreateFrame("Frame", nil, SK.chrome);
     mover:Hide();
     mover:SetScript("OnUpdate", function(self, elapsed)
-        if SK.mode ~= "race" then self:Hide(); return; end
-        local target = SK.paneOpen and 0 or -PANEL_W;
+        if SK.mode ~= "race" and SK.mode ~= "custom" then self:Hide(); return; end
+        local target = PanesOpen() and 0 or -PANEL_W;
         local step = PANEL_W * elapsed / SLIDE_TIME;
         local slide = SK.slide or 0;
         slide = slide < target and math.min(slide + step, target) or math.max(slide - step, target);
         SK.slide = slide;
         pcall(PlaceHeaders, slide);
         pcall(LayoutRaces);
+        if SK.mode == "custom" then pcall(FadeCustom, slide); end
         if slide == target then self:Hide(); end
     end);
-    rail.mover = mover;
+    SK.mover = mover;
     rail:Hide();
+end
+
+-- Customization pages: one tab on the left edge that slides both panels out and back.
+local function BuildPanelTab()
+    local tab = CreateFrame("Button", "CreatorSkinPanelTab", SK.chrome);
+    tab:SetSize(22, 72);
+    tab:SetFrameLevel(SK.chrome:GetFrameLevel() + 4);
+    tab:SetPoint("TOPLEFT", SK.chrome, "TOPLEFT", 0, RAIL_TOP + RAIL_ICON / 2 + 6);
+    local fill = Solid(tab, "BACKGROUND", INK[1], INK[2], INK[3], 0.9);
+    fill:SetAllPoints(tab);
+    Edge(tab, "TOPLEFT", 22, 1);
+    Edge(tab, "BOTTOMLEFT", 22, 1);
+    Edge(tab, "TOPRIGHT", 1, 72);
+    local highlight = Solid(tab, "HIGHLIGHT", GOLD[1], GOLD[2], GOLD[3], 0.08);
+    highlight:SetAllPoints(tab);
+    tab.arrow = tab:CreateTexture(nil, "ARTWORK");
+    tab.arrow:SetSize(14, 14);
+    tab.arrow:SetPoint("CENTER", tab, "CENTER", 0, 0);
+    tab:SetScript("OnClick", function()
+        PlaySound("gsCharacterCreationClass");
+        SlidePane(not PanesOpen());
+    end);
+    tab:Hide();
+    SK.panelTab = tab;
 end
 
 function UpdateFactionRail()
     for _, faction in ipairs(FACTIONS) do
         local icon = _G["CreatorSkinFaction" .. faction.key];
         local on = faction.key == SK.faction;
-        icon.wash:SetAlpha(on and SK.paneOpen and 1 or 0);
+        icon.wash:SetAlpha(on and SK.paneOpen ~= false and 1 or 0);
         icon.bar:SetAlpha(on and 1 or 0);
         icon.crest:SetAlpha(on and 1 or 0.6);
         for _, edge in ipairs(icon.edges) do
@@ -4145,14 +4285,17 @@ local function ApplyToggle(button, on)
     if button:GetChecked() then skin.label:SetTextColor(1, 1, 1); else skin.label:SetTextColor(1, 0.82, 0); end
 end
 
+-- Race page: the picks sit at the bottom. Customization pages: smaller, just above the name fields.
 local function LayoutToggles()
-    if not (SK.on and SK.mode == "race") then return; end
+    if not (SK.on and (SK.mode == "race" or SK.mode == "custom")) then return; end
+    local custom = SK.mode == "custom";
     local male, female = CharacterCreateGenderButtonMale, CharacterCreateGenderButtonFemale;
     for _, button in ipairs({ male, female }) do
         if button then
-            button:SetSize(130, 38);
+            button:SetSize(custom and 112 or 130, custom and 32 or 38);
             button:ClearAllPoints();
-            button:SetPoint("BOTTOM", CharacterCreateFrame, "BOTTOM", button == male and -66 or 66, 64);
+            button:SetPoint("BOTTOM", CharacterCreateFrame, "BOTTOM", (button == male and -1 or 1) * (custom and 60 or 66),
+                custom and 134 or 64);
         end
     end
 end
@@ -4196,7 +4339,7 @@ local function UpdateCard()
     local faction = button and FactionOfRace(index);
     if not faction then card:Hide(); return; end
     card:ClearAllPoints();
-    card:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPRIGHT", -EDGE_X, -104);
+    card:SetPoint("TOPRIGHT", SK.RIGHT.panel, "TOPRIGHT", -EDGE_X, -104);
     local info = button.raceInfo;
     card.name:SetText(string.upper((info and info.Name) or button.name or ""));
     card.crest:SetTexture(faction.crest);
@@ -4305,7 +4448,7 @@ local function RaceTick()
         if browsed and not button:IsShown() then button:Show();
         elseif not browsed and button:IsShown() then button:Hide(); end
     end
-    if not SK.rail.mover:IsShown() then PlaceHeaders(SK.slide); end
+    if not SK.mover:IsShown() then PlaceHeaders(SK.slide); end
     SK.rail:Show();
     UpdateFactionRail();
     local browsing;
@@ -4381,6 +4524,8 @@ local function UpdateFormTabs(show)
 end
 
 local function Tick()
+    if SK.mode == "custom" and not (Personalizing() and not RacePage()) then RestoreCustom(); end
+    if SK.panelTab and not (Personalizing() and not RacePage()) then SK.panelTab:Hide(); end
     if RacePage() then
         UpdateFormTabs(false);
         SetSkin(true);
@@ -4391,8 +4536,24 @@ local function Tick()
     if SK.rail then SK.rail:Hide(); end
     if not Personalizing() then UpdateFormTabs(false); SK.mode = nil; SetSkin(false); return; end
     SetSkin(true);
-    SK.mode = "custom";
-    PlaceHeaders(0);
+    if SK.mode ~= "custom" then
+        SK.mode = "custom";
+        SK.slide = PanesOpen() and 0 or -PANEL_W;
+        LayoutToggles();
+    end
+    if not SK.mover:IsShown() then
+        PlaceHeaders(SK.slide);
+        FadeCustom(SK.slide);
+    end
+    SK.panelTab:Show();
+    local arrow = PanesOpen() and "Left" or "Right";
+    SK.panelTab.arrow:SetTexture("Interface" .. "\\" .. "MoneyFrame" .. "\\" .. "Arrow-" .. arrow .. "-Up");
+    SK.panelTab.arrow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]);
+    -- The stock page switch hides the gender picks here; this page offers them too.
+    if CharacterCreateGenderButtonsContainer and not CharacterCreateGenderButtonsContainer:IsShown() then
+        CharacterCreateGenderButtonsContainer:Show();
+    end
+    for button in pairs(SK.toggles) do ApplyToggle(button, true); end
 
     for i = 1, 64 do
         local row = _G["CharacterCustomizationButtonFrame" .. i];
@@ -4427,8 +4588,9 @@ local function Tick()
         CharCreateRandomizeButton:ClearAllPoints();
         -- Inner end of the Details header, clear of its title.
         CharCreateRandomizeButton:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPRIGHT", -(EDGE_X + 340), -58);
-        if body then CharCreateRandomizeButton:SetAlpha(0); CharCreateRandomizeButton:EnableMouse(false);
-        else CharCreateRandomizeButton:SetAlpha(1); CharCreateRandomizeButton:EnableMouse(true); end
+        local shown = 1 + (SK.slide or 0) / PANEL_W;
+        if body or shown <= 0.5 then CharCreateRandomizeButton:SetAlpha(body and 0 or shown); CharCreateRandomizeButton:EnableMouse(false);
+        else CharCreateRandomizeButton:SetAlpha(shown); CharCreateRandomizeButton:EnableMouse(true); end
     end
 end
 
@@ -4441,6 +4603,7 @@ local function SK_Install()
     if CharCreatePersonalizeButton then SkinButton(CharCreatePersonalizeButton); end
     BuildCard();
     BuildFactionRail();
+    BuildPanelTab();
     for button, text in pairs({ [CharacterCreateGenderButtonMale or 0] = "MALE", [CharacterCreateGenderButtonFemale or 0] = "FEMALE" }) do
         if button ~= 0 then SkinToggle(button, text); end
     end
