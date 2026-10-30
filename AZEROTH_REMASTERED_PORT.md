@@ -135,9 +135,11 @@ translated for that exact bytecode exists. Our backend works the same way (manif
   (offline: scratch `hd_compile_water.py`). cvars `hdWater` (1; 2 = 3.3.5 look for the procedural water only), `hdWaterDebug` 1..7,
   `hdWaterBody`, `hdWaterReflect`, `hdWaterColor`, `hdWaterShore`, `hdWaterWaves`, `hdWaterWaveScale`, `hdWaterRipples`,
   `hdWaterRippleStrength`, `hdWaterInfo` (draw counts per material). Not ported: planar reflection (`HdWaterPlanar`, off in the donor).
-  **Still on built-in values**: no `forever_data` liquid / FFT files (`hd_forever_liquid.txt`, `hd_forever_fft.txt`): the donor's exporters
-  are not in its repo and Forever's `LiquidTypePBRWater` has no WoWDBDefs layout; `FFTTile` and `LiquidTypeXFFTTile` do (1.60.1 build).
-  The FileDataIDs are needed (the CASC root has no names): from the wow-listfile.
+  Forever's water data: `Tools/ForeverData/export_forever_water.py "D:/Blizzard/World of Warcraft" "G:/3.3.5a - Dev/forever_data"` writes
+  `hd_forever_liquid.txt` (25 PBR water types) and `hd_forever_fft.txt` (23 FFT tiles, 25 types with tiles). Forever has no PBR water table in
+  WoWDBDefs: the parameters are columns of `LiquidType` (1.60.1: 3 colours, 38 floats; the PBR types are IDs 12xx, `PBRWater - ...`); the
+  slot mapping was found by matching the donor's built-in rows with the real ones (the docstring has it). FileDataIDs (from the
+  wow-listfile): LiquidType 1371380, FFTTile 7489860, LiquidTypeXFFTTile 7489861. Without the files the donor's built-in values are used.
 
 **Fixes past the donor.**
 - *Custom lights:* the donor fades fog and grading out inside any light Forever lacks. This server's own lights (IDs 5000+,
@@ -148,6 +150,8 @@ translated for that exact bytecode exists. Our backend works the same way (manif
   off (the donor's `FullCasters`). Costs shadow-pass time.
 
 ## forever_data
+
+(Water: see the Forever PBR water entry above, `export_forever_water.py`.)
 
 Grading and fog read WoW Forever's lighting tables, which the donor keeps out of its repo. `Tools/ForeverData/
 export_forever_data.py` rebuilds them, read only, from an installed Forever client (`wow_classic_beta`) through

@@ -1,0 +1,48 @@
+COLUMNS
+int ID
+string Name
+int Flags
+int SoundBank
+int<SoundEntries::ID> SoundID
+int<Spell::ID> SpellID
+float MaxDarkenDepth
+float FogDarkenIntensity
+float AmbDarkenIntensity
+float DirDarkenIntensity
+int<Light::ID> LightID
+float ParticleScale
+int ParticleMovement
+int ParticleTexSlots
+int<LiquidMaterial::ID> MaterialID
+string Texture
+int Color
+float Float
+int Int
+float Coefficient
+int FrameCountTexture
+int MinimapStaticCol
+
+LAYOUT D1ECEEC9
+BUILD 1.60.1.69876, 1.60.1.70124, 1.60.1.70685
+$noninline,id$ID<32>
+Name
+Texture[6]
+Flags<32>
+SoundBank<u8>
+SoundID<u32>
+SpellID<u32>
+MaxDarkenDepth
+FogDarkenIntensity
+AmbDarkenIntensity
+DirDarkenIntensity
+LightID<u16>
+ParticleScale
+ParticleMovement<u8>
+ParticleTexSlots<u8>
+MaterialID<u8>
+MinimapStaticCol<32>
+FrameCountTexture<u8>[6]
+Color<32>[3]
+Float[38]
+Int<u32>[4]
+Coefficient[4]
