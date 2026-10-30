@@ -81,6 +81,8 @@ namespace {
     const char* s_passNote = "";
     int32_t s_drawsPbr = 0;
     int32_t s_drawsKept = 0;
+    int32_t s_calls = 0;      // CMaterialProcWater::Render reached WaterBindProcWater
+    int32_t s_notModel3 = 0;  // ... and its Blizzard shaders were not shader model 3 code
     int32_t s_lastLegacy = -1;
     int32_t s_lastPbr = 0;
 
@@ -349,9 +351,9 @@ namespace {
 
     void ShowPassInfo() {
         char text[400];
-        snprintf(text, sizeof(text), "on (%s) | %s | %d water draws Forever, %d Blizzard | last type %d -> %d | %s",
+        snprintf(text, sizeof(text), "on (%s) | %s | %d procedural-water draws seen: %d Forever, %d Blizzard, %d not SM3 | last type %d -> %d | %s",
                  s_fileFound ? "forever_data\\hd_forever_liquid.txt" : "built-in values, hd_forever_liquid.txt not found",
-                 s_passNote, s_drawsPbr, s_drawsKept, s_lastLegacy, s_lastPbr, s_threadInfo);
+                 s_passNote, s_calls, s_drawsPbr, s_drawsKept, s_notModel3, s_lastLegacy, s_lastPbr, s_threadInfo);
         SetInfo(text);
     }
 }
@@ -370,6 +372,8 @@ void HD::WaterBeginLiquidPass(bool cameraInLiquid) {
     s_passActive = false;
     s_drawsPbr = 0;
     s_drawsKept = 0;
+    s_calls = 0;
+    s_notModel3 = 0;
     if (!s_mode || Mode() == 0 || Visuals::Current() != Visuals::AzerothRemastered) {
         SetInfo("off");
         return;
@@ -429,12 +433,13 @@ void HD::WaterBeginLiquidPass(bool cameraInLiquid) {
 }
 
 void HD::WaterEndLiquidPass() {
-    if (s_passActive || (s_mode && Mode() == 1 && (s_drawsPbr || s_drawsKept))) ShowPassInfo();
+    if (s_passActive || (s_mode && Mode() == 1 && (s_drawsPbr || s_drawsKept || s_calls))) ShowPassInfo();
     s_passActive = false;
 }
 
 bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightCount) {
     s_drawBound = false;
+    s_calls++;
     int32_t mode = s_mode ? Mode() : 0;
     if (mode == 0 || !settings || !s_shaders[Sh_VS] || Visuals::Current() != Visuals::AzerothRemastered) return false;
     if (lightCount > 3) lightCount = 3;
@@ -444,6 +449,7 @@ bool HD::WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightC
     if (!clientPixel || !clientVertex || clientPixel->m_code.Count() < 4 || clientVertex->m_code.Count() < 4 ||
         *reinterpret_cast<const uint32_t*>(clientPixel->m_code.m_data) != 0xFFFF0300u ||
         *reinterpret_cast<const uint32_t*>(clientVertex->m_code.m_data) != 0xFFFE0300u) {
+        s_notModel3++;
         return false;
     }
 
