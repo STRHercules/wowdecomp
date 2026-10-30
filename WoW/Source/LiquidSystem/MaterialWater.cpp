@@ -1,4 +1,5 @@
 #include "Liquid.h"
+#include "WoW/Source/WorldClient/HD/HdWater.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Light.h"
@@ -126,6 +127,7 @@ Liquid::CMaterialWaterFFP* Liquid::CMaterialWaterFFP::Create() {
 // VERIFY: a882be97 manual
 // OFFSET: 0x008A5590
 void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    HD::WaterSeen(1);  // not in the original binary: hdWaterInfo counts the materials drawn
     CGxTex* texture1 = settings->GetTexture(0, settings->GetInt(1));
 
     if (!texture1) {
@@ -205,6 +207,7 @@ void Liquid::CMaterialWater::Render(Liquid::IEnvironment* environment, Liquid::I
 // VERIFY: b899ce66 manual
 // OFFSET: 0x008A5900
 void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    HD::WaterSeen(2);  // not in the original binary: hdWaterInfo counts the materials drawn
     CGxTex* texture1 = settings->GetTexture(0, settings->GetInt(1));
 
     if (!texture1) {
@@ -284,6 +287,7 @@ void Liquid::CMaterialWaterNoSpec::Render(Liquid::IEnvironment* environment, Liq
 // VERIFY: 556f1caa manual
 // OFFSET: 0x008A5C70
 void Liquid::CMaterialWaterFFP::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    HD::WaterSeen(3);  // not in the original binary: hdWaterInfo counts the materials drawn
     CGxTex* texture1 = settings->GetTexture(0, settings->GetInt(1));
 
     if (!texture1) {

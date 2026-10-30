@@ -40,6 +40,10 @@ bool WaterBindProcWater(Liquid::CMaterialSettings* settings, uint32_t lightCount
 // After its Draw when WaterBindProcWater returned true.
 void WaterAfterDraw();
 
+// Every liquid material's Render: counts the draws by material for hdWaterInfo (1 water, 2 water without specular, 3 water
+// fixed-function, 4 magma, 5 magma fixed-function).
+void WaterSeen(int32_t kind);
+
 }  // namespace HD
 
 #endif

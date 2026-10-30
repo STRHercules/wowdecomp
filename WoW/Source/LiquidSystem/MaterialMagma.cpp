@@ -1,4 +1,5 @@
 #include "Liquid.h"
+#include "WoW/Source/WorldClient/HD/HdWater.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Light.h"
@@ -73,6 +74,7 @@ Liquid::CMaterialMagmaFFP* Liquid::CMaterialMagmaFFP::Create() {
 // VERIFY: b5c1ce43 manual
 // OFFSET: 0x008A6090
 void Liquid::CMaterialMagma::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    HD::WaterSeen(4);  // not in the original binary: hdWaterInfo counts the materials drawn
     CGxTex* texture0 = settings->GetTexture(0, 1250);
 
     if (!texture0) {
@@ -129,6 +131,7 @@ void Liquid::CMaterialMagma::Render(Liquid::IEnvironment* environment, Liquid::I
 // VERIFY: 35b378c5 manual
 // OFFSET: 0x008A6350
 void Liquid::CMaterialMagmaFFP::Render(Liquid::IEnvironment* environment, Liquid::IGeomFactory* geomFactory, Liquid::IWaveManager* waveManager, const C3Vector& cameraPos, const C44Matrix* transform, const CAaSphere* bounds, Liquid::CMaterialSettings* settings) {
+    HD::WaterSeen(5);  // not in the original binary: hdWaterInfo counts the materials drawn
     CGxTex* texture0 = settings->GetTexture(0, 1250);
 
     if (!texture0) {

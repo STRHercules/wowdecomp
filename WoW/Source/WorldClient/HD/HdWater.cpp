@@ -81,6 +81,7 @@ namespace {
     const char* s_passNote = "";
     int32_t s_drawsPbr = 0;
     int32_t s_drawsKept = 0;
+    int32_t s_seen[6] = {};   // draws by material (WaterSeen), this liquid pass
     int32_t s_calls = 0;      // CMaterialProcWater::Render reached WaterBindProcWater
     int32_t s_notModel3 = 0;  // ... and its Blizzard shaders were not shader model 3 code
     int32_t s_lastLegacy = -1;
@@ -351,9 +352,9 @@ namespace {
 
     void ShowPassInfo() {
         char text[400];
-        snprintf(text, sizeof(text), "on (%s) | %s | %d procedural-water draws seen: %d Forever, %d Blizzard, %d not SM3 | last type %d -> %d | %s",
+        snprintf(text, sizeof(text), "on (%s) | %s | materials drawn: procedural %d, water %d, water no-spec %d, water FFP %d, magma %d, magma FFP %d | procedural: %d Forever, %d Blizzard, %d not SM3 | last type %d -> %d | %s",
                  s_fileFound ? "forever_data\\hd_forever_liquid.txt" : "built-in values, hd_forever_liquid.txt not found",
-                 s_passNote, s_calls, s_drawsPbr, s_drawsKept, s_notModel3, s_lastLegacy, s_lastPbr, s_threadInfo);
+                 s_passNote, s_calls, s_seen[1], s_seen[2], s_seen[3], s_seen[4], s_seen[5], s_drawsPbr, s_drawsKept, s_notModel3, s_lastLegacy, s_lastPbr, s_threadInfo);
         SetInfo(text);
     }
 }
@@ -374,6 +375,7 @@ void HD::WaterBeginLiquidPass(bool cameraInLiquid) {
     s_drawsKept = 0;
     s_calls = 0;
     s_notModel3 = 0;
+    memset(s_seen, 0, sizeof(s_seen));
     if (!s_mode || Mode() == 0 || Visuals::Current() != Visuals::AzerothRemastered) {
         SetInfo("off");
         return;
@@ -433,7 +435,7 @@ void HD::WaterBeginLiquidPass(bool cameraInLiquid) {
 }
 
 void HD::WaterEndLiquidPass() {
-    if (s_passActive || (s_mode && Mode() == 1 && (s_drawsPbr || s_drawsKept || s_calls))) ShowPassInfo();
+    if (s_passActive || (s_mode && Mode() == 1 && (s_drawsPbr || s_drawsKept || s_calls || s_seen[1] || s_seen[2] || s_seen[3] || s_seen[4] || s_seen[5]))) ShowPassInfo();
     s_passActive = false;
 }
 
@@ -529,4 +531,8 @@ void HD::WaterAfterDraw() {
     s_drawBound = false;
     GxEffects::SetDrawTexture(6, nullptr);
     GxEffects::SetDrawTexture(7, nullptr);
+}
+
+void HD::WaterSeen(int32_t kind) {
+    if (kind >= 1 && kind <= 5) s_seen[kind]++;
 }
