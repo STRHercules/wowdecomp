@@ -1904,7 +1904,8 @@ int32_t CM2Scene::Animate(const C3Vector& cameraPos) {
 
             M2Material* material = &data->m_materials[batch->m_materialIndex];
             int32_t projected = (batch->m_flags & 4) && this->m_projectTextureCallback;
-            M2Material* baseMaterial = batch->m_materialLayer ? &data->m_materials[batch->m_materialIndex - batch->m_materialLayer] : material;
+            // Not in the original: a layer past the material index (malformed M2) read m_materials[-1]; on x64 the unsigned index runs 16 GB off.
+            M2Material* baseMaterial = batch->m_materialLayer && batch->m_materialLayer <= batch->m_materialIndex ? &data->m_materials[batch->m_materialIndex - batch->m_materialLayer] : material;
             int32_t transparent = baseMaterial->m_blendMode > 1 || alpha < 0.99998999f;
             CShaderEffect* effect = optimized ? model->m_optGeo->m_effects[i] : model->m_shared->m_effects[i];
 
