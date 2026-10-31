@@ -24,6 +24,9 @@ namespace HD {
     // Registers the cvars above (once).
     void GrassWindRegister();
 
+    // True while hdGrassWind or hdGrassReact is on.
+    bool GrassWindWanted();
+
     // Once per frame, before the grass chunks are drawn: advances the wave phases, reads the player's position.
     void GrassWindPrepare();
 

@@ -383,6 +383,90 @@ end
 
 )lua";
 
+    // Tree and bush wind (Engine/Source/Model2/M2TreeWind.cpp).
+    static const char treeWindScript[] = R"lua(
+if not VideoOptionsFrame or not WowDecompBuildPage or WowDecompTreeWindPanel then return end
+
+local function Degrees(v) return string.format("%.2f deg", v) end
+local function Heading(v) return string.format("%d deg", v + 0.5) end
+local function Speed(v) return string.format("%.1f yd/s", v) end
+local function Yards(v) return string.format("%.1f yd", v) end
+local function Plain(v) return string.format("%.2f", v) end
+local function Limit(v) if v < 1 then return "Unlimited" end return string.format("%d yd", v + 0.5) end
+
+local function WindRows(p, prefix, what, one)
+    p:Slider(prefix .. "Direction", "Wind direction", "Heading the wind blows toward, in the world.", 0, 360, 1, Heading, 5)
+    p:Slider(prefix .. "Speed", "Wave speed", "How fast the gusts travel across the " .. what .. ".", 0, 12, 0.1, Speed, 0.1)
+    p:Slider(prefix .. "Amplitude", "Sway", "How far the top sways. Keep it under about 2 degrees for a breeze.", 0, 6, 0.05, Degrees, 0.05)
+    p:Slider(prefix .. "Wavelength", "Wave length", "Longer waves make broader, slower gusts.", 2, 80, 0.5, Yards, 1)
+    p:Slider(prefix .. "Lean", "Downwind lean", "A constant lean with the wind on top of the sway.", 0, 4, 0.05, Degrees, 0.05)
+    p:Slider(prefix .. "CrossAmplitude", "Cross-swell", "A second, smaller wave across the wind, so the motion is not a single rhythm.", 0, 3, 0.01, Degrees, 0.05)
+    p:Slider(prefix .. "CrossWavelength", "Cross-swell length", "Length of the second wave.", 2, 40, 0.5, Yards, 1)
+    p:Slider(prefix .. "CrossAngle", "Cross-swell angle", "Heading of the second wave from the wind.", 0, 180, 1, Heading, 5)
+    p:Slider(prefix .. "Variance", "Variety", "How much the sway differs from one " .. one .. " to the next. 0 makes them all alike.", 0, 1, 0.05, Plain, 0.05)
+    p:Slider(prefix .. "Gust", "Gusts", "Depth of the slow rise and fall of the wind. 0 is steady.", 0, 1, 0.05, Plain, 0.05)
+    p:Slider(prefix .. "DistanceFade", "Fade with distance", "Sway lost per yard from the camera. 0 sways far ones as much as near ones.", 0, 0.05, 0.001, function(v) return string.format("%.3f", v) end, 0.001)
+end
+
+local p = WowDecompBuildPage("WowDecompTreeWindPanel", "Esteria Tree Wind", "Placed trees and bushes sway gently in the wind. Purely visual: collision and selection do not move.")
+p:Header("Trees")
+p:Check("treeWind", "Trees sway", "Master switch for the trees.")
+p:Check("treeWindFollowWorld", "Follow the world wind", "Where WindProfile.cdbc gives a place wind, its heading, strength and passing gusts drive the trees and bushes; calm places stand still. Elsewhere the sliders below apply as they are.")
+p:Slider("treeWindWorldScale", "World wind response", "Sway per unit of world wind. At 2, a half-strength wind gives the sway set below.", 0, 10, 0.1, Plain, 0.1)
+WindRows(p, "treeWind", "trees", "tree")
+p:Header("What counts as a tree")
+p:Check("treeWindDoodadsOnly", "Placed objects only", "Only trees placed in the map sway, never units, weapons or spell effects.")
+p:Check("treeWindMatchNames", "Match tree names", "The model's name must name a tree (tree, pine, oak, willow and so on).")
+p:Check("treeWindMatchTallThin", "Match tall models", "The model must also be tall and narrow. Off by default: names alone decide.")
+p:Check("treeWindExcludeDead", "Skip dead and bare trees", "Dead, burnt, bare and felled trees, stumps and logs stay still.")
+p:Slider("treeWindMinHeight", "Least height", "Tall-model test: the model must be at least this tall.", 0, 40, 0.5, Yards, 1)
+p:Slider("treeWindMinAspect", "Least height to width", "Tall-model test: height divided by the widest side.", 0.5, 6, 0.05, Plain, 0.1)
+p:Slider("treeWindMaxHeight", "Greatest height", "Trees taller than this keep still, so giant world trees do not lean across the zone. 0 is unlimited.", 0, 300, 5, Limit, 5)
+p:Slider("treeWindMaxDistance", "Greatest distance", "Trees further away than this keep still. 0 is unlimited.", 0, 500, 5, Limit, 5)
+p:Header("Bushes")
+p:Check("bushWind", "Bushes sway", "Bushes, shrubs, ferns and hedges, matched by name only: the tree size tests never apply.")
+WindRows(p, "bushWind", "bushes", "bush")
+p:Check("bushWindDoodadsOnly", "Placed objects only", "Only bushes placed in the map sway.")
+p:Check("bushWindExcludeDead", "Skip dead and bare bushes", "Dead, burnt and bare bushes stay still.")
+p:Slider("bushWindMaxDistance", "Greatest distance", "Bushes further away than this keep still. 0 is unlimited.", 0, 500, 5, Limit, 5)
+p:Done()
+)lua";
+
+    // The world wind and the grass (WorldClient/LivingWind.cpp, WorldClient/HD/HdGrassWind.cpp).
+    static const char worldWindScript[] = R"lua(
+if not VideoOptionsFrame or not WowDecompBuildPage or WowDecompWorldWindPanel then return end
+
+local function Plain(v) return string.format("%.2f", v) end
+local function Times(v) return string.format("%.2fx", v) end
+local function Heading(v) return string.format("%d deg", v + 0.5) end
+local function Speed(v) return string.format("%.1f yd/s", v) end
+local function Yards(v) return string.format("%.1f yd", v) end
+local function Distance(v) return string.format("%d yd", v + 0.5) end
+
+local p = WowDecompBuildPage("WowDecompWorldWindPanel", "Esteria World Wind", "Wind per zone from WindProfile.cdbc: stronger in storms, with gusts that travel across the land, calm under roofs and behind walls. It moves the grass and the trees.")
+p:Header("World wind")
+p:Check("worldWind", "Enable the world wind", "Off: the trees and the grass use their own fixed wind (the sliders on their pages).")
+p:Slider("worldWindStrength", "Strength", "Your multiplier on every place's wind. 1 is as the table says.", 0, 3, 0.05, Times, 0.05)
+p:Check("worldWindShelter", "Shelter under roofs", "Roofs and overhangs keep the ground below calm.")
+p:Check("worldWindLee", "Wind shadow behind walls", "Walls, cliffs and steep rock calm the air on their downwind side.")
+p:Header("Grass")
+p:Check("hdGrassWind", "Grass sways", "Grass moves in the wind, in every visuals mode. Outside Azeroth Remastered the grass keeps the game's own lighting.")
+p:Check("hdGrassWindFollowWorld", "Follow the world wind", "Where the world wind blows, it sets the grass's heading and strength, and gusts pass over it.")
+p:Slider("hdGrassWindStrength", "Sway", "Multiplier on the grass sway.", 0, 5, 0.05, Times, 0.05)
+p:Slider("hdGrassWindSpeed", "Wave speed", "How fast the waves cross the grass.", 0, 12, 0.1, Speed, 0.1)
+p:Slider("hdGrassWindDirection", "Fixed wind direction", "Heading of the grass wind where the world wind does not blow.", 0, 360, 1, Heading, 5)
+p:Check("hdGrassReact", "Grass parts around you", "Grass bends away from your character.")
+p:Slider("hdGrassReactRadius", "Parting radius", "How far around you the grass bends away.", 0.1, 20, 0.1, Yards, 0.5)
+p:Slider("groundEffectDist", "Grass distance", "How far grass is drawn. The game's own limit of 140 yards is lifted. Grass in range is baked once and kept on the GPU, up to the memory below.", 0, 1024, 5, Distance, 10)
+p:Slider("grassBufferMemory", "Grass memory", "Most memory the kept grass may use. Grass past it is baked again every frame, which costs CPU time. Takes effect when the grass distance changes or the world loads.", 16, 4096, 16, function(v) return string.format("%d MB", v + 0.5) end, 64)
+p:Header("Grass density")
+p:Check("grassDensity", "Denser grass near you", "Extra plants on each plant's own patch of ground, as GroundEffectDoodadDensity.cdbc asks for each place and plant. They share the grass memory, so the grass reaches less far.")
+p:Slider("grassDensityMaxMultiplier", "Most plants per plant", "Your limit on how dense grass gets. 1 is never denser.", 1, 8, 0.5, Times, 0.5)
+p:Slider("grassDensityMaxRadius", "Dense radius", "Your limit on how far around you grass is made denser.", 0, 500, 5, Distance, 10)
+p:Slider("grassDensityMaxSpread", "Spread", "Your limit on how far an extra plant may sit from its plant.", 0, 10, 0.1, Yards, 0.5)
+p:Done()
+)lua";
+
     static const char overlayScript[] = R"lua(
 -- The overlay itself. Created hidden and shown by the showPerformance CVar; a hidden frame runs no OnUpdate, so it
 -- costs nothing while it is off. The position is saved in perfOverlayPos when it is dropped.
@@ -537,6 +621,8 @@ dd:RefreshValue()
     FrameScript_Execute(visualsScript, "NativeVisualsDropDown", nullptr);
     FrameScript_Execute(pagesScript, "NativeEsteriaPageHelpers", nullptr);
     FrameScript_Execute(pagesScript2, "NativeEsteriaPages", nullptr);
+    FrameScript_Execute(treeWindScript, "NativeTreeWindPage", nullptr);
+    FrameScript_Execute(worldWindScript, "NativeWorldWindPage", nullptr);
     FrameScript_Execute(overlayScript, "NativeEsteriaOverlay", nullptr);
     // Lumenveil's pages, built from its settings window (Engine/Source/Lumenveil/OptionsPages.cpp).
     const std::string lumenveilScript = LumenveilOptions::BuildScript();

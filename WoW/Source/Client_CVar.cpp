@@ -12,6 +12,10 @@
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Model2/M2Cache.h"
+#include "Engine/Source/Model2/M2TreeWind.h"
+#include "WoW/Source/WorldClient/DetailDoodad.h"
+#include "WoW/Source/WorldClient/GrassDensity.h"
+#include "WoW/Source/WorldClient/LivingWind.h"
 #include "Engine/Source/Os/Input.h"
 #include "Engine/Source/Os/System.h"
 #include "Engine/Source/Os/TimeManager.h"
@@ -669,6 +673,10 @@ void ClientRegisterConsoleCommands() {
 
     // Not in the original binary: the Esteria gameplay options. Flag 1 saves them in Config.wtf with the other video options.
     LootBeam::RegisterCVars();
+    TreeWind::RegisterCVars();
+    LivingWind::RegisterCVars();
+    CDetailDoodad::RegisterCVars();
+    GrassDensity::RegisterCVars();
 
     // The performance overlay's options; the overlay itself is Lua (UIUtil/DistanceOptions.cpp).
     static const struct { const char* name; const char* help; const char* value; } perfOptions[] = {

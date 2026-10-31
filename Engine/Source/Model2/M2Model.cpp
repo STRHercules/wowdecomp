@@ -32,6 +32,7 @@
 #include "Engine/Source/Model2/M2Cache.h"
 #include "Engine/Source/Model2/M2ModelLight.h"
 #include "Engine/Source/Model2/M2Scene.h"
+#include "Engine/Source/Model2/M2TreeWind.h"
 #include "Engine/Source/Services/AsyncFile.h"
 #include "Engine/Source/Services/Camera.h"
 #include "Engine/Source/Services/ParticleSystem2.h"
@@ -5042,6 +5043,7 @@ void CM2Model::AnimateMTSimple(const C44Matrix* view, const C3Vector& diffuse, c
     }
 
     this->m_matrixF4 = this->m_worldTransform * *view;
+    TreeWind::Apply(this, *view);
 
     CM2Model* attachParent = this->m_attachParent;
 
@@ -5400,6 +5402,7 @@ void CM2Model::AnimateMT(const C44Matrix* view, const C3Vector& diffuse, const C
     }
 
     this->m_matrixF4 = this->m_worldTransform * *view;
+    TreeWind::Apply(this, *view);
 
     CM2Model* attachParent = this->m_attachParent;
 

@@ -13,6 +13,7 @@
 #include "WoW/Source/Object/ObjectClient/Object_C.h"
 #include "WoW/Source/UIUtil/Camera.h"
 #include "WoW/Source/Ui/WorldFrame.h"
+#include "WoW/Source/WorldClient/LivingWind.h"
 #include "WoW/Source/WorldClient/World.h"
 
 namespace {
@@ -40,6 +41,8 @@ namespace {
     CVar* s_strength = nullptr;
     CVar* s_react = nullptr;
     CVar* s_radius = nullptr;
+    CVar* s_followWorld = nullptr;
+    bool s_world = false;                  // this frame follows the world wind: gusts scale each chunk
 
     // this frame (GrassWindPrepare)
     ULONGLONG s_lastTick = 0;
@@ -80,6 +83,12 @@ void HD::GrassWindRegister() {
     s_strength = CVar::Register("hdGrassWindStrength", "HD: grass wind sway multiplier (1 = default)", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_react = CVar::Register("hdGrassReact", "HD: 1 = grass parts around the player, 0 = off", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_radius = CVar::Register("hdGrassReactRadius", "HD: radius of the grass parting, yards", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_followWorld = CVar::Register("hdGrassWindFollowWorld", "Grass wind follows the world wind (WindProfile.cdbc) where it blows", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+}
+
+bool HD::GrassWindWanted() {
+    HD::GrassWindRegister();
+    return (s_wind && s_wind->m_intValue != 0) || (s_react && s_react->m_intValue != 0);
 }
 
 void HD::GrassWindPrepare() {
@@ -94,6 +103,17 @@ void HD::GrassWindPrepare() {
     float heading = s_direction ? s_direction->m_floatValue : 45.0f;
     float strength = s_strength ? Clamp(s_strength->m_floatValue, 0.0f, 50.0f) : 1.0f;
     if (!wind) strength = 0.0f;
+    // Not in the donor: the world wind (LivingWind.h) sets the heading, and its strength scales the sway; half strength
+    // gives the slider's sway, calm places stand still. The gust passing over the player swells all of it at once (a
+    // gust per chunk would show the chunk seams).
+    s_world = wind && (!s_followWorld || s_followWorld->m_intValue != 0) && LivingWind::Active();
+    if (s_world) {
+        heading = LivingWind::HeadingDegrees();
+        strength *= 2.0f * LivingWind::Strength();
+        if (PlayerPosition(&s_player)) {
+            strength *= 1.0f + LivingWind::GustStrength() * LivingWind::GustAt(s_player.x, s_player.y);
+        }
+    }
 
     float a1 = static_cast<float>(heading * (kTwoPi / 360.0));
     float a2 = static_cast<float>((heading + kCrossAngle) * (kTwoPi / 360.0));
@@ -130,6 +150,16 @@ void HD::GrassWindConstants(float chunkOffsetX, float chunkOffsetY, float chunkO
     // to chunk (exact same field as k . world position)
     float phase1 = static_cast<float>(std::fmod(ox * s_dir1[0] + oy * s_dir1[1] + s_phase1, kTwoPi));
     float phase2 = static_cast<float>(std::fmod(ox * s_dir2[0] + oy * s_dir2[1] + s_phase2, kTwoPi));
+    if (s_world) {
+        // The world wind turns all the time: measured from the map's origin a tenth of a degree would move every wave,
+        // so its waves are laid out in its wind frame, which turns about the player (the same field the shader extends
+        // with k . position in the chunk, since the frame is the world turned to the heading).
+        float u, v;
+        LivingWind::WindFrame(static_cast<float>(ox), static_cast<float>(oy), u, v);
+        const double cross = kCrossAngle * (kTwoPi / 360.0);
+        phase1 = static_cast<float>(std::fmod(u * (kTwoPi / kWavelength) + s_phase1, kTwoPi));
+        phase2 = static_cast<float>(std::fmod((u * std::cos(cross) + v * std::sin(cross)) * (kTwoPi / kCrossWavelength) + s_phase2, kTwoPi));
+    }
 
     float* c = out;
     // c53: xy = chunk corner wrapped to 64 yards (per-blade random seed only), z unused, w = wave 1 phase here

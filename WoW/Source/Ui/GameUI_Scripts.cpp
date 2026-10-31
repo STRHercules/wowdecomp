@@ -1,5 +1,6 @@
 #include "GameUI.h"
 #include "WoW/Source/Ui/BodyShapeScripts.h"
+#include "WoW/Source/WorldClient/LivingWind.h"
 #include "Engine/Source/Retail/CentaurAppearance.h"
 #include <cmath>
 #include <cstdarg>
@@ -6280,6 +6281,11 @@ static FrameScript_Method s_ScriptFunctions[] = {
     { "Screenshot", &Script_Screenshot },
     { "GetFramerate", &Script_GetFramerate },
     { "GetPerformanceStats", &Script_GetPerformanceStats },
+    { "LivingAzeroth_GetVersion", &LivingWind::Script_GetVersion },
+    { "LivingAzeroth_GetWind", &LivingWind::Script_GetWind },
+    { "LivingAzeroth_GetWeather", &LivingWind::Script_GetWeather },
+    { "LivingAzeroth_GetTemperature", &LivingWind::Script_GetTemperature },
+    { "LivingAzeroth_GetHumidity", &LivingWind::Script_GetHumidity },
     { "TogglePerformanceDisplay", &Script_TogglePerformanceDisplay },
     { "TogglePerformancePause", &Script_TogglePerformancePause },
     { "TogglePerformanceValues", &Script_TogglePerformanceValues },

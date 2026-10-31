@@ -102,6 +102,7 @@
 #include <cfloat>
 #include <cmath>
 #include "WoW/Source/Ui/SpellBookFrame.h"
+#include "WoW/Source/WorldClient/LivingWind.h"
 
 // STATIC: 0x009F9864
 static const uint32_t s_skinCursorModes[2] = { 21, 20 };
@@ -2015,6 +2016,7 @@ void CGWorldFrame::OnLayerUpdate(float elapsedSec) {
 // OFFSET: 0x004FA5F0
 void CGWorldFrame::OnWorldUpdate() {
     float elapsedSec = this->m_elapsedSec;
+    LivingWind::Update(elapsedSec);  // not in the original binary: the world wind, before the world is animated
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (CGUnit_C::s_activeMover) {

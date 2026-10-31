@@ -1922,12 +1922,15 @@ void CMap::ProcessDetailDoodadUpdateList() {
     while (inst) {
         CDetailDoodadInst* next = CMap::s_detailDoodadUpdateList.Next(inst);
 
-        if (++inst->m_age > 10) {
+        // Not in the original binary: 10 frames became CDetailDoodad::KeepFrames().
+        const uint32_t keep = CDetailDoodad::KeepFrames();
+
+        if (++inst->m_age > keep) {
             if (inst->HasBatches()) {
                 inst->FreeBuffers();
             }
 
-            if (inst->m_age > 20) {
+            if (inst->m_age > keep + 10) {
                 CDetailDoodad::FreeInst(inst);
             }
         }

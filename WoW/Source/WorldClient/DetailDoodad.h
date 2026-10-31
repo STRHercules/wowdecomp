@@ -6,6 +6,7 @@
 #include "Engine/Source/Gx/CGxTex.h"
 #include "Engine/Source/Storm/H/stpl.h"
 #include "Engine/Source/Gx/CGxBuf.h"
+#include "Engine/Source/Gx/CGxPool.h"
 #include "Engine/Source/Tempest/C3Vector.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/C4Vector.h"
@@ -49,6 +50,9 @@ class CDetailDoodad {
     static void SetupVertexShader(const C44Matrix& world, uint32_t index);
     static void UpdateAlphaRampTexture(EGxTexCommand command, uint32_t width, uint32_t height, uint32_t face, uint32_t level, void* userArg, uint32_t& texelStrideInBytes, const void*& texels);
     static void UpdatePools();
+    static void RegisterCVars();   // not in the original binary
+    static uint32_t KeepFrames();  // not in the original binary
+    static bool TakeRebake();      // not in the original binary: one of this frame's few density rebakes
 };
 
 struct CDetailDoodad::SShaderConstants {
@@ -107,13 +111,17 @@ class CDetailDoodadInstBatch {
     void FreeBuffers();
 };
 
+// Not in the original binary: 4 there. A chunk baked with grass density (GrassDensity.h) needs room for its copies.
+constexpr uint32_t kDetailDoodadBatches = 16;
+
 class CDetailDoodadInst {
     public:
     /* 0000 */ int32_t m_objectIndex;
-    /* 0004 */ CDetailDoodadInstBatch m_batches[4];
+    /* 0004 */ CDetailDoodadInstBatch m_batches[kDetailDoodadBatches];
     /* 0094 */ uint32_t m_age;
     /* 0098 */ CMapChunk* m_chunk;
     /* 009C */ TSLink<CDetailDoodadInst> m_link;
+    uint32_t m_densityLevel;   // not in the original binary: GrassDensity::Level the chunk was baked at
 
     CDetailDoodadInst();
     ~CDetailDoodadInst();
@@ -134,7 +142,8 @@ inline void CDetailDoodadInstBatch::FreeBuffers() {
         return;
     }
 
-    if (this->m_vertexBuf->m_pool == CDetailDoodad::s_gxVertexPool) {
+    // Not in the original binary: any kept pool (there are several now, see UpdatePools), never the stream pool.
+    if (this->m_vertexBuf->m_pool->m_usage != GxPoolUsage_Stream) {
         *CDetailDoodad::s_freeGxBufs.New() = this->m_vertexBuf;
         *CDetailDoodad::s_freeGxBufs.New() = this->m_indexBuf;
     }

@@ -562,7 +562,13 @@ void HD::DetailDoodadShaders() {
     ShowState(state);
 
     int32_t mode = OptionCVars::Int(s_light, 0, 3, 1);
-    bool on = Visuals::Current() == Visuals::AzerothRemastered && mode != 0;
+    // Not in the donor: with the other visuals our shaders still carry the grass wind, with 3.3.5 lighting (mode 2:
+    // exactly what Blizzard's shaders compute), while the wind or the parting is on.
+    bool remastered = Visuals::Current() == Visuals::AzerothRemastered;
+    if (!remastered) {
+        mode = HD::GrassWindWanted() ? 2 : 0;
+    }
+    bool on = mode != 0;
     if (!on && s_inUse == 0) {
         // Blizzard's shaders and nothing of ours in place: touch nothing
         s_ours = false;
