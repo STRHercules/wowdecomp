@@ -11,6 +11,7 @@
 #include "Engine/Source/Tempest/CImVector.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/Glue/CharacterCreation.h"
+#include "WoW/Source/Glue/CharacterSelection.h"
 #include "WoW/Source/SoundInterface/SoundInterface2.h"
 
 // STATIC: 0x00B6B48C
@@ -111,6 +112,7 @@ void CSimpleModelFFX::Render(void* arg) {
 
     if (model->m_model) {
         if (model == CCharacterCreation::m_charCustomizeFrame) CCharacterCreation::UpdateZoomCamera();
+        else if (model == CCharacterSelection::m_modelFrame) CCharacterSelection::UpdateZoomCamera();
         CSimpleModel::RenderModel(model);
     }
 

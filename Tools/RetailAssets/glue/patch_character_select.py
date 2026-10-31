@@ -17,7 +17,7 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 ENTRY = "Interface" + chr(92) + "GlueXML" + chr(92) + "CharacterSelect.lua"
-ARCHIVES = (Path("Data") / "patch-Z.MPQ", Path("Data") / "enUS" / "patch-enUS-Z.MPQ")
+ARCHIVES = (Path("Data") / "patch-Z.MPQ", Path("Data") / "Patch-ZzzzzzzzEthereal.MPQ", Path("Data") / "enUS" / "patch-enUS-Z.MPQ")
 MARKER = "-- Character select skin (wowdecomp)"
 SKIN = HERE / "select_skin.lua"
 STOCK = HERE / "backup" / "charselect-stock"

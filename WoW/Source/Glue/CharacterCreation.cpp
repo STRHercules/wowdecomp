@@ -126,10 +126,14 @@ void CCharacterCreation::ResetZoomCamera() {
 void CCharacterCreation::UpdateZoomCamera() {
     auto* frame = m_charCustomizeFrame;
     auto* body = m_character ? m_character->m_data.m_model : nullptr;
+    ApplyFaceCamera(frame, body, s_creatorZoom, s_creatorPanX, s_creatorPanY, s_creatorCamera);
+}
+
+void CCharacterCreation::ApplyFaceCamera(CSimpleModelFFX* frame, CM2Model* body, float zoom, float panX, float panY, CCamera*& camera) {
     if (!frame || !frame->m_model || !body || !(body->m_fFlags & 1)
         || !(frame->m_model->m_fFlags & 1)) return;
-    if (s_creatorZoom == 0.0f && s_creatorPanX == 0.0f && s_creatorPanY == 0.0f) {
-        if (s_creatorCamera && frame->m_camera == s_creatorCamera) frame->SetCameraByIndex(0);
+    if (zoom == 0.0f && panX == 0.0f && panY == 0.0f) {
+        if (camera && frame->m_camera == camera) frame->SetCameraByIndex(0);
         return;
     }
     if (!frame->m_model->m_shared->m_data->m_cameras.m_count) return;
@@ -148,8 +152,8 @@ void CCharacterCreation::UpdateZoomCamera() {
     DataMgrGetCoord(base, 7, &position);
     DataMgrGetCoord(base, 8, &target);
     const auto offset = position - target;
-    target += (face - target) * s_creatorZoom;
-    position = target + offset * std::pow(0.18f, s_creatorZoom);
+    target += (face - target) * zoom;
+    position = target + offset * std::pow(0.18f, zoom);
     // Screen axes of the view; the pan scales with the zoomed distance so closeups drag at the same feel.
     const C3Vector forward = target - position;
     const float distance = std::sqrt(forward.SquaredMag());
@@ -158,20 +162,20 @@ void CCharacterCreation::UpdateZoomCamera() {
         right.Normalize();
         C3Vector up = C3Vector::Cross(right, forward);
         up.Normalize();
-        const C3Vector pan = (right * s_creatorPanX + up * s_creatorPanY) * distance;
+        const C3Vector pan = (right * panX + up * panY) * distance;
         position += pan;
         target += pan;
     }
     if (!std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z)
         || !std::isfinite(target.x) || !std::isfinite(target.y) || !std::isfinite(target.z)) return;
-    if (!s_creatorCamera) s_creatorCamera = CameraCreate();
-    if (!s_creatorCamera) return;
+    if (!camera) camera = CameraCreate();
+    if (!camera) return;
     // A separate camera keeps animated background cameras and other glue screens untouched.
-    for (uint32_t field : {2u, 4u, 5u}) CameraSetFloat(s_creatorCamera, field, CameraGetFloat(base, field));
-    CameraSetFloat(s_creatorCamera, 3, std::max(0.01f, CameraGetFloat(base, 3) * 0.18f));
-    CameraSetCoord(s_creatorCamera, 7, position);
-    CameraSetCoord(s_creatorCamera, 8, target);
-    if (frame->m_camera != s_creatorCamera) frame->SetCamera(s_creatorCamera);
+    for (uint32_t field : {2u, 4u, 5u}) CameraSetFloat(camera, field, CameraGetFloat(base, field));
+    CameraSetFloat(camera, 3, std::max(0.01f, CameraGetFloat(base, 3) * 0.18f));
+    CameraSetCoord(camera, 7, position);
+    CameraSetCoord(camera, 8, target);
+    if (frame->m_camera != camera) frame->SetCamera(camera);
 }
 
 // VERIFY: cbaddeb2 manual

@@ -6,7 +6,9 @@
 #include "WoW/Source/Game/NameGen.h"
 #include "WoW/Source/Glue/Types.h"
 
+class CCamera;
 class CCharacterComponent;
+class CM2Model;
 class ChrClassesRec;
 class ComponentData;
 class CSimpleModelFFX;
@@ -58,6 +60,8 @@ class CCharacterCreation {
     static void PanCamera(float dx, float dy);
     static void ResetPanCamera();
     static void UpdateZoomCamera();
+    // Shared by the select screen: aims `camera` (made on first use) at the body's face, then zooms and pans.
+    static void ApplyFaceCamera(CSimpleModelFFX* frame, CM2Model* body, float zoom, float panX, float panY, CCamera*& camera);
     static void ResetZoomCamera();
     static void SetCharCustomizeModel(const char* modelName);
     static void SetSelectedClass(int32_t classID);

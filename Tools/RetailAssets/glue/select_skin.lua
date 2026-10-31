@@ -123,15 +123,11 @@ local function BuildChrome()
     SK.favLabel:SetPoint("TOPLEFT", chrome, "TOPLEFT", EDGE_X + 6, -LABEL_Y);
     SK.favLabel:SetText("FAVORITES");
 
+    -- The name and info line under the character are hidden (the details panel and roster already show them).
+    -- Tick still fills SK.nameInfo, so keep it, hidden.
     SK.nameInfo = Text(chrome, 14, MUTED);
-    SK.nameInfo:SetPoint("BOTTOM", chrome, "BOTTOM", 0, 108);
-
-    CharSelectCharacterName:SetFont(FONT, 30, "");
-    CharSelectCharacterName:SetTextColor(GOLD[1], GOLD[2], GOLD[3]);
-    CharSelectCharacterName:SetShadowOffset(1, -1);
-    CharSelectCharacterName:SetShadowColor(0, 0, 0, 0.8);
-    CharSelectCharacterName:ClearAllPoints();
-    CharSelectCharacterName:SetPoint("BOTTOM", chrome, "BOTTOM", 0, 132);
+    SK.nameInfo:Hide();
+    CharSelectCharacterName:Hide();
 
     -- Scene dip, above the 3D view and below every control.
     local overlay = CreateFrame("Frame", "CharSelectSkinFade", CharacterSelect);
@@ -314,6 +310,8 @@ end
 local function SK_Install()
     BuildChrome();
     BuildDetails();
+    CharacterSelectUI:EnableMouseWheel(true);
+    CharacterSelectUI:SetScript("OnMouseWheel", function(_, delta) CycleCharCustomization("EA_ZOOM", delta); end);
     SK.ready = true;
     if ECS and ECS.UI and type(ECS.UI.Layout) == "function" then
         local layout = ECS.UI.Layout;
@@ -336,6 +334,42 @@ local function SK_Install()
         if not ok then Fail("tick error", err); self:SetScript("OnUpdate", nil); end
     end);
     SK_Log("installed");
+end
+
+-- ---- camera zoom and pan -------------------------------------------------------------------------------------
+
+-- Mouse wheel zooms to the face and right-drag pans, as in the creator (the native side handles the camera).
+-- Left-drag still turns the character. Right-click without moving resets the pan.
+local stockMouseDown, stockMouseUp, stockUpdate = CharacterSelectFrame_OnMouseDown, CharacterSelectFrame_OnMouseUp, CharacterSelectFrame_OnUpdate;
+local panX, panY, panMoved;
+
+function CharacterSelectFrame_OnMouseDown(button, ...)
+    if button == "RightButton" then
+        panX, panY = GetCursorPosition();
+        panMoved = false;
+    end
+    return stockMouseDown(button, ...);
+end
+
+function CharacterSelectFrame_OnMouseUp(button, ...)
+    if button == "RightButton" and panX then
+        if not panMoved then CycleCharCustomization("EA_PAN_RESET", 1); end
+        panX = nil;
+    end
+    return stockMouseUp(button, ...);
+end
+
+function CharacterSelectFrame_OnUpdate(...)
+    if panX then
+        local x, y = GetCursorPosition();
+        local dx, dy = x - panX, y - panY;
+        if dx ~= 0 or dy ~= 0 then
+            panMoved = true;
+            CycleCharCustomization("EA_PAN", dx / GetScreenHeight(), dy / GetScreenHeight());
+            panX, panY = x, y;
+        end
+    end
+    return stockUpdate(...);
 end
 
 local waiter = CreateFrame("Frame");

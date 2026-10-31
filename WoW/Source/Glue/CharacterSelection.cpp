@@ -29,7 +29,12 @@
 #include "WoW/Source/Glue/CGlueLoading.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/Glue/CSimpleModelFFX.h"
+#include "WoW/Source/Glue/CharacterCreation.h"
 #include "WoW/Source/Glue/CharacterSelectionDisplay.h"
+#include "Engine/Source/Services/Camera.h"
+#include "Engine/Source/Base/Handle.h"
+#include <algorithm>
+#include <cmath>
 #include "WoW/Source/Glue/ComponentData.h"
 #include "WoW/Source/Glue/RealmList.h"
 #include "WoW/Source/LoadingScreen.h"
@@ -54,6 +59,52 @@ int32_t CCharacterSelection::s_selectionIndex = -1;
 
 // STATIC: 0x00B6B1FC
 CSimpleModelFFX* CCharacterSelection::m_modelFrame;
+
+namespace {
+float s_selectZoom = 0.0f;
+// Camera pan in view distances (right, up), as in the creator.
+float s_selectPanX = 0.0f;
+float s_selectPanY = 0.0f;
+CCamera* s_selectCamera = nullptr;
+}
+
+void CCharacterSelection::ZoomCamera(float delta) {
+    if (std::isfinite(delta)) {
+        s_selectZoom = std::clamp(s_selectZoom + delta / 12.0f, 0.0f, 1.0f);
+        if (s_selectZoom < 0.0001f) s_selectZoom = 0.0f;
+    }
+}
+
+void CCharacterSelection::PanCamera(float dx, float dy) {
+    if (!std::isfinite(dx) || !std::isfinite(dy)) return;
+    s_selectPanX = std::clamp(s_selectPanX - dx, -1.0f, 1.0f);
+    s_selectPanY = std::clamp(s_selectPanY - dy, -1.0f, 1.0f);
+}
+
+void CCharacterSelection::ResetPanCamera() {
+    s_selectPanX = s_selectPanY = 0.0f;
+}
+
+void CCharacterSelection::ResetZoomCamera() {
+    s_selectZoom = 0.0f;
+    ResetPanCamera();
+    if (m_modelFrame && s_selectCamera && m_modelFrame->m_camera == s_selectCamera) {
+        m_modelFrame->SetCameraByIndex(0);
+    }
+    if (s_selectCamera) {
+        HandleClose(reinterpret_cast<HOBJECT>(s_selectCamera));
+        s_selectCamera = nullptr;
+    }
+}
+
+void CCharacterSelection::UpdateZoomCamera() {
+    CM2Model* body = nullptr;
+    if (s_selectionIndex >= 0 && s_selectionIndex < static_cast<int32_t>(s_characterList.Count())) {
+        auto* component = s_characterList[s_selectionIndex].m_component;
+        body = component ? component->m_data.m_model : nullptr;
+    }
+    CCharacterCreation::ApplyFaceCamera(m_modelFrame, body, s_selectZoom, s_selectPanX, s_selectPanY, s_selectCamera);
+}
 
 // STATIC: 0x00B6B200
 int32_t CCharacterSelection::s_characterCount;
@@ -595,6 +646,7 @@ void CCharacterSelection::DressComponent(const CHARACTER_INFO& info, CCharacterC
 // VERIFY: 3fe94d69 manual
 // OFFSET: 0x004E3CD0
 void CCharacterSelection::ShowCharacter() {
+    CCharacterSelection::ResetZoomCamera();
     if (CCharacterSelection::s_selectionIndex < 0 || CCharacterSelection::s_selectionIndex >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         return;
     }

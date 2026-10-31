@@ -22,6 +22,12 @@ class CCharacterSelection {
     static ClassMask s_raceRestrictions[10];
 
     static void ClearCharacterList();
+    // Mouse-wheel zoom to the face and right-drag pan, as in the creator.
+    static void ZoomCamera(float delta);
+    static void PanCamera(float dx, float dy);
+    static void ResetPanCamera();
+    static void ResetZoomCamera();
+    static void UpdateZoomCamera();
     static void EnumerateCharactersCallback(CHARACTER_INFO& info, void* param);
     static void GenericLightingCallback(CM2Model* model, CM2Lighting* lighting, void* arg);
     static CharacterSelectionDisplay* GetCharacterDisplay(uint32_t index);

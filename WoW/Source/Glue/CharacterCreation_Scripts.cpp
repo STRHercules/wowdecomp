@@ -22,6 +22,7 @@
 #include "WoW/Source/DB/Rec/ChrRacesRec.h"
 #include "WoW/Source/DB/Rec/FactionGroupRec.h"
 #include "WoW/Source/DB/Rec/FactionTemplateRec.h"
+#include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/Glue/CharacterSelection.h"
 #include "WoW/Source/Glue/CSimpleModelFFX.h"
 #include "WoW/Source/Object/ObjectClient/Unit_C.h"
@@ -337,15 +338,20 @@ static int32_t Script_CycleCharCustomization(lua_State* L) {
     // Esteria: GlueXML multiplexes EsteriaAppearance commands ("EA_PREVIEW_SCALE", "EA_SET", ...) through this
     // function. The appearance system is not ported, so they are ignored instead of raising a usage error.
     if (lua_type(L, 1) == LUA_TSTRING && !lua_isnumber(L, 1) && !strncmp(lua_tolstring(L, 1, nullptr), "EA_", 3)) {
+        // On the select screen the same commands drive the select camera.
+        const bool onSelect = !SStrCmpI(CGlueMgr::m_currentScreen, "charselect", STORM_MAX_STR);
         if (!strcmp(lua_tolstring(L, 1, nullptr), "EA_ZOOM") && lua_isnumber(L, 2)) {
+            if (onSelect) { CCharacterSelection::ZoomCamera(static_cast<float>(lua_tonumber(L, 2))); return 0; }
             CCharacterCreation::ZoomCamera(static_cast<float>(lua_tonumber(L, 2)));
             return 0;
         }
         if (!strcmp(lua_tolstring(L, 1, nullptr), "EA_PAN") && lua_isnumber(L, 2) && lua_isnumber(L, 3)) {
+            if (onSelect) { CCharacterSelection::PanCamera(static_cast<float>(lua_tonumber(L, 2)), static_cast<float>(lua_tonumber(L, 3))); return 0; }
             CCharacterCreation::PanCamera(static_cast<float>(lua_tonumber(L, 2)), static_cast<float>(lua_tonumber(L, 3)));
             return 0;
         }
         if (!strcmp(lua_tolstring(L, 1, nullptr), "EA_PAN_RESET")) {
+            if (onSelect) { CCharacterSelection::ResetPanCamera(); return 0; }
             CCharacterCreation::ResetPanCamera();
             return 0;
         }
