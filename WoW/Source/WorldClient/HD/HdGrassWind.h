@@ -2,6 +2,8 @@
 #ifndef WOW_SOURCE_WORLDCLIENT_HD_HDGRASSWIND_H
 #define WOW_SOURCE_WORLDCLIENT_HD_HDGRASSWIND_H
 
+#include <cstdint>
+
 // Not in the original binary. Azeroth Remastered (Waystone HD): grass wind and grass parting around the player (not part of the original client).
 // Algorithm and default values adapted from wxl-grasswind (WarcraftXL, by iThorgrim, GPLv3,
 // https://www.gnu.org/licenses/): WarcraftXL patches Blizzard's grass bytecode, here the same motion lives in our own
@@ -30,9 +32,14 @@ namespace HD {
     // Once per frame, before the grass chunks are drawn: advances the wave phases, reads the player's position.
     void GrassWindPrepare();
 
-    // c53..c59 (28 floats) for one grass chunk. chunkOffset = the chunk's translation in the grass world matrix
+    // c53..c67 (60 floats) for one grass chunk: the wind, then the 8 units it parts around. chunkOffset = the chunk's translation in the grass world matrix
     // (CWorldScene::RenderDetailDoodads: chunk->m_topLeftCoords - CWorldScene::s_activeWorldView).
     void GrassWindConstants(float chunkOffsetX, float chunkOffsetY, float chunkOffsetZ, float* out);
+
+    // The batch class of a GroundEffectDoodad (0 = no GroundEffectDoodadWind.cdbc row): doodads bake into batches of
+    // their class, and c68 (GrassWindBatchConstants, 4 floats) says how that class bends. Not in the donor.
+    uint16_t GrassWindClassOf(uint32_t doodadId);
+    void GrassWindBatchConstants(uint16_t windClass, float* out);
 }
 
 #endif

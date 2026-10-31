@@ -92,6 +92,7 @@ struct Frame {
     int32_t mapId = -1;
     uint32_t areaChain[kMaxAreaChain] = {};
     int areaCount = 0;
+    bool outdoors = true;   // the client's verdict (WMO and area flags)
     float weather = 0.0f;   // 0..1 after the engine's dead zone
     uint32_t weatherType = 0;
 };
@@ -168,6 +169,7 @@ Frame ReadWorld() {
     if (object->m_worldObject && CMap::QueryAreaId(object->m_worldObject, area) && area) {
         f.areaCount = AreaChainOf(area, f.areaChain, kMaxAreaChain);
     }
+    f.outdoors = World::QueryOutdoors(object->m_worldObject) != 0;
     if (World::s_weather) {
         // the engine's own dead zone: nothing reacts below the knee, knee..1 maps onto 0..1
         const float raw = World::s_weather->m_intensity;
@@ -239,10 +241,15 @@ float Cached(std::unordered_map<uint64_t, Entry>& map, const float pos[3], float
     if (fresh) return it->second.value;
     if (s_rays >= kRayBudget) return it != map.end() ? it->second.value : fallback;
     ++s_rays;
-    // shortcut: rays start at the queried height in the cell's centre column, not above the terrain there; a query on
-    // a steep slope can read as sheltered. Upgrade with a terrain height query if it shows on cliffs.
+    // From the cell's centre column at the queried height, but never from below the terrain there: on a steep slope the
+    // terrain at the centre can be higher than the spot that asked, the ray would start underground and hit the terrain
+    // from below, and exposed cliffs would read as sheltered.
     const float x = (cx + 0.5f) * kCell, y = (cy + 0.5f) * kCell;
-    const float value = trace(x, y, pos[2]);
+    C3Vector centre(x, y, pos[2]);
+    float ground = pos[2];
+    CMapChunk* chunk = nullptr;
+    const float z = CMap::LinkStaticEntityGetChunk(centre, &ground, &chunk) && ground > pos[2] ? ground : pos[2];
+    const float value = trace(x, y, z);
     map[key] = Entry{ value, s_time, x, y };
     return value;
 }
@@ -322,9 +329,7 @@ bool ResolveWind(float out[FieldCount]) {
 }
 
 // Most specific first: the area chain, the map, Global. Signed temperatures inherit at -1000 and below, the rest when negative.
-// shortcut: the player's own area row, a step at area borders (the donor blends 33-yard chunks over ~100 yd);
-// upgrade when something other than the Lua API reads the climate.
-ClimateRow ResolveClimate() {
+ClimateRow ClimateFor(const uint32_t* chain, int count) {
     ClimateRow out;
     float* fields[5] = { &out.dayTemp, &out.nightTemp, &out.seasonAmplitude, &out.seasonOffset, &out.humidity };
     bool set[5] = {};
@@ -338,11 +343,105 @@ ClimateRow ResolveClimate() {
             }
         }
     };
-    for (int i = 0; i < s_frame.areaCount; ++i) apply(FindRow(s_climateRows, kScopeArea, static_cast<int32_t>(s_frame.areaChain[i])));
+    for (int i = 0; i < count; ++i) apply(FindRow(s_climateRows, kScopeArea, static_cast<int32_t>(chain[i])));
     apply(FindRow(s_climateRows, kScopeMap, s_frame.mapId));
     apply(FindRow(s_climateRows, kScopeGlobal, 0));
     out.humidity = Clamp01(out.humidity);
     return out;
+}
+
+// The row of a terrain chunk's area (cached per area; the map is s_frame's, so the cache follows the map).
+bool ChunkClimate(float x, float y, ClimateRow& out) {
+    static std::unordered_map<uint32_t, ClimateRow> s_cache;
+    static int32_t s_cacheMap = -2;
+    if (s_cacheMap != s_frame.mapId) {
+        s_cache.clear();
+        s_cacheMap = s_frame.mapId;
+    }
+    const C3Vector pos(x, y, 0.0f);
+    const uint32_t area = static_cast<uint32_t>(CMap::QueryAreaIdTerrain(&pos));
+    if (!area) return false;
+    auto it = s_cache.find(area);
+    if (it == s_cache.end()) {
+        uint32_t chain[kMaxAreaChain];
+        it = s_cache.emplace(area, ClimateFor(chain, AreaChainOf(area, chain, kMaxAreaChain))).first;
+    }
+    out = it->second;
+    return true;
+}
+
+// The climate where the player stands, blended across area borders as the donor's climate::At: every 33-yard terrain
+// chunk takes its area's row averaged with its 8 neighbours, interpolated between chunk centres, so crossing a border
+// changes the temperature over ~100 yards instead of at once. Inside a building (or before the chunks are loaded) the
+// player's own area chain.
+ClimateRow ResolveClimate() {
+    constexpr float kChunk = 100.0f / 3.0f;
+    const float fx = s_frame.player.x / kChunk - 0.5f, fy = s_frame.player.y / kChunk - 0.5f;
+    const int32_t i0 = static_cast<int32_t>(std::floor(fx)), j0 = static_cast<int32_t>(std::floor(fy));
+    const float tx = fx - i0, ty = fy - j0;
+    ClimateRow rows[4][4];
+    bool known[4][4] = {};
+    for (int a = 0; a < 4; ++a) {
+        for (int b = 0; b < 4; ++b) {
+            known[a][b] = ChunkClimate((i0 - 1 + a + 0.5f) * kChunk, (j0 - 1 + b + 0.5f) * kChunk, rows[a][b]);
+        }
+    }
+    ClimateRow out;
+    float* fields[5] = { &out.dayTemp, &out.nightTemp, &out.seasonAmplitude, &out.seasonOffset, &out.humidity };
+    for (float* f : fields) *f = 0.0f;
+    float total = 0.0f;
+    for (int a = 1; a <= 2; ++a) {
+        for (int b = 1; b <= 2; ++b) {
+            const float w = (a == 1 ? 1.0f - tx : tx) * (b == 1 ? 1.0f - ty : ty);
+            ClimateRow mean;
+            float* m[5] = { &mean.dayTemp, &mean.nightTemp, &mean.seasonAmplitude, &mean.seasonOffset, &mean.humidity };
+            for (float* f : m) *f = 0.0f;
+            int n = 0;
+            for (int da = -1; da <= 1; ++da) {
+                for (int db = -1; db <= 1; ++db) {
+                    if (!known[a + da][b + db]) continue;
+                    const ClimateRow& r = rows[a + da][b + db];
+                    const float v[5] = { r.dayTemp, r.nightTemp, r.seasonAmplitude, r.seasonOffset, r.humidity };
+                    for (int f = 0; f < 5; ++f) *m[f] += v[f];
+                    ++n;
+                }
+            }
+            if (!n || w <= 0.0f) continue;
+            for (int f = 0; f < 5; ++f) *fields[f] += w * *m[f] / n;
+            total += w;
+        }
+    }
+    if (total <= 0.0f || !s_frame.outdoors) {
+        return ClimateFor(s_frame.areaChain, s_frame.areaCount);
+    }
+    for (float* f : fields) *f /= total;
+    out.humidity = Clamp01(out.humidity);
+    return out;
+}
+
+// The ground's temperature: the air, warmed near magma as the donor's world fields do (full within 1 yd, gone by 12 yd
+// and 4 yd above its surface; the ground takes 5% of the difference to magma's 1000 degC, ~+50 degC). Rings of liquid
+// queries around the player, below any surface there (a liquid query needs a point under its surface).
+float GroundTemperature(float air) {
+    constexpr float kMagma = 1000.0f, kShare = 0.05f, kNear = 1.0f, kFar = 12.0f, kLow = 0.5f, kHigh = 4.0f;
+    auto smooth = [](float a, float b, float v) {   // 1 at a, 0 at b
+        const float t = Clamp01((v - a) / (b - a));
+        return 1.0f - t * t * (3.0f - 2.0f * t);
+    };
+    float heat = 0.0f;
+    const float radii[] = { 0.0f, 2.0f, 4.0f, 8.0f, 12.0f };
+    for (float r : radii) {
+        for (int k = 0; k < (r > 0.0f ? 8 : 1); ++k) {
+            C3Vector at(s_frame.player.x + r * std::cos(k * kPi / 4.0f), s_frame.player.y + r * std::sin(k * kPi / 4.0f), s_frame.player.z - 100.0f);
+            int32_t type = 0;
+            float surface = 0.0f;
+            if (!World::QueryLiquidStatus(&at, &type, &surface)) continue;
+            const LiquidTypeRec* rec = g_liquidTypeDB.GetRecord(type);
+            if (!rec || rec->m_soundBank != 2) continue;   // LiquidType column 3 is its category: 2 = magma
+            heat = std::fmax(heat, smooth(kNear, kFar, r) * smooth(kLow, kHigh, s_frame.player.z - surface));
+        }
+    }
+    return air + heat * kShare * (kMagma - air);
 }
 
 // 0 at the coldest time of day (05:00), 1 at the warmest (15:00): warming over 10 hours, cooling over 14.
@@ -506,14 +605,15 @@ int32_t LivingWind::Script_GetWeather(lua_State* L) {
     return 2;
 }
 
-// ground, air in degC. shortcut: ground = air; the donor warms the ground near lava and hot ground (its world fields).
+// ground, air in degC. The ground is warmed near magma; the donor also warms it near hot painted ground (GroundMaterial
+// rows with a Temperature), which comes with the snow's tables.
 int32_t LivingWind::Script_GetTemperature(lua_State* L) {
     if (!s_frame.inWorld) {
         lua_pushnil(L);
         return 1;
     }
     const float air = AirTemperature(ResolveClimate());
-    lua_pushnumber(L, air);
+    lua_pushnumber(L, GroundTemperature(air));
     lua_pushnumber(L, air);
     return 2;
 }

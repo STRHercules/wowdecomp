@@ -101,6 +101,7 @@ class CDetailDoodadInstBatch {
     /* 000C */ CGxBuf* m_vertexBuf;
     /* 0010 */ CGxBuf* m_indexBuf;
     /* 0014 */ TSGrowableArray<CDetailDoodadInstAdd> m_adds;
+    uint16_t m_windClass;   // not in the original binary: HD::GrassWindClassOf of its doodads (one class per batch)
 
     CDetailDoodadInstBatch();
     ~CDetailDoodadInstBatch();
@@ -155,6 +156,7 @@ inline void CDetailDoodadInstBatch::FreeBuffers() {
 // INLINED
 inline void CDetailDoodadInstBatch::Free() {
     this->m_texture = nullptr;
+    this->m_windClass = 0;
     this->m_vertexCount = 0;
     this->m_indexCount = 0;
     this->m_adds.SetCount(0);

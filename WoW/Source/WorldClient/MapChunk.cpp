@@ -1211,11 +1211,13 @@ void CMapChunk::CreateDetailDoodads() {
     // own, so the client's plants come out exactly as they always did.
     float player[3];
     float playerDistance = 1.0e9f;
-    if (GrassDensity::MaxMultiplier() > 1.0f && LivingWind::PlayerPosition(player)) {
+    if (GrassDensity::Active() && LivingWind::PlayerPosition(player)) {
         const float dx = player[0] - this->m_sphere.c.x, dy = player[1] - this->m_sphere.c.y;
         playerDistance = sqrtf(dx * dx + dy * dy);
     }
     inst->m_densityLevel = GrassDensity::Level(playerDistance);
+    const bool dense = (inst->m_densityLevel & 0xF) != 0;
+    const float keepShare = GrassDensity::ThinShare(playerDistance);
     CRndSeed copySeed;
     copySeed.SetSeed(0);
     copySeed.SetSeed((this->m_cOffset.x | (this->m_cOffset.y << 16)) ^ 0x5EED5EED);
@@ -1365,9 +1367,21 @@ void CMapChunk::CreateDetailDoodads() {
             float rotation = (CRandom::sfloat_(seed) + 1.0f) * 3.1415927f;
             float scale = CRandom::sfloat_(seed) * 0.33f + 1.0f;
 
+            // Not in the original binary: far grass thinning keeps an even sample of the plants. A plant's hash of its
+            // cell and index decides, so a thinner bake is always a subset of a denser one (nothing jumps as you move).
+            if (keepShare < 1.0f) {
+                uint32_t h = (cellBase * 2654435761u) ^ (j * 40503u) ^ (static_cast<uint32_t>(this->m_cOffset.x) * 73856093u) ^ (static_cast<uint32_t>(this->m_cOffset.y) * 19349663u);
+                h ^= h >> 15;
+                h *= 0x2C1B3C6Du;
+                h ^= h >> 12;
+                if ((h & 0xFFFF) >= static_cast<uint32_t>(keepShare * 65536.0f)) {
+                    continue;
+                }
+            }
+
             inst->AddDoodad(id, position, rotation, scale, plane.n, static_cast<uint16_t>(tri), color);
 
-            if (inst->m_densityLevel) {
+            if (dense) {
                 const GrassDensity::Values density = GrassDensity::Resolve(static_cast<uint32_t>(this->m_areaId), s_mapId, id, this->m_layers[layer].m_offectId);
                 const float extra = (density.multiplier - 1.0f) * GrassDensity::Weight(density, playerDistance);
                 uint32_t copies = static_cast<uint32_t>(extra);
@@ -1418,7 +1432,7 @@ void CMapChunk::RenderPrep() {
     if ((CWorld::enables & Enable_DetailDoodads) && CWorld::detailDoodadDist > this->m_distToCamera) {
         // Not in the original binary: a chunk baked for another grass density level (it came closer or moved away) is
         // baked again, a few per frame (CDetailDoodad::TakeRebake).
-        if (this->m_detailDoodadInst && (GrassDensity::MaxMultiplier() > 1.0f || this->m_detailDoodadInst->m_densityLevel)) {
+        if (this->m_detailDoodadInst && (GrassDensity::Active() || this->m_detailDoodadInst->m_densityLevel)) {
             float player[3];
             if (LivingWind::PlayerPosition(player)) {
                 const float dx = player[0] - this->m_sphere.c.x, dy = player[1] - this->m_sphere.c.y;

@@ -3,6 +3,7 @@
 // DoodadID + GroundEffectID, then DoodadID, then GroundEffectID, then every doodad; a negative field takes the next row's.
 #include "WoW/Source/WorldClient/GrassDensity.h"
 
+#include <cmath>
 #include <cstdio>
 #include <map>
 #include <tuple>
@@ -28,6 +29,10 @@ CVar* s_enabled = nullptr;
 CVar* s_maxMultiplier = nullptr;
 CVar* s_maxRadius = nullptr;
 CVar* s_maxSpread = nullptr;
+CVar* s_thin = nullptr;
+CVar* s_thinStart = nullptr;
+CVar* s_thinEnd = nullptr;
+CVar* s_thinMinShare = nullptr;
 
 bool s_loaded = false;
 std::map<std::pair<uint32_t, uint32_t>, std::vector<Row>> s_rows;   // (scope, id) -> rows there
@@ -84,6 +89,23 @@ void GrassDensity::RegisterCVars() {
     s_maxMultiplier = Register("grassDensityMaxMultiplier", "Grass density: most plants drawn per placed plant (1 = never denser)", "4", true);
     s_maxRadius = Register("grassDensityMaxRadius", "Grass density: most yards around you that grass is made denser", "150", true);
     s_maxSpread = Register("grassDensityMaxSpread", "Grass density: most yards an extra plant moves from its plant", "3", false);
+    s_thin = Register("grassThinning", "Far grass draws fewer plants (an even sample)", "1", false);
+    s_thinStart = Register("grassThinStart", "Grass thinning: every plant is drawn within this many yards", "150", false);
+    s_thinEnd = Register("grassThinEnd", "Grass thinning: yards where it reaches grassThinMinShare", "800", false);
+    s_thinMinShare = Register("grassThinMinShare", "Grass thinning: share of plants drawn at grassThinEnd and beyond", "0.25", false);
+}
+
+bool GrassDensity::Active() {
+    return GrassDensity::MaxMultiplier() > 1.0f || OptionCVars::Bool(s_thin, true);
+}
+
+float GrassDensity::ThinShare(float distance) {
+    if (!OptionCVars::Bool(s_thin, true)) return 1.0f;
+    const float start = OptionCVars::Float(s_thinStart, 0.0f, 10000.0f, 150.0f);
+    const float end = std::fmax(start + 1.0f, OptionCVars::Float(s_thinEnd, 0.0f, 10000.0f, 800.0f));
+    const float t = Clamp((distance - start) / (end - start), 0.0f, 1.0f);
+    const float share = 1.0f - t * (1.0f - OptionCVars::Float(s_thinMinShare, 0.01f, 1.0f, 0.25f));
+    return std::ceil(share * 8.0f) / 8.0f;
 }
 
 float GrassDensity::MaxMultiplier() {
@@ -143,5 +165,7 @@ uint32_t GrassDensity::Level(float distanceToPlayer) {
     Values cap;
     cap.multiplier = GrassDensity::MaxMultiplier();
     cap.radius = GrassDensity::MaxRadius();
-    return static_cast<uint32_t>(GrassDensity::Weight(cap, distanceToPlayer) * 4.0f + 0.5f);
+    const uint32_t density = static_cast<uint32_t>(GrassDensity::Weight(cap, distanceToPlayer) * 4.0f + 0.5f);
+    const uint32_t thin = 8 - static_cast<uint32_t>(GrassDensity::ThinShare(distanceToPlayer) * 8.0f + 0.5f);
+    return density | (thin << 4);
 }

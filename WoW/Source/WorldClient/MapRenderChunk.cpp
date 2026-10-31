@@ -22,6 +22,7 @@
 #include "WoW/Source/WorldClient/MapArea.h"
 #include "WoW/Source/WorldClient/MapChunk.h"
 #include "WoW/Source/WorldClient/MapLight.h"
+#include "WoW/Source/WorldClient/SurfaceCover.h"
 #include "WoW/Source/WorldClient/Types.h"
 #include "WoW/Source/WorldClient/World.h"
 #if defined(_MSC_VER)
@@ -565,6 +566,7 @@ CMapChunkBufBlock::~CMapChunkBufBlock() {
 // VERIFY: a8d77235 manual
 // OFFSET: 0x007B9D60
 CMapRenderChunk::~CMapRenderChunk() {
+    SurfaceCover::Forget(this);  // not in the original binary
     this->FreeBuf();
     this->FreeLayers();
 
@@ -622,6 +624,7 @@ void CMapRenderChunk::RenderPrepBufs(CGxBuf* vertexBuf, CGxBuf* indexBuf) {
     int32_t indexReady = indexBuf->m_hasData && indexBuf->m_valid;
 
     if (!vertexReady) {
+        SurfaceCover::Forget(this);  // not in the original binary: the cover is made from these vertices too
         C3Vector offset;
         char* vertices = g_theGxDevicePtr->BufLock(vertexBuf);
 
@@ -2729,6 +2732,7 @@ void CMapRenderChunk::RenderSinglePassVertexPixelShader() {
 
     CMapRenderChunk::SetVertexShader(this, this->m_layersCount + 1, specular);
     g_theGxDevicePtr->Draw(&this->m_batch, 1);
+    SurfaceCover::DrawAfter(this);  // not in the original binary: snow (and sand, ash) on top, with this chunk's constants
 
     for (uint32_t j = 0; j < this->m_layersCount; j++) {
         if (this->m_layers[j].m_flags & 0x40) {

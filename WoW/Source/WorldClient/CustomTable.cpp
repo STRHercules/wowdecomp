@@ -1,5 +1,6 @@
 #include "WoW/Source/WorldClient/CustomTable.h"
 
+#include <algorithm>
 #include <cstdio>
 
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
@@ -31,7 +32,7 @@ bool CustomTable::LoadTable(const char* path, uint32_t minFields, Table& out, ch
         return false;
     }
     std::memcpy(header, bytes.data(), sizeof header);
-    const uint32_t records = header[1], fields = header[2], recordSize = header[3];
+    const uint32_t records = header[1], fields = header[2], recordSize = header[3], stringSize = header[4];
     if (header[0] != 0x43424457u || fields < minFields || recordSize != fields * 4 ||
         static_cast<uint64_t>(records) * recordSize > bytes.size() - sizeof header) {
         std::snprintf(status, statusSize, "%s: not a WDBC table with at least %u columns", path, minFields);
@@ -40,6 +41,10 @@ bool CustomTable::LoadTable(const char* path, uint32_t minFields, Table& out, ch
     out.fields = fields;
     out.cells.resize(static_cast<size_t>(records) * fields);
     std::memcpy(out.cells.data(), bytes.data() + sizeof header, out.cells.size() * 4);
+    const size_t stringStart = sizeof header + out.cells.size() * 4;
+    const size_t stringEnd = stringStart + std::min<size_t>(stringSize, bytes.size() - stringStart);
+    out.strings.assign(bytes.begin() + stringStart, bytes.begin() + stringEnd);
+    out.strings.push_back('\0');  // the last string ends even in a cut-off file
     std::snprintf(status, statusSize, "%u row(s)", records);
     return true;
 }

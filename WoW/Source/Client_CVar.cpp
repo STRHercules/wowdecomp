@@ -15,6 +15,7 @@
 #include "Engine/Source/Model2/M2TreeWind.h"
 #include "WoW/Source/WorldClient/DetailDoodad.h"
 #include "WoW/Source/WorldClient/GrassDensity.h"
+#include "WoW/Source/WorldClient/SurfaceCover.h"
 #include "WoW/Source/WorldClient/LivingWind.h"
 #include "Engine/Source/Os/Input.h"
 #include "Engine/Source/Os/System.h"
@@ -677,6 +678,7 @@ void ClientRegisterConsoleCommands() {
     LivingWind::RegisterCVars();
     CDetailDoodad::RegisterCVars();
     GrassDensity::RegisterCVars();
+    SurfaceCover::RegisterCVars();
 
     // The performance overlay's options; the overlay itself is Lua (UIUtil/DistanceOptions.cpp).
     static const struct { const char* name; const char* help; const char* value; } perfOptions[] = {

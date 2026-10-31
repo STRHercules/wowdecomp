@@ -67,6 +67,7 @@
 #include "WoW/Source/WorldClient/Barrier.h"
 #include "WoW/Source/WorldClient/CChunkLiquid.h"
 #include "WoW/Source/WorldClient/CMapBaseObjLink.h"
+#include "WoW/Source/WorldClient/SurfaceCover.h"
 #include "WoW/Source/WorldClient/CPortalView.h"
 #include "WoW/Source/WorldClient/CWorldMath.h"
 #include "WoW/Source/WorldClient/CWorldOcclusion.h"
@@ -3689,6 +3690,8 @@ void CWorldScene::RenderChunksSinglePass() {
             }
         }
     }
+
+    SurfaceCover::DrawNear();  // not in the original binary: the fine snow patch around the player, after all terrain
 
     g_theGxDevicePtr->RsSet(GxRs_VertexShader, static_cast<void*>(nullptr));
     g_theGxDevicePtr->RsSet(GxRs_PixelShader, static_cast<void*>(nullptr));

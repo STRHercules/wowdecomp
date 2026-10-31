@@ -432,6 +432,29 @@ p:Slider("bushWindMaxDistance", "Greatest distance", "Bushes further away than t
 p:Done()
 )lua";
 
+    // Snow, sand and ash lying on the ground (WorldClient/SurfaceCover.cpp).
+    static const char surfaceCoverScript[] = R"lua(
+if not VideoOptionsFrame or not WowDecompBuildPage or WowDecompSurfaceCoverPanel then return end
+
+local function Times(v) return string.format("%.2fx", v) end
+local function Plain(v) return string.format("%.2f", v) end
+local function Yards(v) return string.format("%.2f yd", v) end
+
+local p = WowDecompBuildPage("WowDecompSurfaceCoverPanel", "Esteria Snow Cover", "Painted snow lies on the ground as a layer of its own, from SurfaceCover.cdbc: a few inches deep on flat ground, thinning on slopes, burying the grass, lit and shadowed like the ground. Near you it is lumpy and takes trenches.")
+p:Header("Cover")
+p:Check("surfaceCover", "Snow lies on the ground", "Master switch. Needs its shaders translated once on Vulkan (surfaceCoverInfo says so).")
+p:Check("surfaceCoverOthers", "Sand and ash too", "The table's other covers: a thin layer of sand in deserts, ash in burnt lands. Off: only snow.")
+p:Slider("surfaceCoverDepth", "Depth", "Multiplier on how deep the table says the cover lies. 1 is as the table says.", 0, 3, 0.05, Times, 0.05)
+p:Slider("surfaceCoverBreakup", "Ragged edges", "Multiplier on how patchy the cover's edges are. 0 gives smooth, rounded edges.", 0, 3, 0.05, Times, 0.05)
+p:Slider("surfaceCoverBrightness", "Brightness", "How bright the cover is under the same light as the ground.", 0.2, 1.5, 0.01, Plain, 0.02)
+p:Slider("surfaceCoverDistanceLift", "Lift far away", "Far away the cover is lifted this much so it never flickers with the ground under it. Keep it small: more makes distant snow float.", 0, 3, 0.05, Yards, 0.05)
+p:Header("Near you")
+p:Check("surfaceCoverNear", "Fine snow around you", "A detailed, lumpy patch of cover 48 yards across follows you, lit by its own bumps. Off: the coarser cover everywhere, and no trenches.")
+p:Check("surfaceCoverTrenches", "Trenches", "You and the creatures and players near you press trenches into the cover, with pushed-up rims. They fill back in over time.")
+p:Slider("surfaceCoverTrenchScale", "Trench width", "Width of a trench as a multiple of each one's size. Mounts make wider ones.", 0.2, 4, 0.05, Times, 0.05)
+p:Done()
+)lua";
+
     // The world wind and the grass (WorldClient/LivingWind.cpp, WorldClient/HD/HdGrassWind.cpp).
     static const char worldWindScript[] = R"lua(
 if not VideoOptionsFrame or not WowDecompBuildPage or WowDecompWorldWindPanel then return end
@@ -457,6 +480,9 @@ p:Slider("hdGrassWindSpeed", "Wave speed", "How fast the waves cross the grass."
 p:Slider("hdGrassWindDirection", "Fixed wind direction", "Heading of the grass wind where the world wind does not blow.", 0, 360, 1, Heading, 5)
 p:Check("hdGrassReact", "Grass parts around you", "Grass bends away from your character.")
 p:Slider("hdGrassReactRadius", "Parting radius", "How far around you the grass bends away.", 0.1, 20, 0.1, Yards, 0.5)
+p:Check("hdGrassReactUnits", "Grass parts around others", "Creatures and other players near you part the grass too, each by its own size.")
+p:Slider("hdGrassReactUnitScale", "Their parting size", "Parting radius around a creature or player, as a multiple of its size.", 0.5, 5, 0.1, Times, 0.1)
+p:Slider("hdGrassReactMountedScale", "Wider when mounted", "How much wider the parting is around anyone mounted, you included.", 1, 5, 0.1, Times, 0.1)
 p:Slider("groundEffectDist", "Grass distance", "How far grass is drawn. The game's own limit of 140 yards is lifted. Grass in range is baked once and kept on the GPU, up to the memory below.", 0, 1024, 5, Distance, 10)
 p:Slider("grassBufferMemory", "Grass memory", "Most memory the kept grass may use. Grass past it is baked again every frame, which costs CPU time. Takes effect when the grass distance changes or the world loads.", 16, 4096, 16, function(v) return string.format("%d MB", v + 0.5) end, 64)
 p:Header("Grass density")
@@ -464,6 +490,11 @@ p:Check("grassDensity", "Denser grass near you", "Extra plants on each plant's o
 p:Slider("grassDensityMaxMultiplier", "Most plants per plant", "Your limit on how dense grass gets. 1 is never denser.", 1, 8, 0.5, Times, 0.5)
 p:Slider("grassDensityMaxRadius", "Dense radius", "Your limit on how far around you grass is made denser.", 0, 500, 5, Distance, 10)
 p:Slider("grassDensityMaxSpread", "Spread", "Your limit on how far an extra plant may sit from its plant.", 0, 10, 0.1, Yards, 0.5)
+p:Header("Far grass")
+p:Check("grassThinning", "Thin far grass", "Far away, grass draws an even sample of its plants: much less GPU time at long grass distances, hardly visible.")
+p:Slider("grassThinStart", "Full grass within", "Every plant is drawn this close to you.", 0, 1000, 5, Distance, 10)
+p:Slider("grassThinEnd", "Thinnest from", "Where the thinning reaches its lowest share.", 0, 2000, 10, Distance, 25)
+p:Slider("grassThinMinShare", "Thinnest share", "Share of plants drawn at that distance and beyond.", 0.05, 1, 0.05, function(v) return string.format("%d%%", v * 100 + 0.5) end, 0.05)
 p:Done()
 )lua";
 
@@ -623,6 +654,7 @@ dd:RefreshValue()
     FrameScript_Execute(pagesScript2, "NativeEsteriaPages", nullptr);
     FrameScript_Execute(treeWindScript, "NativeTreeWindPage", nullptr);
     FrameScript_Execute(worldWindScript, "NativeWorldWindPage", nullptr);
+    FrameScript_Execute(surfaceCoverScript, "NativeSurfaceCoverPage", nullptr);
     FrameScript_Execute(overlayScript, "NativeEsteriaOverlay", nullptr);
     // Lumenveil's pages, built from its settings window (Engine/Source/Lumenveil/OptionsPages.cpp).
     const std::string lumenveilScript = LumenveilOptions::BuildScript();

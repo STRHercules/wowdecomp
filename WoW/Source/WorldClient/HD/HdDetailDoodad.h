@@ -2,6 +2,8 @@
 #ifndef WOW_SOURCE_WORLDCLIENT_HD_HDDETAILDOODAD_H
 #define WOW_SOURCE_WORLDCLIENT_HD_HDDETAILDOODAD_H
 
+#include <cstdint>
+
 class C44Matrix;
 
 // Not in the original binary. Azeroth Remastered's grass (detail doodad) shaders (HdDetailDoodad.cpp): the 3.3.5
@@ -26,6 +28,9 @@ void DetailDoodadShaders();
 // In CDetailDoodad::SetupVertexShader after the client's grass constants: vertex c49..c52 of our shader and c53..c59
 // grass wind for this chunk (world = the chunk's grass world matrix). Nothing while Blizzard's shaders are in place.
 void DetailDoodadVertexConstants(const C44Matrix& world);
+
+// c68 for one batch: how its plant bends (windClass from HD::GrassWindClassOf). Not in the donor.
+void DetailDoodadBatchConstants(uint16_t windClass);
 // In CDetailDoodad::Destroy before the shaders are released: Blizzard's code back.
 void DetailDoodadShadersForget();
 

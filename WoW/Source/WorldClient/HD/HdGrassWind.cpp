@@ -5,7 +5,10 @@
 // License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later
 // version. It is distributed WITHOUT ANY WARRANTY. See <https://www.gnu.org/licenses/>.
 #include "WoW/Source/WorldClient/HD/HdGrassWind.h"
+#include <algorithm>
 #include <cmath>
+#include <unordered_map>
+#include <vector>
 #include <windows.h>
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
 #include "Engine/Source/ConsoleBase/Types.h"
@@ -13,6 +16,8 @@
 #include "WoW/Source/Object/ObjectClient/Object_C.h"
 #include "WoW/Source/UIUtil/Camera.h"
 #include "WoW/Source/Ui/WorldFrame.h"
+#include "WoW/Source/Object/ObjectClient/Unit_C.h"
+#include "WoW/Source/WorldClient/CustomTable.h"
 #include "WoW/Source/WorldClient/LivingWind.h"
 #include "WoW/Source/WorldClient/World.h"
 
@@ -42,6 +47,68 @@ namespace {
     CVar* s_react = nullptr;
     CVar* s_radius = nullptr;
     CVar* s_followWorld = nullptr;
+    CVar* s_reactUnits = nullptr;
+    CVar* s_unitScale = nullptr;
+    CVar* s_mountedScale = nullptr;
+
+    // Not in the donor: grass parts around the units near the player too (seyris-living-azeroth's Actors), each sized by
+    // its own bounding radius, wider while mounted. The player is actor 0 (hdGrassReactRadius); 7 nearest units after it.
+    constexpr int kActors = 8;
+    constexpr float kActorRange = 40.0f;       // yards from the player a unit still parts grass
+    constexpr float kMinUnitRadius = 0.5f;
+    struct Actor {
+        C3Vector pos;
+        float radius;
+        float distSq;
+    };
+    Actor s_actors[kActors];
+    int s_actorCount = 0;
+
+    // GroundEffectDoodadWind.cdbc (ID, Flags, Stiffness, RootV, TipV): per-doodad overrides of the bend. Doodads with a
+    // row bake into batches of their own (CDetailDoodadInst::AddDoodad), whose c68 says how they bend.
+    struct WindClass {
+        uint32_t flags;      // 0x1 no wind, 0x2 no push, 0x10 root and tip swapped
+        float stiffness;     // 0 flexible .. 1 rigid: scales wind and push
+        float rootV, tipV;   // texture V of the foot and the tip; -1 = the default (foot at V 1, tip at V 0)
+    };
+    std::vector<WindClass> s_classes;               // index = class - 1
+    std::unordered_map<uint32_t, uint16_t> s_classOf;
+    bool s_classesLoaded = false;
+
+    void LoadClasses() {
+        s_classesLoaded = true;
+        CustomTable::Table table;
+        char status[160];
+        if (!CustomTable::LoadTable("DBFilesClient\\GroundEffectDoodadWind.cdbc", 5, table, status, sizeof status)) return;
+        for (uint32_t r = 0; r < table.Rows() && s_classes.size() < 0xFFFE; ++r) {
+            s_classes.push_back(WindClass{ table.U(r, 1), table.F(r, 2), table.F(r, 3), table.F(r, 4) });
+            s_classOf[table.U(r, 0)] = static_cast<uint16_t>(s_classes.size());
+        }
+    }
+
+    int32_t CollectUnit(WOWGUID guid, void* param) {
+        const CGObject_C* self = static_cast<const CGObject_C*>(param);
+        CGObject_C* object = ClntObjMgrObjectPtr(guid, TYPEMASK_UNIT, __FILE__, __LINE__);
+        if (!object || object == self) return 1;
+        CGUnit_C* unit = static_cast<CGUnit_C*>(object);
+        const C3Vector pos = unit->GetPosition();
+        const float dx = pos.x - s_actors[0].pos.x, dy = pos.y - s_actors[0].pos.y, dz = pos.z - s_actors[0].pos.z;
+        const float distSq = dx * dx + dy * dy + dz * dz;
+        if (distSq > kActorRange * kActorRange) return 1;
+        float radius = std::max(kMinUnitRadius, (unit->m_unit ? unit->m_unit->m_unitFieldBoundingradius : 0.5f) * (s_unitScale ? s_unitScale->m_floatValue : 2.0f));
+        if (unit->IsMounted()) radius *= s_mountedScale ? s_mountedScale->m_floatValue : 2.0f;
+        // keep the nearest: when full, replace the farthest unit (never the player in slot 0)
+        int slot = s_actorCount < kActors ? s_actorCount++ : -1;
+        if (slot < 0) {
+            slot = 1;
+            for (int i = 2; i < kActors; i++) {
+                if (s_actors[i].distSq > s_actors[slot].distSq) slot = i;
+            }
+            if (s_actors[slot].distSq <= distSq) return 1;
+        }
+        s_actors[slot] = Actor{ pos, std::min(radius, 20.0f), distSq };
+        return 1;
+    }
     bool s_world = false;                  // this frame follows the world wind: gusts scale each chunk
 
     // this frame (GrassWindPrepare)
@@ -84,6 +151,9 @@ void HD::GrassWindRegister() {
     s_react = CVar::Register("hdGrassReact", "HD: 1 = grass parts around the player, 0 = off", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_radius = CVar::Register("hdGrassReactRadius", "HD: radius of the grass parting, yards", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
     s_followWorld = CVar::Register("hdGrassWindFollowWorld", "Grass wind follows the world wind (WindProfile.cdbc) where it blows", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_reactUnits = CVar::Register("hdGrassReactUnits", "Grass parts around the creatures and players near you too", 1, "1", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_unitScale = CVar::Register("hdGrassReactUnitScale", "Grass parting around a unit: radius as a multiple of its bounding radius", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
+    s_mountedScale = CVar::Register("hdGrassReactMountedScale", "Grass parting: how much wider it is around a mounted unit (you too)", 1, "2", nullptr, CATEGORY_GRAPHICS, false, nullptr, false);
 }
 
 bool HD::GrassWindWanted() {
@@ -136,6 +206,20 @@ void HD::GrassWindPrepare() {
     s_radiusValue = s_radius ? Clamp(s_radius->m_floatValue, 0.1f, 20.0f) : 2.0f;
     s_havePlayer = react && PlayerPosition(&s_player);
     s_push = s_havePlayer ? kPushCentre : 0.0f;
+    s_actorCount = 0;
+    if (s_havePlayer) {
+        CGCamera* camera = CGWorldFrame::GetActiveCamera();
+        CGObject_C* self = camera ? ClntObjMgrObjectPtr(camera->m_targetGUID, TYPEMASK_OBJECT, __FILE__, __LINE__) : nullptr;
+        float radius = s_radiusValue;
+        if (self && (self->m_obj->m_type & TYPEMASK_UNIT) && static_cast<CGUnit_C*>(self)->IsMounted()) {
+            radius *= s_mountedScale ? Clamp(s_mountedScale->m_floatValue, 1.0f, 5.0f) : 2.0f;
+        }
+        s_actors[0] = Actor{ s_player, radius, 0.0f };
+        s_actorCount = 1;
+        if (!s_reactUnits || s_reactUnits->m_intValue != 0) {
+            ClntObjMgrEnumVisibleObjects(CollectUnit, self);
+        }
+    }
     s_on = (strength > 0.0f || s_push > 0.0f) ? 1.0f : 0.0f;
 }
 
@@ -197,4 +281,45 @@ void HD::GrassWindConstants(float chunkOffsetX, float chunkOffsetY, float chunkO
     c[25] = kJitter;
     c[26] = kLean;
     c[27] = s_on;
+    // c60..c67: the units the grass parts around, relative to the chunk corner; w = 1 / radius (huge = no unit)
+    for (int a = 0; a < kActors; a++) {
+        float* u = c + 28 + 4 * a;
+        if (a < s_actorCount) {
+            u[0] = static_cast<float>(s_actors[a].pos.x - ox);
+            u[1] = static_cast<float>(s_actors[a].pos.y - oy);
+            u[2] = static_cast<float>(s_actors[a].pos.z - oz);
+            u[3] = 1.0f / s_actors[a].radius;
+        } else {
+            u[0] = u[1] = u[2] = 0.0f;
+            u[3] = 1.0e6f;
+        }
+    }
+}
+
+uint16_t HD::GrassWindClassOf(uint32_t doodadId) {
+    if (!s_classesLoaded) LoadClasses();
+    auto it = s_classOf.find(doodadId);
+    return it == s_classOf.end() ? 0 : it->second;
+}
+
+void HD::GrassWindBatchConstants(uint16_t windClass, float* out) {
+    // The bend from V: none at `root`, full at the tip. The default is the donor's: the foot at V 1, the tip at V 0, the
+    // bottom kAnchor of the blade never moving.
+    float wind = 1.0f, push = 1.0f, foot = 1.0f, tip = 0.0f;
+    if (windClass && windClass <= s_classes.size()) {
+        const WindClass& k = s_classes[windClass - 1];
+        const float stiff = Clamp(k.stiffness, 0.0f, 1.0f);
+        wind = (k.flags & 0x1) ? 0.0f : 1.0f - stiff;
+        push = (k.flags & 0x2) ? 0.0f : 1.0f - stiff;
+        if (k.rootV >= 0.0f && k.tipV >= 0.0f && k.rootV != k.tipV) {
+            foot = k.rootV;
+            tip = k.tipV;
+        }
+        if (k.flags & 0x10) std::swap(foot, tip);
+    }
+    const float root = foot + kAnchor * (tip - foot);
+    out[0] = wind;
+    out[1] = push;
+    out[2] = root;
+    out[3] = 1.0f / (tip - root);
 }

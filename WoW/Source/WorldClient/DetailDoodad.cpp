@@ -26,6 +26,7 @@
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/Ui/OptionCVars.h"
 #include "WoW/Source/WorldClient/GrassDensity.h"
+#include "WoW/Source/WorldClient/HD/HdGrassWind.h"
 #include "WoW/Source/WorldClient/WorldParam.h"
 #include "WoW/Source/WorldClient/CDetailDoodadData.h"
 #include "WoW/Source/WorldClient/DayNight.h"
@@ -755,13 +756,16 @@ void CDetailDoodadInst::AddDoodad(uint32_t id, const C3Vector& position, float r
     M2SkinProfile* skin = model->m_shared->m_skinData;
     uint32_t vertexCount = skin->m_vertices.m_count;
     uint32_t indexCount = skin->m_indices.m_count;
+    // Not in the original binary: a doodad with a GroundEffectDoodadWind.cdbc row bends its own way (the batch's c68),
+    // so it shares a batch only with doodads of its class.
+    const uint16_t windClass = HD::GrassWindClassOf(id);
 
     uint32_t i;
 
     for (i = 0; i < kDetailDoodadBatches; i++) {
         CDetailDoodadInstBatch& batch = this->m_batches[i];
 
-        if (!HandleCompare(reinterpret_cast<HOBJECT>(batch.m_texture), reinterpret_cast<HOBJECT>(data->m_texture)) && vertexCount + batch.m_vertexCount < CDetailDoodad::s_vtxBufItems && indexCount + batch.m_indexCount < CDetailDoodad::s_idxBufItems) {
+        if (!HandleCompare(reinterpret_cast<HOBJECT>(batch.m_texture), reinterpret_cast<HOBJECT>(data->m_texture)) && batch.m_windClass == windClass && vertexCount + batch.m_vertexCount < CDetailDoodad::s_vtxBufItems && indexCount + batch.m_indexCount < CDetailDoodad::s_idxBufItems) {
             break;
         }
     }
@@ -778,6 +782,7 @@ void CDetailDoodadInst::AddDoodad(uint32_t id, const C3Vector& position, float r
         }
 
         this->m_batches[i].m_texture = data->m_texture;
+        this->m_batches[i].m_windClass = windClass;
     }
 
     CDetailDoodadInstBatch& batch = this->m_batches[i];
@@ -827,6 +832,7 @@ void CDetailDoodadInstBatch::Draw() {
 
     g_theGxDevicePtr->PrimIndexPtr(this->m_indexBuf);
     g_theGxDevicePtr->RsSet(GxRs_Texture0, gxTex);
+    HD::DetailDoodadBatchConstants(this->m_windClass);  // not in the original binary: how this batch's plant bends
 
     CGxBatch batch;
     batch.m_primType = GxPrim_Triangles;
@@ -917,6 +923,7 @@ CDetailDoodadInstBatch::CDetailDoodadInstBatch() {
     this->m_indexCount = 0;
     this->m_vertexBuf = nullptr;
     this->m_indexBuf = nullptr;
+    this->m_windClass = 0;
 }
 
 // VERIFY: 9e2e57b8 manual

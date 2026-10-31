@@ -69,6 +69,8 @@ float4 cWind2         : register(c55);  // HD: x = 1 / radius, y = radius, z = 1
 float4 cWind3         : register(c56);  // HD: wave 1: xy = direction * amplitude, zw = direction * 2 pi / wavelength
 float4 cWind4         : register(c57);  // HD: wave 2, same
 float4 cWind5         : register(c58);  // HD: x = anchor, y = 1 / (1 - anchor), z = variance, w = distance fade
+float4 cActor[8]      : register(c60);  // grass parts around these: xyz = relative to the chunk corner, w = 1 / radius (huge = none)
+float4 cBatch         : register(c68);  // this batch's plant: x = wind scale, y = push scale, z = V where the bend starts, w = 1 / (tip V - that)
 float4 cWind6         : register(c59);  // HD: x = wave 2 phase at the chunk corner, y = phase spread, z = lean, w = 1 on
 
 #if POINT_LIGHTS
@@ -87,10 +89,11 @@ float3 PointLight(int i, float3 vp, float3 n)
 #endif
 
 // HD: world-plane offset of a grass vertex (position lp in the chunk, uv, view depth): wind + parting around the
-// player. uv.y is 1 at the foot of the blade and 0 at its tip, so the foot stays put on any slope.
+// player and the units near it. By default uv.y is 1 at the foot of the blade and 0 at its tip, so the foot stays put
+// on any slope; cBatch maps V to the bend for this batch's plant (GroundEffectDoodadWind.cdbc can set it).
 float2 GrassOffset(float3 lp, float2 uv, float depth)
 {
-    float blade = saturate((1.0 - uv.y - cWind5.x) * cWind5.y);
+    float blade = saturate((uv.y - cBatch.z) * cBatch.w);
     float w = blade * blade / (1.0 + abs(depth) * cWind5.w);
     float2 seed = lp.xy + cWind0.xy;
     float h = frac(seed.x * 0.737 + seed.y * 1.311);
@@ -98,14 +101,17 @@ float2 GrassOffset(float3 lp, float2 uv, float depth)
     float j = h * cWind6.y;
     float s1 = sin(dot(lp.xy, cWind3.zw) + j + cWind0.w) + cWind6.z;
     float s2 = sin(dot(lp.xy, cWind4.zw) + j + cWind6.x);
-    float2 offset = (cWind3.xy * s1 + cWind4.xy * s2) * (w * amp);
+    float2 offset = (cWind3.xy * s1 + cWind4.xy * s2) * (w * amp * cBatch.x);
 
-    float2 d = lp.xy - cWind1.xy;
-    float dist = sqrt(dot(d, d) + 0.001);
-    float high = saturate((lp.z - cWind1.z - cWind2.w) * cWind2.z);
-    // x blade: on a slope uphill of the player the foot of the blade would be "high" too, it must not move
-    float push = cWind1.w * (1.0 - saturate(dist * cWind2.x)) * high * blade;
-    return offset + d * (push / dist);
+    [unroll] for (int a = 0; a < 8; a++) {
+        float2 d = lp.xy - cActor[a].xy;
+        float dist = sqrt(dot(d, d) + 0.001);
+        float high = saturate((lp.z - cActor[a].z - cWind2.w) * cWind2.z);
+        // x blade: on a slope uphill of the unit the foot of the blade would be "high" too, it must not move
+        float push = cWind1.w * cBatch.y * (1.0 - saturate(dist * cActor[a].w)) * high * blade;
+        offset += d * (push / dist);
+    }
+    return offset;
 }
 
 void main(
@@ -392,7 +398,7 @@ void main(
     char s_refusedInfo[200] = "";  // a grass shader we cannot replace: then none is replaced this run (all or nothing)
     int32_t s_inUse = 0;           // shaders holding our code right now (shown in hdGrassInfo)
     bool s_ours = false;           // all 14 grass shaders hold our code (vertex constants are needed)
-    float s_vertexConstants[44];   // c49..c52 for this frame (DetailDoodadShaders), c53..c59 grass wind per chunk
+    float s_vertexConstants[76];   // c49..c52 for this frame (DetailDoodadShaders), c53..c67 grass wind and units per chunk
     char s_shownInfo[500] = "";
 
     std::map<CGxShader*, std::vector<uint8_t>> s_original;  // Blizzard's code of each shader we changed
@@ -612,7 +618,15 @@ void HD::DetailDoodadVertexConstants(const C44Matrix& world) {
     if (!s_ours) return;
     // c53..c59 grass wind for this chunk (world = translation chunk corner - s_activeWorldView)
     HD::GrassWindConstants(world.d0, world.d1, world.d2, s_vertexConstants + 16);
-    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 49, s_vertexConstants, 11);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 49, s_vertexConstants, 19);
+}
+
+void HD::DetailDoodadBatchConstants(uint16_t windClass) {
+    if (!s_ours) return;
+    // c68: how this batch's plant bends (HdGrassWind.h, GroundEffectDoodadWind.cdbc)
+    float batch[4];
+    HD::GrassWindBatchConstants(windClass, batch);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 68, batch, 1);
 }
 
 void HD::DetailDoodadShadersForget() {
