@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: Everlook Broadcasting Co.
+## Notes: In-game live internet radio player (native radio support in the client)
+## Author: Antigravity; retail-style window; radio native to this client
+## Version: 2.1.0
+## OptionalDeps: DragonUI
+## SavedVariables: EverlookBroadcastingDB
+
+EverlookBroadcasting.lua

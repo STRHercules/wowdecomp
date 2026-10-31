@@ -251,6 +251,7 @@ class SE2 {
     static FMOD_RESULT BypassDsp(FMOD::DSP* dsp, bool bypass);
     static void CaptureWork();
     static FMOD_RESULT ConnectDspToChannelGroup(FMOD::DSP* dsp, FMOD::ChannelGroup* channelGroup);
+    static FMOD::System* GetSystem();
     static FMOD::ChannelGroup* CreateChannelGroup(const char* name);
     static FMOD_RESULT CreateDSPByType(FMOD_DSP_TYPE type, FMOD::DSP** dsp);
     static FMOD::SoundGroup* CreateSoundGroup(const char* name, int32_t maxAudible);

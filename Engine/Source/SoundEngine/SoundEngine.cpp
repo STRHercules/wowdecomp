@@ -553,6 +553,10 @@ static float F_CALLBACK RolloffCallback(FMOD_CHANNEL* channel, float distance) {
     return ComputeRolloff(minDistance, maxDistance, distance);
 }
 
+FMOD::System* SE2::GetSystem() {
+    return s_system;
+}
+
 // VERIFY: 917e3eb9 auto
 // OFFSET: 0x00878360
 int32_t SE2::GetNumInputDrivers(int32_t chatSystem) {
