@@ -2209,6 +2209,7 @@ int32_t EsteriaSectionCount(int32_t race, int32_t sex, int32_t variation) {
 namespace {
 
 std::unordered_map<uint64_t, uint64_t> g_roster;
+std::unordered_map<uint64_t, uint32_t> g_wings;
 
 bool ExtendedRace(uint32_t race) {
     return race == 20 || race == 46 || race == 47 || race == 48 || race == 49 || race == 50 || race == 51 || CreatureAppearance::Uses(race);
@@ -2234,6 +2235,7 @@ bool EsteriaKeepsAppearance(uint32_t race) {
 
 void EsteriaEnumExtra(CDataStore* packet) {
     g_roster.clear();
+    g_wings.clear();
     BodyShape::Roster().clear();
     RetailRaceClearLooks();
     if (!packet || Disabled()) {
@@ -2267,6 +2269,8 @@ void EsteriaEnumExtra(CDataStore* packet) {
             uint64_t guid = *reinterpret_cast<uint64_t*>(bytes + start + i * stride);
             if (stride == 9) {
                 g_roster[guid] = bytes[start + i * stride + 8];
+            } else if (stride == 12) {
+                g_wings[guid] = *reinterpret_cast<uint32_t*>(bytes + start + i * stride + 8);
             } else if (stride == 16) {
                 g_roster[guid] = *reinterpret_cast<uint64_t*>(bytes + start + i * stride + 8);
             } else if (stride == CharacterRetailLook::EnumStride) {
@@ -2286,6 +2290,14 @@ void EsteriaEnumExtra(CDataStore* packet) {
         size = start;
         packet->m_size = base + size;
     }
+}
+
+void EsteriaTraceText(const char* text) { Trace("%s", text); }
+
+uint32_t EsteriaSelectWingSpell(uint64_t guid) {
+    const auto found = g_wings.find(guid);
+    Trace("wings: guid %llx spell %u of %zu", static_cast<unsigned long long>(guid), found == g_wings.end() ? 0 : found->second, g_wings.size());
+    return found == g_wings.end() ? 0 : found->second;
 }
 
 bool EsteriaEyeLightning(uint64_t guid) {

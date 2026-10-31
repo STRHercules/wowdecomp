@@ -54,6 +54,7 @@ features need the matching Esteria server. Every custom race, with its IDs and w
 | Unit outline and loot beam | A coloured outline on your target, pet target, mouseover, quest givers and interactive objects (with a Vulkan outline pass), and a beam of light over lootable corpses tinted by the best item. Both are markers only and send nothing to the server |
 | Performance overlay | A small movable overlay with frame rate, frame time, draw calls, triangles and CPU use (`showPerformance`) |
 | Manastorm speedflying and transmog | The Manastorm speedflying controller, HUD, talent panel and flight camera effects, and the transmog addon with Vulkan-backed model snapshots (`Addons/Manastorm_Speedflying`, `Addons/Manastorm_Transmog`; [integration notes](docs/MANASTORM_INTEGRATION.md)). Replaces the earlier retail-style Skyriding, whose documents are archived in `docs/archive/` |
+| Everlook Broadcasting radio | Internet radio in the DragonUI micro strip. The [Everlook Broadcasting](Addons/EverlookBroadcasting) addon by Bset runs on a native stream player ([EverlookRadio](Extensions/EverlookRadio)) built on the client's FMOD, so it needs no external DLLs. MP3 and Ogg streams only |
 | Bundled addons | The body shape and view distance addons in `Addons/` |
 
 ### Retail content (optional)
@@ -369,6 +370,7 @@ rendering or gameplay correctness.
 - Manatactical, for the unit outline, speedflying controller, HUD and talent panel, and the transmog addon and the README layout
 - Morfium-G, for seyris-living-azeroth, the source of the world wind, climate, ground material and snow cover design and tables ported in Living Azeroth
 - iThorgrim and [WarcraftXL](https://github.com/WarcraftXL), for wxl-treewind, wxl-grasswind and wxl-db2, which the tree wind, the grass wind and the Retail appearance resolver are ported from
+- Bset, for Everlook Broadcasting, the radio addon (GPL) integrated into the client
 - [Furioz420](https://github.com/Furioz420), for the native Direct3D 11 backend this client's DX11 work draws on
 - [Lumenveil](https://github.com/lumenveil/Lumenveil) and [CoAVolFog](https://github.com/jealous-sound/coa-vfog), for the fog and lighting mod behind Lumenveil
 - The Azeroth Remastered project, for the HD effects ported under `visuals 2`, and Intel's XeGTAO (MIT) for its ambient occlusion

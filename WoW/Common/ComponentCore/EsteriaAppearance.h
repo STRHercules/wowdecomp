@@ -33,6 +33,9 @@ void EsteriaEnumExtra(CDataStore* packet);
 // Character select: applies the unclamped appearance bytes and the roster's extra bytes to the shown character.
 void EsteriaSelectCharacter(CCharacterComponent* character, uint64_t guid, uint32_t skin, uint32_t face, uint32_t hairStyle, uint32_t hairColor, uint32_t facialHair);
 bool EsteriaEyeLightning(uint64_t guid);
+// The cosmetic wing spell the realm reported for a character (CWG1 tail of SMSG_CHAR_ENUM), 0 for none.
+uint32_t EsteriaSelectWingSpell(uint64_t guid);
+void EsteriaTraceText(const char* text);
 
 // World objects: records the extra appearance bytes carried in the unit/object padding fields for a new component.
 void EsteriaCaptureUnit(CCharacterComponent* character, uint32_t unitPadding, uint32_t objectPadding, bool isPlayer);

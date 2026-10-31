@@ -24,7 +24,12 @@
 #include "WoW/Source/DB/Rec/CreatureModelDataRec.h"
 #include "WoW/Source/DB/Rec/ItemDisplayInfoRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualEffectNameRec.h"
+#include "WoW/Source/DB/Rec/SpellRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualKitModelAttachRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualKitRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualRec.h"
+#include "WoW/Source/Magic/MagicClient/Spell_C.h"
+#include "WoW/Source/Magic/MagicClient/SpellVisuals.h"
 #include "WoW/Source/Game/GameClient/CDrawBowString.h"
 #include "WoW/Source/Glue/CGlueLoading.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
@@ -188,11 +193,85 @@ void CGlueMgr::ProcessAttachment(CM2Model* model, int32_t effectID, uint32_t att
     effect->Release();
 }
 
+static void AttachSelectKit(CM2Model* model, SpellVisualKitRec* kitRec);
+
 // VERIFY: 01cf543c manual
 // OFFSET: 0x004E2CE0
 void CGlueMgr::AttachCharacterSelectVisuals(CM2Model* model) {
-    SpellVisualKitRec* kitRec = g_spellVisualKitDB.GetRecord(989);
+    AttachSelectKit(model, g_spellVisualKitDB.GetRecord(989));
+}
 
+// Kits like the wing auras carry their models in SpellVisualKitModelAttach rows, which the world plays through
+// CGObject_C::PlaySpellVisualKit; this is the select screen's copy of that, minus effects that need a unit.
+static void AttachSelectModelAttachments(CM2Model* model, int32_t kitId) {
+    const uint32_t count = SpellVisualsGetModelAttachRecCount(kitId);
+    char text[256];
+
+    for (uint32_t i = 0; i < count; i++) {
+        const SpellVisualKitModelAttachRec* attach = SpellVisualsGetModelAttachRec(kitId, i);
+        SpellVisualEffectNameRec* effectRec = attach ? g_spellVisualEffectNameDB.GetRecord(attach->m_spellVisualEffectNameID) : nullptr;
+
+        if (!effectRec) {
+            continue;
+        }
+
+        const uint32_t attachId = attach->m_attachmentID < 0 ? 0 : attach->m_attachmentID;
+        snprintf(text, sizeof(text), "wing attach %u: effect %d attachment %d has %d scale %.2f off %.2f %.2f %.2f", i,
+            attach->m_spellVisualEffectNameID, attach->m_attachmentID, model->HasAttachment(attachId), effectRec->m_scale,
+            attach->m_offset[0], attach->m_offset[1], attach->m_offset[2]);
+        EsteriaTraceText(text);
+
+        if (!model->HasAttachment(attachId)) {
+            continue;
+        }
+
+        CM2Model* effect = CCharacterSelection::m_modelFrame->GetScene()->CreateModel(effectRec->m_fileName, 0);
+
+        if (!effect) {
+            continue;
+        }
+
+        C44Matrix matrix;
+        matrix.Scale(effectRec->m_scale);
+        matrix.RotateAroundX(attach->m_roll);
+        matrix.RotateAroundY(attach->m_pitch);
+        matrix.RotateAroundZ(attach->m_yaw);
+        matrix.Translate(C3Vector(attach->m_offset[0], attach->m_offset[1], attach->m_offset[2]));
+        effect->m_fFlags |= 0x8000;
+        effect->m_worldTransform = matrix;
+        effect->AttachToParent(model, attachId, nullptr, 0);
+        effect->Release();
+    }
+}
+
+// The state kit of a character's cosmetic wing aura (server tail CWG1), attached the way the select kit is.
+static void AttachSelectWings(CM2Model* model, uint64_t guid) {
+    SpellRec spell;
+    const uint32_t spellId = EsteriaSelectWingSpell(guid);
+
+    if (!spellId || !g_spellDB.GetRecord(spellId, &spell)) {
+        return;
+    }
+
+    const SpellVisualRec* visual = GetSpellVisual(&spell);
+    char text[256];
+    snprintf(text, sizeof(text), "wing visual %d state %d cast %d precast %d impact %d", spell.m_spellVisualID[0],
+        visual ? visual->m_stateKit : -1, visual ? visual->m_castKit : -1, visual ? visual->m_precastKit : -1, visual ? visual->m_impactKit : -1);
+    EsteriaTraceText(text);
+
+    if (visual) {
+        SpellVisualKitRec* kit = g_spellVisualKitDB.GetRecord(visual->m_stateKit);
+        snprintf(text, sizeof(text), "wing kit %p head %d chest %d base %d lh %d rh %d sp %d %d %d proc %d %d", static_cast<void*>(kit),
+            kit ? kit->m_headEffect : 0, kit ? kit->m_chestEffect : 0, kit ? kit->m_baseEffect : 0, kit ? kit->m_leftHandEffect : 0,
+            kit ? kit->m_rightHandEffect : 0, kit ? kit->m_specialEffect[0] : 0, kit ? kit->m_specialEffect[1] : 0,
+            kit ? kit->m_specialEffect[2] : 0, kit ? kit->m_charProc[0] : 0, kit ? kit->m_charProc[1] : 0);
+        EsteriaTraceText(text);
+        AttachSelectKit(model, kit);
+        AttachSelectModelAttachments(model, visual->m_stateKit);
+    }
+}
+
+static void AttachSelectKit(CM2Model* model, SpellVisualKitRec* kitRec) {
     if (!kitRec) {
         return;
     }
@@ -707,6 +786,8 @@ void CCharacterSelection::ShowCharacter() {
         if (CCharacterSelection::s_characterList[CCharacterSelection::s_selectionIndex].m_characterInfo.m_flags & 0x2000) {
             CGlueMgr::AttachCharacterSelectVisuals(CCharacterSelection::s_characterList[CCharacterSelection::s_selectionIndex].m_component->m_data.m_model);
         }
+
+        AttachSelectWings(characterModel, info.m_guid.m_guid);
 
         CharacterSelectionDisplay* display = &CCharacterSelection::s_characterList[CCharacterSelection::s_selectionIndex];
 
