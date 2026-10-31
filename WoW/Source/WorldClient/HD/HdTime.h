@@ -2,8 +2,8 @@
 #ifndef WOW_SOURCE_WORLDCLIENT_HD_HDTIME_H
 #define WOW_SOURCE_WORLDCLIENT_HD_HDTIME_H
 
-// Not in the original binary. Azeroth Remastered's time of day and sun (HdTime.cpp); every one only with visuals 2
-// (Visuals::AzerothRemastered), the original behaviour otherwise.
+// Not in the original binary. Azeroth Remastered's time of day and sun (HdTime.cpp); hdTime works in every visual set,
+// the others only with visuals 2 (Visuals::AzerothRemastered), the original behaviour otherwise.
 //   hdTime    -1 = real server time (default); 0 to 24 = force this hour on this screen only, e.g. 18.5 = 18:30
 //   hdSunPath 0 = original sun (north-west, under the horizon before 5:30 and after 21:30)
 //             1 = by day (4:50 to 22:10) the sun sits where the world light comes from (north-west, 20 to 37

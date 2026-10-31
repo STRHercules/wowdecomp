@@ -22,6 +22,7 @@
 #include "Engine/Source/Tempest/C33Matrix.h"
 #include "Engine/Source/Tempest/CImVector.h"
 #include <cstring>
+#include <unordered_map>
 #include <vector>
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/Ui/OptionCVars.h"
@@ -743,6 +744,42 @@ void CDetailDoodadInst::FreeBuffers() {
     }
 }
 
+// Not in the original binary (seyris-living-azeroth's GrassDoodads.cpp): where a blade's root and tip are on its texture,
+// from the model's own geometry: the average texture V of the vertices in the lowest and in the highest 12% of its height.
+// False for a model with no height (a flat decal) or no usable V range.
+static bool ScanRootTip(CM2Model* model, float& rootV, float& tipV) {
+    M2Data* m2Data = model->m_shared->m_data;
+    M2SkinProfile* skin = model->m_shared->m_skinData;
+    const uint32_t count = skin->m_vertices.m_count;
+    if (count < 3) return false;
+    float minZ = 1e30f, maxZ = -1e30f;
+    for (uint32_t j = 0; j < count; j++) {
+        const float z = m2Data->m_vertices[skin->m_vertices[j]].m_position.z;
+        minZ = std::min(minZ, z);
+        maxZ = std::max(maxZ, z);
+    }
+    const float height = maxZ - minZ;
+    if (height < 0.05f) return false;
+    const float band = height * 0.12f;
+    float rootSum = 0.0f, tipSum = 0.0f;
+    uint32_t rootN = 0, tipN = 0;
+    for (uint32_t j = 0; j < count; j++) {
+        const M2Vertex& v = m2Data->m_vertices[skin->m_vertices[j]];
+        if (v.m_position.z <= minZ + band) {
+            rootSum += v.m_texcoord[0].y;
+            rootN++;
+        }
+        if (v.m_position.z >= maxZ - band) {
+            tipSum += v.m_texcoord[0].y;
+            tipN++;
+        }
+    }
+    if (!rootN || !tipN) return false;
+    rootV = rootSum / rootN;
+    tipV = tipSum / tipN;
+    return true;
+}
+
 // VERIFY: b905f512 manual
 // OFFSET: 0x007B31E0
 void CDetailDoodadInst::AddDoodad(uint32_t id, const C3Vector& position, float rotation, float scale, const C3Vector& normal, uint16_t triIndex, const CImVector& color) {
@@ -758,7 +795,15 @@ void CDetailDoodadInst::AddDoodad(uint32_t id, const C3Vector& position, float r
     uint32_t indexCount = skin->m_indices.m_count;
     // Not in the original binary: a doodad with a GroundEffectDoodadWind.cdbc row bends its own way (the batch's c68),
     // so it shares a batch only with doodads of its class.
-    const uint16_t windClass = HD::GrassWindClassOf(id);
+    // Its mapping from the model's own geometry is read once per doodad.
+    static std::unordered_map<uint32_t, uint16_t> s_windClasses;
+    auto cached = s_windClasses.find(id);
+    if (cached == s_windClasses.end()) {
+        float rootV = 0.0f, tipV = 0.0f;
+        const bool mapped = ScanRootTip(model, rootV, tipV);
+        cached = s_windClasses.emplace(id, HD::GrassWindClassOf(id, mapped, rootV, tipV)).first;
+    }
+    const uint16_t windClass = cached->second;
 
     uint32_t i;
 

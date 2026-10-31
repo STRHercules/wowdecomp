@@ -39,7 +39,7 @@ float GustAt(float x, float y);
 float StrengthAt(const float pos[3]);
 
 // 0 under a roof or overhang within 40 yd above pos, 1 in the open (cached per 4-yard cell, rays within this frame's
-// budget; 1 where unknown or with worldWindShelter off). Main thread only.
+// budget; -1 where not known yet because the budget is spent, 1 with worldWindShelter off). Main thread only.
 float RoofOpenness(const float pos[3]);
 
 // The player's position this frame (false outside the world).

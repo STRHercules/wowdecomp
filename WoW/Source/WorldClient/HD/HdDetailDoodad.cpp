@@ -72,6 +72,8 @@ float4 cWind5         : register(c58);  // HD: x = anchor, y = 1 / (1 - anchor),
 float4 cActor[8]      : register(c60);  // grass parts around these: xyz = relative to the chunk corner, w = 1 / radius (huge = none)
 float4 cBatch         : register(c68);  // this batch's plant: x = wind scale, y = push scale, z = V where the bend starts, w = 1 / (tip V - that)
 float4 cWind6         : register(c59);  // HD: x = wave 2 phase at the chunk corner, y = phase spread, z = lean, w = 1 on
+float4 cGridInfo      : register(c69);  // HD: xy = this chunk's corner relative to the wind grid's origin (yd), z = 1 / spacing, w = 1 when the grid is on
+float4 cGrid[64]      : register(c100); // HD: x = the world wind's strength at each of the 8 x 8 samples (row = world y, column = world x)
 
 #if POINT_LIGHTS
 // point light i at view position vp, normal n (3.3.5: light direction normalised, n not; 1 / (k0 + k1 d + k2 d^2))
@@ -101,7 +103,17 @@ float2 GrassOffset(float3 lp, float2 uv, float depth)
     float j = h * cWind6.y;
     float s1 = sin(dot(lp.xy, cWind3.zw) + j + cWind0.w) + cWind6.z;
     float s2 = sin(dot(lp.xy, cWind4.zw) + j + cWind6.x);
-    float2 offset = (cWind3.xy * s1 + cWind4.xy * s2) * (w * amp * cBatch.x);
+    // the world wind where this blade stands: the grid's samples, bilinear, the edge's beyond it
+    float place = 1.0;
+    [branch] if (cGridInfo.w > 0.5) {
+        float2 g = clamp((lp.xy + cGridInfo.xy) * cGridInfo.z, 0.0, 6.999);
+        float2 gf = frac(g);
+        int gi = (int)g.x + 8 * (int)g.y;
+        float a0 = lerp(cGrid[gi].x, cGrid[gi + 1].x, gf.x);
+        float a1 = lerp(cGrid[gi + 8].x, cGrid[gi + 9].x, gf.x);
+        place = lerp(a0, a1, gf.y);
+    }
+    float2 offset = (cWind3.xy * s1 + cWind4.xy * s2) * (w * amp * cBatch.x * place);
 
     [unroll] for (int a = 0; a < 8; a++) {
         float2 d = lp.xy - cActor[a].xy;
@@ -609,6 +621,9 @@ void HD::DetailDoodadShaders() {
         v[12 + c] = ground[c];  // c52
     }
     HD::GrassWindPrepare();  // wind phases and player position for this frame (c53..c59 per chunk)
+    int gridCount = 0;
+    const float* grid = HD::GrassWindGrid(&gridCount);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 100, grid, gridCount);  // the wind grid, c100..c163
     float keep = s_shadow ? (s_shadow->m_floatValue < 0.0f ? 0.0f : s_shadow->m_floatValue > 1.0f ? 1.0f : s_shadow->m_floatValue) : 0.5f;
     float pixel[4] = { forever ? 1.0f : 0.0f, test ? 1.0f : 0.0f, keep, 0.0f };
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Pixel, 16, pixel, 1);
@@ -619,6 +634,9 @@ void HD::DetailDoodadVertexConstants(const C44Matrix& world) {
     // c53..c59 grass wind for this chunk (world = translation chunk corner - s_activeWorldView)
     HD::GrassWindConstants(world.d0, world.d1, world.d2, s_vertexConstants + 16);
     g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 49, s_vertexConstants, 19);
+    float gridInfo[4];
+    HD::GrassWindGridInfo(world.d0, world.d1, gridInfo);
+    g_theGxDevicePtr->ShaderConstantsSet(GxSh_Vertex, 69, gridInfo, 1);  // c69: where this chunk is in the wind grid
 }
 
 void HD::DetailDoodadBatchConstants(uint16_t windClass) {

@@ -33,6 +33,8 @@
 #include "WoW/Source/Ui/WorldFrame.h"
 #include "WoW/Source/Ui/OptionCVars.h"
 #include "WoW/Source/Ui/Visuals.h"
+#include "Engine/Source/Tempest/CMath.h"
+#include "WoW/Source/WorldClient/CChunkLiquid.h"
 #include "WoW/Source/WorldClient/CMapBaseObjLink.h"
 #include "WoW/Source/WorldClient/CustomTable.h"
 #include "WoW/Source/WorldClient/HD/HdSurfaceCover.h"
@@ -60,8 +62,8 @@ struct Selector {
 
 // SurfaceCover.cdbc fields that inherit along the Parent chain (a negative value takes the parent's). TintStrength
 // carries TintColor, Depth carries Flags.
-enum Field { kDepth, kMaxSlope, kSlopeFade, kDrift, kBreakup, kRim, kRelax, kTint, kZOffset, kMoistureMin, kFieldCount };
-constexpr uint32_t kColumn[kFieldCount] = { 3, 4, 5, 6, 7, 8, 9, 11, 15, 20 };
+enum Field { kDepth, kMaxSlope, kSlopeFade, kDrift, kBreakup, kRim, kRelax, kTint, kZOffset, kMoistureMin, kMeltKept, kMeltGone, kFieldCount };
+constexpr uint32_t kColumn[kFieldCount] = { 3, 4, 5, 6, 7, 8, 9, 11, 15, 20, 18, 19 };
 
 struct Row {
     float value[kFieldCount];
@@ -83,6 +85,9 @@ struct Cover {
     float tintStrength = 0.0f;
     float zOffset = 0.0f;
     float moistureMin = 2.0f;
+    float meltKept = 0.6f;       // SurfaceCover MeltKeptShare: painted snow left at 15 degC (the donor's default where unset)
+    float meltGone = 25.0f;      // MeltGoneTemperature: degC at which none is left
+    int32_t meltClass = -1;      // index into s_meltClasses for snow covers (a zone keeps one melt state per class)
     uint32_t tintColor = 0;
     uint32_t flags = 0;
     uint32_t coverMaterial = 0;
@@ -258,6 +263,9 @@ Cover ForMaterial(uint32_t material) {
     if (set[kTint]) { c.tintStrength = std::min(value[kTint], 1.0f); c.tintColor = tint; }
     if (set[kZOffset]) c.zOffset = value[kZOffset];
     if (set[kMoistureMin]) c.moistureMin = value[kMoistureMin];
+    if (set[kMeltKept]) c.meltKept = std::min(value[kMeltKept], 1.0f);
+    if (set[kMeltGone]) c.meltGone = std::max(value[kMeltGone], 1.0f);
+    c.meltClass = -1;
     c.texture = texture > 0 ? texture : 0;
     c.coverMaterial = coverMaterial ? coverMaterial : material;
     ForChain(c.coverMaterial, [&](uint32_t id) {
@@ -296,6 +304,20 @@ bool FallenLook(uint32_t area, int32_t map, Cover& out) {
     out = ForMaterial(material);
     out.snow = true;
     return true;
+}
+
+// Painted snow's melting numbers come from its SurfaceCover row: a zone keeps one melt state per distinct pair.
+struct MeltClass {
+    float kept, gone;
+};
+std::vector<MeltClass> s_meltClasses;
+
+int32_t MeltClassOf(float kept, float gone) {
+    for (size_t i = 0; i < s_meltClasses.size(); i++) {
+        if (std::fabs(s_meltClasses[i].kept - kept) < 1e-4f && std::fabs(s_meltClasses[i].gone - gone) < 1e-4f) return static_cast<int32_t>(i);
+    }
+    s_meltClasses.push_back({ kept, gone });
+    return static_cast<int32_t>(s_meltClasses.size()) - 1;
 }
 
 // ---- options ------------------------------------------------------------------------------------------------------
@@ -423,6 +445,9 @@ constexpr float kFarDepth = 0.05f;  // yd: the most the far mesh is lifted by it
 struct ChunkRec {
     float terrain[kChunkVerts] = {};
     float lift[kChunkVerts] = {};
+    float fshare[kChunkVerts] = {};   // the share of each vertex's ground fallen snow can lie on (far mesh; slope and water applied)
+    float pfull[kChunkVerts] = {};    // ...the painted cover's full depth there (yd, capped), and its share of the ground
+    float pshare[kChunkVerts] = {};
     bool any = false;
     std::vector<uint8_t> share, slope, depth;  // per node: share and slope factor (0..255), depth in cm (slope applied)
     std::vector<uint8_t> fall;                 // per node: how much of it fallen snow can lie on (bare or snowy layers, slope applied)
@@ -430,6 +455,7 @@ struct ChunkRec {
     float tint[3] = { 1.0f, 1.0f, 1.0f };
     CTexture* texture = nullptr;
     bool snow = false;
+    int32_t meltClass = -1;
 };
 std::unordered_map<CMapChunk*, ChunkRec> s_recs;
 uint32_t s_recVersion = 0;  // bumped whenever a record is made: the near patch looks again where it had none
@@ -470,6 +496,86 @@ float Dry(const CMapChunk* chunk, float x, float y, float z) {
     return Clamp((z - surface) / 0.3f + 1.0f, 0.0f, 1.0f);
 }
 
+// ---- heat: magma melts snow around it ------------------------------------------------------------------------------
+
+bool IsMagma(int32_t type) {
+    const LiquidTypeRec* rec = g_liquidTypeDB.GetRecord(type);
+    return rec && rec->m_soundBank == 2;  // LiquidType column 3 is its category: 2 = magma
+}
+
+// The magma surface over the terrain tile at (x, y), if there is any (CMapChunk::GetLiquidHeight, magma liquids only).
+bool MagmaHeight(const CMapChunk* chunk, float x, float y, float* height) {
+    const C2Vector pos(-(y - 17066.666f) * 0.24f, -(x - 17066.666f) * 0.24f);
+    const int32_t tx = CMath::fint_(pos.x - 0.5f), ty = CMath::fint_(pos.y - 0.5f);
+    C2iVector tile;
+    tile.x = tx & 7;
+    tile.y = ty & 7;
+    const C2Vector frac(pos.x - tx, pos.y - ty);
+    CMapChunk* mc = const_cast<CMapChunk*>(chunk);
+    for (CChunkLiquid* liquid = mc->m_liquidChunkLinkList.Head(); liquid; liquid = mc->m_liquidChunkLinkList.Next(liquid)) {
+        if (IsMagma(liquid->m_type) && liquid->TileExists(tile.x, tile.y) && liquid->GetHeight(frac, tile, *height)) return true;
+    }
+    return false;
+}
+
+// Heat 0..1 on the chunk's cover nodes (kNodes x kNodes): full within 1 yd of magma, gone by 12 yd (the donor's reach).
+// Empty where the chunk has no magma. shortcut: only the chunk's own magma counts, not a neighbour's pool across the
+// border; hot terrain materials (GroundMaterial.Temperature) are not read yet.
+void ComputeHeat(const CMapChunk* chunk, const ChunkRec& rec, std::vector<float>& out) {
+    out.clear();
+    CMapChunk* mc = const_cast<CMapChunk*>(chunk);
+    bool magma = false;
+    for (CChunkLiquid* liquid = mc->m_liquidChunkLinkList.Head(); liquid && !magma; liquid = mc->m_liquidChunkLinkList.Next(liquid)) magma = IsMagma(liquid->m_type);
+    if (!magma) return;
+    const float node = kChunkSize / (kNodes - 1);
+    std::vector<float> d(kNodes * kNodes, 1e9f);
+    bool found = false;
+    for (int32_t a = 0; a < kNodes; a++) {
+        for (int32_t b = 0; b < kNodes; b++) {
+            const float x = ChunkTop(chunk) - a * node, y = ChunkLeft(chunk) - b * node;
+            float surface;
+            if (MagmaHeight(chunk, x, y, &surface) && surface >= OverTriangles(chunk, rec.terrain, x, y) - 0.3f) {
+                d[a * kNodes + b] = 0.0f;
+                found = true;
+            }
+        }
+    }
+    if (!found) return;
+    // a two-pass chamfer distance, in nodes
+    for (int32_t a = 0; a < kNodes; a++) {
+        for (int32_t b = 0; b < kNodes; b++) {
+            float& v = d[a * kNodes + b];
+            if (a > 0) v = std::min(v, d[(a - 1) * kNodes + b] + 1.0f);
+            if (b > 0) v = std::min(v, d[a * kNodes + b - 1] + 1.0f);
+            if (a > 0 && b > 0) v = std::min(v, d[(a - 1) * kNodes + b - 1] + 1.4142f);
+            if (a > 0 && b < kNodes - 1) v = std::min(v, d[(a - 1) * kNodes + b + 1] + 1.4142f);
+        }
+    }
+    for (int32_t a = kNodes - 1; a >= 0; a--) {
+        for (int32_t b = kNodes - 1; b >= 0; b--) {
+            float& v = d[a * kNodes + b];
+            if (a < kNodes - 1) v = std::min(v, d[(a + 1) * kNodes + b] + 1.0f);
+            if (b < kNodes - 1) v = std::min(v, d[a * kNodes + b + 1] + 1.0f);
+            if (a < kNodes - 1 && b < kNodes - 1) v = std::min(v, d[(a + 1) * kNodes + b + 1] + 1.4142f);
+            if (a < kNodes - 1 && b > 0) v = std::min(v, d[(a + 1) * kNodes + b - 1] + 1.4142f);
+        }
+    }
+    out.resize(kNodes * kNodes);
+    for (int32_t i = 0; i < kNodes * kNodes; i++) {
+        const float t = Clamp((d[i] * node - 1.0f) / 11.0f, 0.0f, 1.0f);
+        out[i] = 1.0f - t * t * (3.0f - 2.0f * t);
+    }
+}
+
+// The heat at world (x, y) from a chunk's heat nodes (nearest node); 0 without any.
+float HeatAt(const CMapChunk* chunk, const std::vector<float>& heat, float x, float y) {
+    if (heat.empty()) return 0.0f;
+    const float node = kChunkSize / (kNodes - 1);
+    const int32_t a = ClampI(static_cast<int32_t>(std::lround((ChunkTop(chunk) - x) / node)), 0, kNodes - 1);
+    const int32_t b = ClampI(static_cast<int32_t>(std::lround((ChunkLeft(chunk) - y) / node)), 0, kNodes - 1);
+    return heat[a * kNodes + b];
+}
+
 // What a layer's cover keeps of `dry`: SurfaceCover Flags 0x1 prevents it underwater, 0x2 keeps it to the water's floor.
 float LayerDry(const Cover& c, bool fall, float dry) {
     if (fall || (c.flags & 0x1)) return dry;
@@ -497,12 +603,88 @@ struct Entry {
     int32_t slot = -1;
     float layerCover[4] = {};
     float fallLayer[4] = {};   // 1 where fallen snow may lie (scaled by its depth at draw time)
-    float snowLayer[4] = {};   // 1 where the painted cover is snow (its share follows the melting at draw time)
+    int32_t snowClass[4] = { -1, -1, -1, -1 };   // the melt class of a painted snow layer (its share follows the melting at draw time)
+    // The vertices as built (without fallen snow's lift) and each one's fallen-snow share, so the mesh can be lifted again
+    // as the fallen depth changes without building the chunk again.
+    std::vector<CGxVertexPNC> base;
+    std::vector<float> fshare, pfull, pshare;  // per vertex: fallen snow's share; painted cover's depth and share
+    std::vector<float> open, fallFrac;         // per vertex: 1 in the open, 0 under a roof; the fallen share of its cover
+    int32_t paintClass = -1;                   // the melt class of the chunk's painted snow
+    float fallApplied = 0.0f;                  // the lifts the slot's vertices carry now
+    float keepApplied = 1.0f;
+    bool roofDirty = false;                    // `open` changed since they were written
+    uint32_t roofCursor = 0;                   // the next vertex whose roof test is still to be done
+    ULONGLONG roofTime = 0;                    // when the last pass over them finished
     bool painted = false;      // some layer has painted cover; else the mesh is only there for fallen snow
+    bool waitFall = false;     // built without fallen snow's part because none lay then: built again once it does
     float breakup = 0.0f;
     CTexture* texture = nullptr;
 };
 std::unordered_map<CMapRenderChunk*, Entry> s_entries;
+constexpr float kFarFall = 0.6f;  // yd: the most fallen snow lifts the far mesh (= the deepest it gets, so far and near agree)
+float s_farFall = 0.0f;           // fallen snow's lift of the far mesh now, in 2 cm steps
+int32_t s_refreshBudget = 0;      // far chunks that may be lifted again this frame
+int32_t s_roofBudget = 0;         // far vertices whose roof test may be read this frame
+int32_t s_waitBudget = 0;         // chunks built again this frame because fallen snow has started
+
+// How far fallen snow lifts the far mesh where `share` of the ground can hold it: none below a third (no lip where the
+// per-pixel edge is thinner than the vertices can follow), the full lift from near all of it.
+float FarFall(float lift, float share) {
+    const float t = Clamp((share - 0.35f) / 0.65f, 0.0f, 1.0f);
+    return lift * t * t * (3.0f - 2.0f * t);
+}
+
+constexpr float kFarPainted = 0.6f;  // yd: the most a painted cover lifts the far mesh
+float KeepNow(int32_t meltClass);
+
+// Painted snow's melted share in 5% steps (the far mesh follows it that coarsely).
+float QuantizedKeep(float keep) { return std::floor(keep / 0.05f + 0.5f) * 0.05f; }
+
+// The far mesh's vertices as the entry built them, lifted by the fallen snow (`fall` yd at most) and the painted cover
+// (kept share `keep`), each where its share of the ground is high enough, and with the fallen share of the cover thinned
+// under roofs.
+void LiftVertices(const Entry& e, CGxVertexPNC* out, float fall, float keep) {
+    for (size_t i = 0; i < e.base.size(); i++) {
+        out[i] = e.base[i];
+        const float open = e.open[i];
+        const float lift = std::max(FarFall(fall * open, e.fshare[i]), FarFall(e.pfull[i] * keep, e.pshare[i]));
+        out[i].m_position.z += lift;
+        if (open < 1.0f) {
+            const float a = out[i].m_color.a * (1.0f - e.fallFrac[i] * (1.0f - open));
+            out[i].m_color.a = static_cast<uint8_t>(a + 0.5f);
+        }
+    }
+}
+// What the cover costs, per status window (surfaceCoverInfo): calls, milliseconds in all of them, and the worst one.
+struct Perf {
+    double ms = 0.0, worst = 0.0;
+    uint32_t n = 0;
+};
+Perf s_perfBuild, s_perfApply, s_perfRoof, s_perfUpdate, s_perfNear;
+
+double NowMs() {
+    static const double s_scale = [] {
+        LARGE_INTEGER f;
+        QueryPerformanceFrequency(&f);
+        return 1000.0 / static_cast<double>(f.QuadPart);
+    }();
+    LARGE_INTEGER c;
+    QueryPerformanceCounter(&c);
+    return static_cast<double>(c.QuadPart) * s_scale;
+}
+
+struct PerfScope {
+    Perf& perf;
+    double start;
+    explicit PerfScope(Perf& p) : perf(p), start(NowMs()) {}
+    ~PerfScope() {
+        const double d = NowMs() - start;
+        perf.ms += d;
+        perf.n++;
+        if (d > perf.worst) perf.worst = d;
+    }
+};
+float s_fallenDepth = 0.0f;          // fallen snow in the player's zone, as of this frame
 uint32_t s_draws = 0;     // cover draws since the status line was last shown
 uint32_t s_starved = 0;   // since then, chunks that wanted a slot and found none
 
@@ -580,6 +762,7 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
         if (!material) continue;
         Cover c = ForMaterial(material);
         c.snow = IsSnow(c.coverMaterial, areaId, mapId);
+        c.meltClass = c.snow ? MeltClassOf(c.meltKept, c.meltGone) : -1;
         c.snowable = c.snow || c.depth <= 0.0f;
         // shortcut: covers that need ground moisture (mud) wait for a moisture model; nothing else is gated yet
         if (c.moistureMin <= 1.0f || (!c.snow && !others)) c.depth = 0.0f;
@@ -588,12 +771,18 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
     }
     // Layers with no material at all are bare ground: snowable too.
     Cover fallenLook;
-    const bool fallenOn = OptionCVars::Bool(s_fallen, true) && FallenLook(areaId, mapId, fallenLook);
-    bool snowableAny = false;
+    const bool fallenAllowed = OptionCVars::Bool(s_fallen, true) && FallenLook(areaId, mapId, fallenLook);
+    // Bare chunks get a mesh and a record only while fallen snow lies (a zone's snow is one depth): else every chunk in
+    // view would build one for snow that is not there, and spinning the camera would build hundreds a second. They are
+    // built when the snow starts (e.waitFall, a few a frame).
+    const bool fallenOn = fallenAllowed && s_fallenDepth > 0.0f;
+    bool snowableAny = false, snowableRaw = false;
     for (uint32_t i = 0; i < layerCount; i++) {
         if (!covers[i].snow && covers[i].depth <= 0.0f && covers[i].coverMaterial == 0) covers[i].snowable = true;
+        snowableRaw = snowableRaw || (fallenAllowed && covers[i].snowable);
         snowableAny = snowableAny || (fallenOn && covers[i].snowable);
     }
+    e.waitFall = snowableRaw && !snowableAny;
 
     CGxVertexPNC vertices[2 * kChunkVerts];
     const uint32_t chunks = rc->m_mapChunks[1] ? 2 : 1;
@@ -622,6 +811,10 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
         LayerWeights(width, height, big, (y - rc->m_vec1.y) * alphaY, (x - rc->m_vec1.x) * alphaX, w);
     };
 
+    // Magma's heat melts the cover around it (none where the chunk has no magma).
+    std::vector<float> heat[2];
+    for (uint32_t k = 0; k < chunks; k++) ComputeHeat(rc->m_mapChunks[k], *recs[k], heat[k]);
+
     // The cover's nodes, for the near patch.
     const float node = kChunkSize / (kNodes - 1);
     for (uint32_t k = 0; k < chunks; k++) {
@@ -639,12 +832,13 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
                 const C3Vector& n = vertices[k * kChunkVerts + r * 17 + c].m_normal;
                 const float nx = ChunkTop(mc) - a * node, ny = ChunkLeft(mc) - b * node;
                 const float dry = Dry(mc, nx, ny, OverTriangles(mc, rec.terrain, nx, ny));
+                const float warm = 1.0f - (heat[k].empty() ? 0.0f : heat[k][a * kNodes + b]);
                 float share = 0.0f, slope = 0.0f, depth = 0.0f, fall = 0.0f;
                 for (uint32_t l = 0; l < layerCount; l++) {
-                    if (fallenOn && covers[l].snowable) fall += w[l] * dry * SlopeFactor(fallenLook, n);
+                    if (fallenOn && covers[l].snowable) fall += w[l] * dry * warm * SlopeFactor(fallenLook, n);
                     if (covers[l].depth <= 0.0f || w[l] <= 0.0f) continue;
                     const float s = SlopeFactor(covers[l], n);
-                    const float wl = w[l] * LayerDry(covers[l], false, dry);
+                    const float wl = w[l] * LayerDry(covers[l], false, dry) * (covers[l].snow ? warm : 1.0f);
                     share += wl;
                     slope += wl * s;
                     depth += wl * s * covers[l].depth;
@@ -678,6 +872,7 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
 
     // The far mesh: each vertex lifted by its cover.
     float fullLift[2 * kChunkVerts] = {};
+    float vPaintedFull[2 * kChunkVerts] = {}, vPaintedShare[2 * kChunkVerts] = {}, vFallFrac[2 * kChunkVerts] = {};
     const float depthScale = OptionCVars::Float(s_depth, 0.0f, 4.0f, 1.0f);
     const bool rgba = g_theGxDevicePtr->Caps().m_colorFormat == GxCF_rgba;
     for (uint32_t i = 0; i < count; i++) {
@@ -685,9 +880,10 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
         float w[4];
         weights(v.m_position.x, v.m_position.y, w);
         const float drift = Drift(v.m_position.x, v.m_position.y);
-        float share = 0.0f, slopeShare = 0.0f, depth = 0.0f, zOffset = 0.0f, covered = 0.0f;
+        float share = 0.0f, slopeShare = 0.0f, depth = 0.0f, zOffset = 0.0f, covered = 0.0f, fallShare = 0.0f, paintedShare = 0.0f;
         float tint[3] = { 0.0f, 0.0f, 0.0f };
         const float dry = Dry(rc->m_mapChunks[i / kChunkVerts], v.m_position.x, v.m_position.y, v.m_position.z);
+        const float warm = 1.0f - HeatAt(rc->m_mapChunks[i / kChunkVerts], heat[i / kChunkVerts], v.m_position.x, v.m_position.y);
         for (uint32_t l = 0; l < layerCount; l++) {
             const Cover& c = covers[l];
             // Bare layers carry fallen snow: shaped by its look, no painted depth (the pixel shader's cover share for
@@ -696,13 +892,17 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
             if ((c.depth <= 0.0f && !fall) || w[l] <= 0.0f) continue;
             const Cover& look = fall ? fallenLook : c;
             const float slope = SlopeFactor(look, v.m_normal);
-            const float wl = w[l] * LayerDry(c, fall, dry);   // the layer's share that stays dry enough for its cover
+            // the layer's share that stays dry (and, for snow, cool) enough for its cover
+            const float wl = w[l] * LayerDry(c, fall, dry) * (fall || c.snow ? warm : 1.0f);
             covered += w[l];
             share += wl;
             slopeShare += wl * slope;
             if (!fall) {
+                paintedShare += wl * slope;
                 depth += wl * slope * c.depth * std::max(0.0f, 1.0f + c.drift * drift);
                 zOffset += wl * slope * c.zOffset;
+            } else {
+                fallShare += wl * slope;
             }
             const float t = look.tintStrength;
             tint[0] += wl * (1.0f + (((look.tintColor >> 16) & 255) / 255.0f - 1.0f) * t);
@@ -710,14 +910,22 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
             tint[2] += wl * (1.0f + ((look.tintColor & 255) / 255.0f - 1.0f) * t);
         }
         const float slope = share > 0.0f ? slopeShare / share : 0.0f;
-        // Far away the cover is a skin: its edges follow the alpha maps per pixel, much finer than these vertices 4 yd
-        // apart, so a cover of its full depth would end in a lip hanging over the ground. The full depth only shades it
-        // (normals below); the near patch, whose edges slope down to the ground, has the volume. A floor of 2 cm under
-        // any cover, so it never fights the terrain for depth.
+        // Far away the cover's edges follow the alpha maps per pixel, much finer than these vertices 4 yd apart, so a
+        // cover of its full depth would end in a lip hanging over the ground: the mesh is lifted only where most of the
+        // ground is covered (FarLift tapers it), by the cover's depth as it is now (melting, fallen snow). What is built
+        // here is a floor of 2 cm under any cover, so it never fights the terrain for depth, and the numbers the lift
+        // is made of (LiftVertices).
         const float full = share > 0.0f ? std::max(0.0f, depth * depthScale + zOffset) : 0.0f;
-        const float lift = share > 0.0f ? std::min(full, kFarDepth) + 0.02f * std::min(1.0f, share * 4.0f) : 0.0f;
+        const float lift = share > 0.0f ? 0.02f * std::min(1.0f, share * 4.0f) : 0.0f;
         v.m_position.z += lift;
-        recs[i / kChunkVerts]->lift[i % kChunkVerts] = lift;
+        ChunkRec& vrec = *recs[i / kChunkVerts];
+        vrec.lift[i % kChunkVerts] = lift;
+        vrec.fshare[i % kChunkVerts] = Clamp(fallShare, 0.0f, 1.0f);
+        vrec.pfull[i % kChunkVerts] = std::min(full, kFarPainted);
+        vrec.pshare[i % kChunkVerts] = Clamp(paintedShare, 0.0f, 1.0f);
+        vPaintedFull[i] = std::min(full, kFarPainted);
+        vPaintedShare[i] = Clamp(paintedShare, 0.0f, 1.0f);
+        vFallFrac[i] = share > 0.0f ? Clamp(fallShare / share, 0.0f, 1.0f) : 0.0f;
         fullLift[i] = full;
         CImVector color;
         for (int32_t c = 0; c < 3; c++) tint[c] = share > 0.0f ? tint[c] / share : 1.0f;
@@ -783,7 +991,7 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
         if (!e.texture) e.texture = CoverTexture(covers[l].texture);
     }
     e.painted = any;
-    for (uint32_t l = 0; l < 4; l++) e.snowLayer[l] = l < layerCount && covers[l].depth > 0.0f && covers[l].snow ? 1.0f : 0.0f;
+    for (uint32_t l = 0; l < 4; l++) e.snowClass[l] = l < layerCount && covers[l].depth > 0.0f && covers[l].snow ? covers[l].meltClass : -1;
     for (uint32_t l = 0; l < 4; l++) e.fallLayer[l] = l < layerCount && fallenOn && covers[l].snowable && covers[l].depth <= 0.0f ? 1.0f : 0.0f;
     if (!any) {
         e.snow = true;
@@ -805,6 +1013,7 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
             rec.tint[2] = 1.0f + ((c.tintColor & 255) / 255.0f - 1.0f) * c.tintStrength;
             rec.texture = CoverTexture(c.texture);
             rec.snow = c.snow;
+            rec.meltClass = c.meltClass;
         }
     }
 
@@ -813,6 +1022,25 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
         s_starved++;
         return false;
     }
+    // The built vertices and what their lift is made of, kept so the mesh can be lifted again as the depth changes. Built
+    // lifted by the current depths, so a chunk streaming in is never lower than its neighbours.
+    e.base.assign(vertices, vertices + count);
+    e.fshare.resize(count);
+    e.pfull.assign(vPaintedFull, vPaintedFull + count);
+    e.pshare.assign(vPaintedShare, vPaintedShare + count);
+    e.fallFrac.assign(vFallFrac, vFallFrac + count);
+    e.open.assign(count, 1.0f);
+    for (uint32_t i = 0; i < count; i++) e.fshare[i] = recs[i / kChunkVerts]->fshare[i % kChunkVerts];
+    e.paintClass = -1;
+    for (uint32_t l = 0; l < layerCount; l++) {
+        if (covers[l].depth > 0.0f && covers[l].snow) e.paintClass = covers[l].meltClass;
+    }
+    e.roofDirty = false;
+    e.roofCursor = 0;
+    e.roofTime = 0;
+    e.fallApplied = s_farFall;
+    e.keepApplied = QuantizedKeep(KeepNow(e.paintClass));
+    LiftVertices(e, vertices, e.fallApplied, e.keepApplied);
     CGxBuf* buf = s_slots[e.slot].buf;
     char* dst = g_theGxDevicePtr->BufLock(buf);
     if (!dst) return false;
@@ -820,6 +1048,23 @@ bool Build(CMapRenderChunk* rc, Entry& e, ULONGLONG now) {
     g_theGxDevicePtr->BufUnlock(buf, 0);
     buf->m_hasData = 1;
     return true;
+}
+
+// The slot's vertices lifted again by the current fallen depth and painted share.
+void ApplyFar(Entry& e, float fall, float keep) {
+    if (e.base.empty() || e.slot < 0) return;
+    static std::vector<CGxVertexPNC> s_scratch;
+    s_scratch.resize(e.base.size());
+    LiftVertices(e, s_scratch.data(), fall, keep);
+    CGxBuf* buf = s_slots[e.slot].buf;
+    char* dst = g_theGxDevicePtr->BufLock(buf);
+    if (!dst) return;
+    std::memcpy(dst, s_scratch.data(), s_scratch.size() * sizeof(CGxVertexPNC));
+    g_theGxDevicePtr->BufUnlock(buf, 0);
+    buf->m_hasData = 1;
+    e.fallApplied = fall;
+    e.keepApplied = keep;
+    e.roofDirty = false;
 }
 
 bool Fresh(const Entry& e, CMapRenderChunk* rc) {
@@ -838,12 +1083,15 @@ constexpr int32_t kBlend = 48;           // cells along the border that blend in
 
 struct Cell {
     float terrain = 0.0f;
-    float coarse = 0.0f;   // the far mesh here (the border blends into it)
+    float coarse = 0.0f;   // the far mesh here (the border blends into it), with fallen snow's lift as of this frame
+    float coarseBase = 0.0f;  // ...without it
+    float farShare = 0.0f; // the far mesh's fallen-snow share here
+    float farPFull = 0.0f, farPShare = 0.0f;  // ...and its painted cover's depth and share
     float lift = 0.0f;     // the cover's depth with drifts and lumps, untouched
     float share = 0.0f;    // how much of the ground here is covered, slope included (0..1)
     float pShare = 0.0f;   // painted cover: coverage before its edge, and what Edge needs to redo it as it melts
     float pNoise = 0.0f, pBreakup = 0.0f, pDepth = 0.0f;
-    bool melts = false;    // the painted cover is snow (it thins with the weather)
+    int32_t meltClass = -1;  // the painted cover is snow of this melt class (it thins with the weather); -1 not snow
     float fAlpha = 0.0f;   // fallen snow: the edge's alpha here, if the zone has some
     float fRise = 0.0f;    // fallen snow: the share of its depth standing here (edges slope to the ground)
     float fMul = 1.0f;     // fallen snow: drifts and lumps as a multiple of its depth
@@ -900,7 +1148,10 @@ void SampleCell(Cell& cell, float x, float y) {
     const ChunkRec& rec = it->second;
     cell.state = 1;
     cell.terrain = OverTriangles(chunk, rec.terrain, x, y);
-    cell.coarse = cell.terrain + OverTriangles(chunk, rec.lift, x, y);
+    cell.coarse = cell.coarseBase = cell.terrain + OverTriangles(chunk, rec.lift, x, y);
+    cell.farShare = OverTriangles(chunk, rec.fshare, x, y);
+    cell.farPFull = OverTriangles(chunk, rec.pfull, x, y);
+    cell.farPShare = OverTriangles(chunk, rec.pshare, x, y);
     if (!rec.any || rec.share.empty()) return;
 
     // The edge as the chunks' pixel shader draws it (breakup noise moving it, a soft band), and the cover sloping down
@@ -944,7 +1195,7 @@ void SampleCell(Cell& cell, float x, float y) {
     cell.pNoise = n;
     cell.pBreakup = b;
     cell.pDepth = std::max(0.0f, depth + lumps);
-    cell.melts = rec.snow;
+    cell.meltClass = rec.snow ? rec.meltClass : -1;
 }
 
 void Recentre(int32_t oi, int32_t oj, bool keep) {
@@ -1001,6 +1252,8 @@ void Stamp(const C3Vector& pos, float radius) {
     }
 }
 
+float s_trenchDeep = 1.0f;  // trench width multiplier from the fallen snow's depth (1 up to 25 cm, 2.5 at 62 cm)
+
 struct Stamper {
     C3Vector pos;
     float radius;
@@ -1011,7 +1264,8 @@ CGObject_C* s_self = nullptr;
 float StampRadius(CGUnit_C* unit) {
     float radius = (unit->m_unit ? unit->m_unit->m_unitFieldBoundingradius : 0.4f) * OptionCVars::Float(s_trenchScale, 0.2f, 4.0f, 1.0f);
     if (unit->IsMounted()) radius *= 1.6f;
-    return Clamp(radius, 0.25f, 3.0f);
+    // Deep snow: a trench as wide as the snow is deep, so the walls don't stand over the unit's legs.
+    return Clamp(radius * s_trenchDeep, 0.25f, 4.0f);
 }
 
 int32_t CollectUnit(WOWGUID guid, void*) {
@@ -1040,30 +1294,30 @@ constexpr float kSublimationHalfLife = 8.0f * 3600.0f;  // seconds, calm average
 // Painted snow's melting (env/Snow.hpp's MeltCap and StepKeep): its share `keep` follows a cap that falls as the air
 // warms (all of it at or below 0 degC, down to kDefaultKeptShare at 15 degC, gone at kDefaultGoneTemperature) by
 // degree-days, and grows back in the cold, faster while it snows.
-// shortcut: the cap's two numbers are the donor's defaults, not SurfaceCover's MeltKeptShare / MeltGoneTemperature; no
-// local heat (lava) melting yet.
+// The cap's two numbers come from the cover's SurfaceCover row (MeltKeptShare, MeltGoneTemperature; the donor's 0.6 and
+// 25 degC where unset). Magma's heat melts the cover around it at once (ComputeHeat), not through a state.
 constexpr float kRegrowPerSecond = 0.05f / 3600.0f, kRegrowSnowingBoost = 4.0f, kTypicalPaintedDepth = 0.35f;
-constexpr float kDefaultKeptShare = 0.6f, kDefaultGoneTemperature = 25.0f, kMildEnd = 15.0f;
+constexpr float kMildEnd = 15.0f;
 
-float MeltCap(float t) {
+float MeltCap(float t, float kept, float gone) {
     if (t <= 0.0f) return 1.0f;
-    if (t >= kDefaultGoneTemperature) return 0.0f;
-    const float mildEnd = std::min(kDefaultGoneTemperature, kMildEnd);
-    if (t < mildEnd) return 1.0f + (kDefaultKeptShare - 1.0f) * t / kMildEnd;
-    const float atMildEnd = 1.0f + (kDefaultKeptShare - 1.0f) * mildEnd / kMildEnd;
-    return atMildEnd * (kDefaultGoneTemperature - t) / (kDefaultGoneTemperature - mildEnd);
+    if (t >= gone) return 0.0f;
+    const float mildEnd = std::min(gone, kMildEnd);
+    if (t < mildEnd) return 1.0f + (kept - 1.0f) * t / kMildEnd;
+    const float atMildEnd = 1.0f + (kept - 1.0f) * mildEnd / kMildEnd;
+    return atMildEnd * (gone - t) / (gone - mildEnd);
 }
 
 struct Zone {
     float depth = 0.0f;    // fallen snow, yd
-    float keep = 1.0f;     // painted snow's share left
-    bool started = false;  // keep has taken its first value
+    std::vector<float> keep;        // painted snow's share left, per melt class
+    std::vector<uint8_t> started;   // ...and whether that has taken its first value
     double lastSeen = 0.0; // seconds of play the player was last in it
     float catchUp = 0.0f;  // seconds left of running its rules fast, after entering it
 };
 std::map<uint64_t, Zone> s_zones;    // by map and zone
-float s_keep = 1.0f;                 // the player's zone's painted share, as of this frame
-float s_fallenDepth = 0.0f;          // the player's zone, as of this frame
+std::vector<float> s_keepNow;        // the player's zone's painted share per melt class, as of this frame
+float KeepNow(int32_t meltClass) { return meltClass >= 0 && meltClass < static_cast<int32_t>(s_keepNow.size()) ? s_keepNow[meltClass] : 1.0f; }
 float s_fallenClock = 0.0f;
 uint32_t s_pressed = 0;              // cells pressed by a trench (status line)
 float s_fallenTemperature = 0.0f;
@@ -1082,18 +1336,23 @@ void StepZone(Zone& zone, float step, float air, float humidity, float wind, flo
         if (air > 0.0f && depth > 0.0f) depth -= std::min(depth, kMeltPerDegreeSecond * air * step);
         if (depth < 0.001f) depth = 0.0f;
     }
-    if (OptionCVars::Bool(s_melt, true)) {
-        const float cap = MeltCap(air);
-        if (!zone.started) {
-            zone.keep = cap;  // a zone first seen: as if the season had been running
-            zone.started = true;
-        } else if (zone.keep > cap) {
-            zone.keep = std::max(cap, zone.keep - kMeltPerDegreeSecond * std::max(air, 0.0f) / kTypicalPaintedDepth * step);
-        } else {
-            zone.keep = std::min(cap, zone.keep + kRegrowPerSecond * (1.0f + kRegrowSnowingBoost * snowing) / kTypicalPaintedDepth * step);
+    zone.keep.resize(s_meltClasses.size(), 1.0f);
+    zone.started.resize(s_meltClasses.size(), 0);
+    for (size_t c = 0; c < s_meltClasses.size(); c++) {
+        float& keep = zone.keep[c];
+        if (!OptionCVars::Bool(s_melt, true)) {
+            keep = 1.0f;
+            continue;
         }
-    } else {
-        zone.keep = 1.0f;
+        const float cap = MeltCap(air, s_meltClasses[c].kept, s_meltClasses[c].gone);
+        if (!zone.started[c]) {
+            keep = cap;  // a zone first seen: as if the season had been running
+            zone.started[c] = 1;
+        } else if (keep > cap) {
+            keep = std::max(cap, keep - kMeltPerDegreeSecond * std::max(air, 0.0f) / kTypicalPaintedDepth * step);
+        } else {
+            keep = std::min(cap, keep + kRegrowPerSecond * (1.0f + kRegrowSnowingBoost * snowing) / kTypicalPaintedDepth * step);
+        }
     }
 }
 
@@ -1106,7 +1365,7 @@ uint64_t s_playerKey = 0;
 void StepFallen(float dt, const CMapChunk* chunk) {
     if (!chunk) {
         s_fallenDepth = 0.0f;
-        s_keep = 1.0f;
+        s_keepNow.clear();
         return;
     }
     s_clock += dt;
@@ -1149,7 +1408,7 @@ void StepFallen(float dt, const CMapChunk* chunk) {
         }
     }
     s_fallenDepth = OptionCVars::Bool(s_fallen, true) ? zone.depth : 0.0f;
-    s_keep = zone.keep;
+    s_keepNow = zone.keep;
 }
 
 // Roofs: LivingWind's roof test (a ray 40 yd up, cached per 4-yard cell) on a 4-yard grid over the near patch, blended
@@ -1163,7 +1422,7 @@ void UpdateOpen() {
     s_openI0 = static_cast<int32_t>(std::floor(s_oi * kCell / kRoofGrid));
     s_openJ0 = static_cast<int32_t>(std::floor(s_oj * kCell / kRoofGrid));
     s_openN = static_cast<int32_t>(std::ceil(kCells * kCell / kRoofGrid)) + 2;
-    s_open.resize(s_openN * s_openN);
+    if (static_cast<int32_t>(s_open.size()) != s_openN * s_openN) s_open.assign(s_openN * s_openN, 1.0f);
     for (int32_t a = 0; a < s_openN; a++) {
         for (int32_t b = 0; b < s_openN; b++) {
             const float x = (s_openI0 + a) * kRoofGrid, y = (s_openJ0 + b) * kRoofGrid;
@@ -1171,7 +1430,8 @@ void UpdateOpen() {
             const int32_t cj = ClampI(static_cast<int32_t>(std::lround(y / kCell)) - s_oj, 0, kVerts - 1);
             const Cell& under = s_cells[ci * kVerts + cj];
             const float pos[3] = { x, y, under.state == 1 ? under.terrain : s_nearZ };
-            s_open[a * s_openN + b] = LivingWind::RoofOpenness(pos);
+            const float open = LivingWind::RoofOpenness(pos);
+            if (open >= 0.0f) s_open[a * s_openN + b] = open;  // negative: this frame's rays are spent, keep the last
         }
     }
 }
@@ -1191,13 +1451,16 @@ void ShowInfo() {
     const ULONGLONG now = GetTickCount64();
     if (!s_info || now - s_last < 500) return;
     s_last = now;
-    char text[900];
-    std::snprintf(text, sizeof text, "shaders: %s; %u cover draws in 0.5 s, %u chunk(s) found no slot (%u slots); near patch %s (%.0f yd across, %u cells pressed); fallen snow %.1f cm at %.1f C, painted snow %.0f%% kept; %s",
+    char text[1300];
+    std::snprintf(text, sizeof text, "COST in 0.5 s (calls/ms/worst): build %u/%.1f/%.1f, lift %u/%.1f/%.1f, roof %u/%.1f/%.1f, update %u/%.1f/%.1f, near %u/%.1f/%.1f; shaders: %s; %u cover draws, %u chunk(s) found no slot (%u slots); near patch %s (%.0f yd across, %u cells pressed); fallen snow %.1f cm at %.1f C, painted snow %.0f%% kept; %s",
+                  s_perfBuild.n, s_perfBuild.ms, s_perfBuild.worst, s_perfApply.n, s_perfApply.ms, s_perfApply.worst, s_perfRoof.n, s_perfRoof.ms, s_perfRoof.worst,
+                  s_perfUpdate.n, s_perfUpdate.ms, s_perfUpdate.worst, s_perfNear.n, s_perfNear.ms, s_perfNear.worst,
                   HD::SurfaceCoverShaderInfo(), s_draws, s_starved, static_cast<uint32_t>(s_slots.size()),
-                  !s_haveNear ? "off" : s_nearAny ? "covered" : "bare", kCell * kCells, s_pressed, s_fallenDepth * 91.44f, s_fallenTemperature, s_keep * 100.0f,
+                  !s_haveNear ? "off" : s_nearAny ? "covered" : "bare", kCell * kCells, s_pressed, s_fallenDepth * 91.44f, s_fallenTemperature, KeepNow(0) * 100.0f,
                   s_loaded ? s_tableStatus : "tables not loaded yet");
     s_draws = 0;
     s_starved = 0;
+    s_perfBuild = s_perfApply = s_perfRoof = s_perfUpdate = s_perfNear = Perf();
     s_info->Set(text, true, false, false, false);
 }
 
@@ -1266,6 +1529,7 @@ void SurfaceCover::Forget(CMapRenderChunk* chunk) {
 }
 
 void SurfaceCover::Update(float elapsedSec) {
+    PerfScope timing(s_perfUpdate);
     s_frame++;
     ShowInfo();
     C3Vector player;
@@ -1319,17 +1583,27 @@ void SurfaceCover::Update(float elapsedSec) {
     const float fallen = s_fallenDepth * OptionCVars::Float(s_depth, 0.0f, 4.0f, 1.0f);
     const float presence = Clamp(s_fallenDepth / 0.02f, 0.0f, 1.0f);
     if (presence > 0.0f) UpdateOpen();
+    s_trenchDeep = Clamp(fallen / 0.25f, 1.0f, 2.5f);
+    s_farFall = std::floor(std::min(fallen, kFarFall) / 0.02f + 0.5f) * 0.02f;
+    s_refreshBudget = 96;
+    s_roofBudget = 400;
+    s_waitBudget = 24;
     s_nearAny = false;
     for (int32_t index = 0; index < kVerts * kVerts; index++) {
         Cell& cell = s_cells[index];
+        if (cell.state == 1) {
+            const float pk = QuantizedKeep(cell.meltClass >= 0 ? KeepNow(cell.meltClass) : 1.0f);
+            cell.coarse = cell.coarseBase + std::max(FarFall(s_farFall, cell.farShare), FarFall(cell.farPFull * pk, cell.farPShare));
+        }
         // none under roofs and overhangs (fallen snow only: painted snow is authored)
         const float fall = presence > 0.0f && cell.fAlpha > 0.0f ? presence * OpenAt((s_oi + index / kVerts) * kCell, (s_oj + index % kVerts) * kCell) : 0.0f;
         // painted snow thins and retreats as it melts: its edge is worked out again from its share kept
         float painted = cell.share, paintedLift = cell.lift;
-        if (cell.melts && cell.share > 0.0f && s_keep < 0.999f) {
+        const float keep = cell.meltClass >= 0 ? KeepNow(cell.meltClass) : 1.0f;
+        if (cell.share > 0.0f && keep < 0.999f) {
             float rise;
-            Edge(cell.pShare * s_keep, cell.pBreakup, cell.pNoise, painted, rise);
-            paintedLift = painted > 0.0f ? cell.pDepth * s_keep * rise + 0.02f * painted : 0.0f;
+            Edge(cell.pShare * keep, cell.pBreakup, cell.pNoise, painted, rise);
+            paintedLift = painted > 0.0f ? cell.pDepth * keep * rise + 0.02f * painted : 0.0f;
         }
         cell.eShare = std::max(painted, cell.fAlpha * fall);
         cell.eLift = std::max(painted > 0.0f ? paintedLift : 0.0f, fall > 0.0f ? fallen * cell.fMul * cell.fRise * (fall / presence) + 0.02f * cell.fAlpha * fall : 0.0f);
@@ -1407,22 +1681,59 @@ void SurfaceCover::DrawAfter(CMapRenderChunk* rc) {
     Entry& e = s_entries[rc];
     bool stale = !Fresh(e, rc);
     if (!stale && e.cover && (e.slot < 0 || !s_slots[e.slot].buf->m_hasData || !s_slots[e.slot].buf->m_valid)) stale = true;
+    if (!stale && e.waitFall && s_fallenDepth > 0.0f && s_waitBudget > 0) {
+        s_waitBudget--;
+        stale = true;
+    }
     if (stale) {
         e.chunks[0] = rc->m_mapChunks[0];
         e.chunks[1] = rc->m_mapChunks[1];
         e.header = rc->m_mapChunks[0]->m_header;
         e.generation = s_generation;
-        e.cover = Build(rc, e, now);
+        {
+            PerfScope timing(s_perfBuild);
+            e.cover = Build(rc, e, now);
+        }
         if (!e.cover) FreeSlot(e);
     }
     if (!e.cover) return;
     s_slots[e.slot].lastUsed = now;
     // Fallen snow on the bare layers grows in over its first 2 cm; none lying: nothing to draw where nothing is painted.
     const float presence = Clamp(s_fallenDepth / 0.02f, 0.0f, 1.0f);
-    const float keep = OptionCVars::Bool(s_melt, true) ? s_keep : 1.0f;
     if (!e.painted && presence <= 0.0f) return;
+    // Roofs: a few of the chunk's vertices a frame get their roof test, from LivingWind's cache of it (a ray 40 yd up per
+    // 4-yard cell); the fallen snow thins under them. Looked at again every 30 seconds, as buildings stream in.
+    if (presence > 0.0f && !e.fallFrac.empty()) {
+        PerfScope timing(s_perfRoof);
+        if (e.roofCursor >= e.base.size() && now - e.roofTime > 30000) e.roofCursor = 0;
+        while (e.roofCursor < e.base.size() && s_roofBudget > 0) {
+            const CGxVertexPNC& v = e.base[e.roofCursor];
+            if (e.fallFrac[e.roofCursor] > 0.0f) {
+                const float pos[3] = { v.m_position.x, v.m_position.y, v.m_position.z };
+                const float open = LivingWind::RoofOpenness(pos);
+                if (open < 0.0f) {  // this frame's rays are spent: later
+                    s_roofBudget = 0;
+                    break;
+                }
+                s_roofBudget--;
+                if (std::fabs(open - e.open[e.roofCursor]) > 0.01f) {
+                    e.open[e.roofCursor] = open;
+                    e.roofDirty = true;
+                }
+            }
+            if (++e.roofCursor >= e.base.size()) e.roofTime = now;
+        }
+    }
+    // The mesh follows the fallen snow's depth, the painted snow's melting and the roofs: a few chunks a frame.
+    const float keepQ = QuantizedKeep(KeepNow(e.paintClass));
+    if (!e.base.empty() && s_refreshBudget > 0 &&
+        (std::fabs(e.fallApplied - s_farFall) > 0.001f || std::fabs(e.keepApplied - keepQ) > 0.001f || e.roofDirty)) {
+        s_refreshBudget--;
+        PerfScope timing(s_perfApply);
+        ApplyFar(e, s_farFall, keepQ);
+    }
     float layerCover[4];
-    for (int32_t l = 0; l < 4; l++) layerCover[l] = std::max(e.layerCover[l] * (e.snowLayer[l] ? keep : 1.0f), e.fallLayer[l] * presence);
+    for (int32_t l = 0; l < 4; l++) layerCover[l] = std::max(e.layerCover[l] * KeepNow(e.snowClass[l]), e.fallLayer[l] * presence);
 
     CGxTex* blend = TextureGetGxTex(rc->m_terrainBlendTexture, 1, nullptr);
     CGxTex* cover = e.texture ? TextureGetGxTex(e.texture, 0, nullptr) : nullptr;
@@ -1459,6 +1770,7 @@ void SurfaceCover::DrawAfter(CMapRenderChunk* rc) {
 }
 
 void SurfaceCover::DrawNear() {
+    PerfScope timing(s_perfNear);
     if (s_terrainFrame != s_frame || !s_haveNear || !s_nearAny || !OptionCVars::Bool(s_enabled, true) || !OptionCVars::Bool(s_near, true)) return;
     CGxShader* vertexShader = nullptr;
     CGxShader* pixelShader = nullptr;

@@ -254,9 +254,9 @@ float Cached(std::unordered_map<uint64_t, Entry>& map, const float pos[3], float
     return value;
 }
 
-float Openness(const float pos[3]) {
+float Openness(const float pos[3], float fallback = 1.0f) {
     if (!OptionCVars::Bool(s_shelter, true)) return 1.0f;
-    return Cached(s_roof, pos, 1.0f, [](float x, float y, float z) {
+    return Cached(s_roof, pos, fallback, [](float x, float y, float z) {
         // half a yard up, so a query at floor level does not hit the floor it stands on
         return Trace(C3Vector(x, y, z + 0.5f), C3Vector(x, y, z + kRoofSearch)) < 1.0f ? 0.0f : 1.0f;
     });
@@ -565,7 +565,7 @@ bool LivingWind::ZoneAir(uint32_t zone, float& air, float& humidity) {
     return true;
 }
 
-float LivingWind::RoofOpenness(const float pos[3]) { return Openness(pos); }
+float LivingWind::RoofOpenness(const float pos[3]) { return Openness(pos, -1.0f); }
 
 bool LivingWind::GroundConditions(GroundState& out) {
     if (!s_frame.inWorld) return false;

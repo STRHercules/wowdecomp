@@ -109,7 +109,15 @@ namespace {
         s_actors[slot] = Actor{ pos, std::min(radius, 20.0f), distSq };
         return 1;
     }
-    bool s_world = false;                  // this frame follows the world wind: gusts scale each chunk
+    bool s_world = false;                  // this frame follows the world wind
+
+    // The world wind's strength on an 8 x 8 grid around the player (shelter under roofs, lee behind walls and gusts already
+    // in it), 8 yards apart, sampled per blade by the grass vertex shader (c100..c163, x = the sample; c69 per chunk).
+    constexpr int kGrid = 8;
+    constexpr float kGridSpacing = 8.0f;
+    float s_grid[kGrid * kGrid * 4];
+    float s_gridOrigin[2] = { 0.0f, 0.0f };
+    bool s_gridOn = false;
 
     // this frame (GrassWindPrepare)
     ULONGLONG s_lastTick = 0;
@@ -177,11 +185,27 @@ void HD::GrassWindPrepare() {
     // gives the slider's sway, calm places stand still. The gust passing over the player swells all of it at once (a
     // gust per chunk would show the chunk seams).
     s_world = wind && (!s_followWorld || s_followWorld->m_intValue != 0) && LivingWind::Active();
+    s_gridOn = false;
     if (s_world) {
         heading = LivingWind::HeadingDegrees();
-        strength *= 2.0f * LivingWind::Strength();
         if (PlayerPosition(&s_player)) {
-            strength *= 1.0f + LivingWind::GustStrength() * LivingWind::GustAt(s_player.x, s_player.y);
+            // Each blade takes the wind of its own place: the grid's samples (StrengthAt: steady wind, gusts, roofs, lee)
+            // where the player is near, the slider's sway times two for the whole grid. Beyond the grid's edge the last
+            // sample holds. shortcut: sampled at the player's height, not the ground's.
+            s_gridOrigin[0] = std::floor(s_player.x / kGridSpacing) * kGridSpacing - 0.5f * (kGrid - 1) * kGridSpacing;
+            s_gridOrigin[1] = std::floor(s_player.y / kGridSpacing) * kGridSpacing - 0.5f * (kGrid - 1) * kGridSpacing;
+            for (int b = 0; b < kGrid; b++) {
+                for (int a = 0; a < kGrid; a++) {
+                    const float pos[3] = { s_gridOrigin[0] + a * kGridSpacing, s_gridOrigin[1] + b * kGridSpacing, s_player.z };
+                    float* sample = s_grid + 4 * (b * kGrid + a);
+                    sample[0] = LivingWind::StrengthAt(pos);
+                    sample[1] = sample[2] = sample[3] = 0.0f;
+                }
+            }
+            s_gridOn = true;
+            strength *= 2.0f;
+        } else {
+            strength *= 2.0f * LivingWind::Strength();
         }
     }
 
@@ -296,10 +320,33 @@ void HD::GrassWindConstants(float chunkOffsetX, float chunkOffsetY, float chunkO
     }
 }
 
-uint16_t HD::GrassWindClassOf(uint32_t doodadId) {
+const float* HD::GrassWindGrid(int* count) {
+    *count = kGrid * kGrid;
+    return s_grid;
+}
+
+void HD::GrassWindGridInfo(float chunkOffsetX, float chunkOffsetY, float* out) {
+    const double ox = static_cast<double>(chunkOffsetX) + CWorldScene::s_activeWorldView.x;
+    const double oy = static_cast<double>(chunkOffsetY) + CWorldScene::s_activeWorldView.y;
+    out[0] = static_cast<float>(ox - s_gridOrigin[0]);
+    out[1] = static_cast<float>(oy - s_gridOrigin[1]);
+    out[2] = 1.0f / kGridSpacing;
+    out[3] = s_gridOn ? 1.0f : 0.0f;
+}
+
+uint16_t HD::GrassWindClassOf(uint32_t doodadId, bool modelMapped, float modelRootV, float modelTipV) {
     if (!s_classesLoaded) LoadClasses();
     auto it = s_classOf.find(doodadId);
-    return it == s_classOf.end() ? 0 : it->second;
+    // A mapping from the model's geometry that is not the default one, where the table leaves root and tip unset: a class
+    // of its own (a copy of the row's, or a plain one), so the batch of this plant bends from its own V range.
+    const bool usable = modelMapped && std::fabs(modelTipV - modelRootV) > 0.01f && (std::fabs(modelRootV - 1.0f) > 0.03f || std::fabs(modelTipV) > 0.03f);
+    if (!usable || s_classes.size() >= 0xFFFE) return it == s_classOf.end() ? 0 : it->second;
+    WindClass k = it == s_classOf.end() ? WindClass{ 0, 0.0f, -1.0f, -1.0f } : s_classes[it->second - 1];
+    if (k.rootV >= 0.0f && k.tipV >= 0.0f) return it->second;  // the table says it
+    k.rootV = modelRootV;
+    k.tipV = modelTipV;
+    s_classes.push_back(k);
+    return static_cast<uint16_t>(s_classes.size());
 }
 
 void HD::GrassWindBatchConstants(uint16_t windClass, float* out) {

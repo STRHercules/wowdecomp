@@ -36,9 +36,17 @@ namespace HD {
     // (CWorldScene::RenderDetailDoodads: chunk->m_topLeftCoords - CWorldScene::s_activeWorldView).
     void GrassWindConstants(float chunkOffsetX, float chunkOffsetY, float chunkOffsetZ, float* out);
 
+    // The wind grid: 64 float4 (x = the world wind's strength there) for c100, once a frame after GrassWindPrepare; and
+    // per chunk c69 = (chunk corner minus the grid's origin in yards, 1 / spacing, 1 when the grid is on).
+    const float* GrassWindGrid(int* count);
+    void GrassWindGridInfo(float chunkOffsetX, float chunkOffsetY, float* out);
+
     // The batch class of a GroundEffectDoodad (0 = no GroundEffectDoodadWind.cdbc row): doodads bake into batches of
     // their class, and c68 (GrassWindBatchConstants, 4 floats) says how that class bends. Not in the donor.
-    uint16_t GrassWindClassOf(uint32_t doodadId);
+    // modelMapped: the model's own mapping, read from its geometry (the texture V at the bottom and at the top of the
+    // blade, as the donor's GrassDoodads.cpp does); it fills what the table row leaves unset, and a doodad with neither
+    // keeps the default (foot at V 1, tip at V 0).
+    uint16_t GrassWindClassOf(uint32_t doodadId, bool modelMapped = false, float modelRootV = 0.0f, float modelTipV = 0.0f);
     void GrassWindBatchConstants(uint16_t windClass, float* out);
 }
 

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Azeroth Remastered's HdTime.cpp, gated on visuals 2; the cvars and their defaults (the donor pack's) are the donor's.
+// Azeroth Remastered's HdTime.cpp; the cvars and their defaults (the donor pack's) are the donor's. hdTime works in every
+// visual set; the sun and shadow cvars stay gated on visuals 2.
 #include "WoW/Source/WorldClient/HD/HdTime.h"
 
 #include "Engine/Source/ConsoleBase/ConsoleVar.h"
@@ -19,7 +20,7 @@ namespace {
 
     // Forced minutes since midnight (0 to 1439), or -1 when the override is off.
     int32_t ForcedMinutes() {
-        if (!On() || !s_hdTime) return -1;
+        if (!s_hdTime) return -1;  // any visuals: the override is the time of day, not a look
         float hours = s_hdTime->m_floatValue;
         if (hours < 0.0f) return -1;
         if (hours >= 24.0f) hours = 0.0f;
