@@ -452,7 +452,7 @@ float DailyCurve(float f) {
     return t < warm ? 0.5f - 0.5f * std::cos(kPi * t / warm) : 0.5f + 0.5f * std::cos(kPi * (t - warm) / (1.0f - warm));
 }
 
-float AirTemperature(const ClimateRow& row) {
+float AirTemperature(const ClimateRow& row, bool withWeather = true) {
     const DayNight::DNInfo* info = DayNight::GetInfo();
     float day = info ? info->m_dayProgression : 0.5f;
     if (!(day >= 0.0f && day <= 1.0f)) day = (g_clientGameTime.m_hour * 60 + g_clientGameTime.m_minute) / 1440.0f;
@@ -461,7 +461,7 @@ float AirTemperature(const ClimateRow& row) {
     float y = year - 0.55f - row.seasonOffset / 12.0f;
     y -= std::floor(y);
     float t = row.nightTemp + (row.dayTemp - row.nightTemp) * DailyCurve(day) + 0.5f * row.seasonAmplitude * std::cos(2.0f * kPi * y);
-    switch (s_frame.weatherType) {
+    switch (withWeather ? s_frame.weatherType : 0) {
         case 1: t -= 3.0f * s_frame.weather; break;   // rain
         case 2: t -= 6.0f * s_frame.weather; break;   // snow
         case 3: t += 2.0f * s_frame.weather; break;   // sand
@@ -554,6 +554,30 @@ bool LivingWind::PlayerPosition(float out[3]) {
 int LivingWind::AreaChain(uint32_t area, uint32_t* out, int max) { return AreaChainOf(area, out, max); }
 float LivingWind::Strength() { return s_active ? s_steadyGround * s_multiplier : 0.0f; }
 float LivingWind::BearingDegrees() { return s_bearing; }
+
+bool LivingWind::ZoneAir(uint32_t zone, float& air, float& humidity) {
+    if (!s_frame.inWorld || !zone) return false;
+    uint32_t chain[kMaxAreaChain];
+    const int count = AreaChainOf(zone, chain, kMaxAreaChain);
+    const ClimateRow row = ClimateFor(chain, count);
+    air = AirTemperature(row, false);
+    humidity = row.humidity;
+    return true;
+}
+
+float LivingWind::RoofOpenness(const float pos[3]) { return Openness(pos); }
+
+bool LivingWind::GroundConditions(GroundState& out) {
+    if (!s_frame.inWorld) return false;
+    const ClimateRow row = ResolveClimate();
+    out.air = AirTemperature(row);
+    out.temperature = GroundTemperature(out.air);
+    out.humidity = row.humidity;
+    out.wind = Strength();
+    out.weatherType = s_frame.weatherType;
+    out.weather = s_frame.weather;
+    return true;
+}
 float LivingWind::GustStrength() { return s_active ? s_profile[GustStrengthField] : 0.0f; }
 
 float LivingWind::GustAt(float x, float y) {

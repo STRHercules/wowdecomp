@@ -452,6 +452,11 @@ p:Header("Near you")
 p:Check("surfaceCoverNear", "Fine snow around you", "A detailed, lumpy patch of cover 48 yards across follows you, lit by its own bumps. Off: the coarser cover everywhere, and no trenches.")
 p:Check("surfaceCoverTrenches", "Trenches", "You and the creatures and players near you press trenches into the cover, with pushed-up rims. They fill back in over time.")
 p:Slider("surfaceCoverTrenchScale", "Trench width", "Width of a trench as a multiple of each one's size. Mounts make wider ones.", 0.2, 4, 0.05, Times, 0.05)
+p:Slider("surfaceCoverNearRange", "Fine snow range", "How far across the fine patch reaches. 48 yards is the finest; wider reaches further but is coarser (trenches get blurrier) and costs more.", 24, 192, 4, Yards, 4)
+p:Header("Fallen snow")
+p:Check("surfaceCoverFallen", "Snow falls and lies", "In snowstorms on ground below freezing, snow builds up on bare ground in the fine patch, and melts when it is warm. Kept per zone.")
+p:Check("surfaceCoverMelt", "Painted snow melts", "Snow painted on the ground thins in warm weather, its edges retreating, and grows back when it is cold or snowing.")
+p:Slider("surfaceCoverFallenRate", "Snowfall and melting speed", "How many times faster snow builds up and melts. 1 is about 18 cm an hour in a full storm.", 0, 200, 1, Times, 1)
 p:Done()
 )lua";
 

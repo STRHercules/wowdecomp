@@ -38,6 +38,7 @@
 #include "WoW/Source/Ui/GameUI.h"
 #include "WoW/Source/Ui/SpeedFlying.h"
 #include "WoW/Source/Ui/WorldFrame.h"
+#include "WoW/Source/WorldClient/SurfaceCover.h"
 #include "WoW/Source/UIUtil/InputControl.h"
 #include "WoW/Source/WorldClient/FrameTime.h"
 #include "WoW/Source/WorldClient/World.h"
@@ -3800,6 +3801,16 @@ uint32_t CGCamera::CollideCameraWithWorld(const C3Vector& target, float& distanc
                 if (!(0.0f < distance)) {
                     distance = 0.0f;
                 }
+            }
+
+            // Not in the original binary: the boom stays above snow lying on the terrain.
+            const float pivot[3] = { base.x, base.y, base.z };
+            const float along[3] = { forward.x, forward.y, forward.z };
+            float limited = SurfaceCover::LimitCameraDistance(pivot, along, distance);
+
+            if (limited < distance) {
+                distance = limited;
+                result |= 0x10000;
             }
         }
     }

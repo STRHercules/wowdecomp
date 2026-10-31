@@ -34,6 +34,11 @@ void Update(float elapsedSec);
 // After the terrain (CWorldScene::RenderChunksSinglePass): the near patch, with the last chunk's terrain constants.
 void DrawNear();
 
+// The 3rd-person camera's boom (CGCamera, after the client's own collision test): the eye sits at pivot - forward *
+// distance. Returns the distance shortened so the eye stays above the near patch's cover, as it is kept out of the
+// terrain. Unchanged where there is no cover or the pivot is already under it.
+float LimitCameraDistance(const float pivot[3], const float forward[3], float distance);
+
 // The render chunk's terrain vertices were made again, or it is going away: its cover is made again at its next draw.
 void Forget(CMapRenderChunk* chunk);
 
