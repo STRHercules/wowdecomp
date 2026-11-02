@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="ESTERIAPERKS_TOGGLE" header="ESTERIAPERKS">
+        EsteriaPerks_Toggle()
+    </Binding>
+</Bindings>

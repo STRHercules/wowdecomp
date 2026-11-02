@@ -1,5 +1,5 @@
 """Builds Patch-ZzzzzzzzzzzEsteriaShell.MPQ: the Esteria additions to the DragonUI micro strip, the Everlook radio
-add-on, the transmog window and the character swap wheel with its sky, as one archive that sorts after every other
+add-on, the transmog window and the character swap wheel with its sky and the Paths of Fate Codex, as one archive that sorts after every other
 patch.
 
   python build_shell_mpq.py --client "G:\\3.3.5a - Dev" --out <archive path>
@@ -32,13 +32,13 @@ PATCHES = {
         ('<Script file="micromenu.lua"/>', '<Script file="esteria_microbuttons.lua"/>\n    <Script file="micromenu.lua"/>', 1),
     ],
     "modules" + B + "micromenu.lua": [
-        # the strip: Esteria's three buttons sit after Collections
+        # the strip: Esteria's four buttons sit after Collections
         ('MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),',
-         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Radio"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
-        # three more buttons of 26 px each: the strip starts further left
-        ("-180", "-258", 3),
+         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Radio"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
+        # four more buttons of 26 px each: the strip starts further left
+        ("-180", "-284", 3),
         # one row, however many buttons the profile's saved column count allows
-        ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 14))", 1),
+        ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 15))", 1),
         # atlas rows for the new sheets
         ("-- The fifth field names the file: DragonUI's colour sheet predates the professions icon.",
          '''for _, spec in pairs(addon.EsteriaMicro or {}) do
@@ -114,6 +114,18 @@ def wing(d, S, c):
     d.ellipse([ox - 5 * S, oy - 5 * S, ox + 5 * S, oy + 5 * S], fill=c + (255,), outline=(60, 40, 10, 255))
 
 
+def compass(d, S, c):
+    # a four-pointed star in a ring: the Paths of Fate mark
+    cx, cy = 32 * S, 41 * S
+    d.ellipse([cx - 19 * S, cy - 19 * S, cx + 19 * S, cy + 19 * S], outline=c + (255,), width=3 * S)
+    for dx, dy in ((0, -1), (1, 0), (0, 1), (-1, 0)):
+        tip = (cx + dx * 24 * S, cy + dy * 24 * S)
+        side = (-dy * 6 * S, dx * 6 * S)
+        d.polygon([tip, (cx + side[0], cy + side[1]), (cx, cy), (cx - side[0], cy - side[1])],
+                  fill=c + (255,), outline=(60, 40, 10, 255))
+    d.ellipse([cx - 4 * S, cy - 4 * S, cx + 4 * S, cy + 4 * S], fill=(255, 255, 255, 255))
+
+
 def cloud_noise(width, height, seed, octaves=6):
     """Fractal value noise in [0, 1], height x width."""
     import numpy as np
@@ -174,11 +186,15 @@ def main():
     entries[DUI + "modules" + B + "esteria_microbuttons.lua"] = (REPO / "Addons" / "EsteriaShell" / "esteria_microbuttons.lua").read_bytes()
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-transmog.tga"] = tga(sheet(tunic))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-flight.tga"] = tga(sheet(wing))
+    entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-fate.tga"] = tga(sheet(compass))
     back, front = swap_sky()
     entries["Interface" + B + "Esteria" + B + "SwapSkyBack.tga"] = tga(back)
     entries["Interface" + B + "Esteria" + B + "SwapSkyFront.tga"] = tga(front)
-    for addon in ("EverlookBroadcasting", "Manastorm_Transmog", "EsteriaSwap"):
+    for addon in ("EverlookBroadcasting", "Manastorm_Transmog", "EsteriaSwap", "EsteriaPerks"):
         entries.update(tree(REPO / "Addons" / addon, "Interface" + B + "AddOns" + B + addon + B))
+    # The Codex draws with the character creator's style kit: one file, shipped in both places.
+    entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + "esteria_style.lua"] = (
+        REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     # The swap wheel's art (EasyController, MIT: easycontroller/README.md)
     for png in (REPO / "Tools" / "EsteriaShell" / "easycontroller").glob("*.png"):
         name = "Interface" + B + "AddOns" + B + "EsteriaSwap" + B + "Textures" + B + png.stem + ".tga"

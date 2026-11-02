@@ -26,6 +26,12 @@ end
 function BodyShapePage_Active()
     return BS.page and BS_FlowAvailable();
 end
+BodyShapePage_FlowAvailable = BS_FlowAvailable;
+
+-- Accept's label on the Body page: Next while the Fate page still follows.
+local function BS_FinalText()
+    return FatePage_Follows and FatePage_Follows() and "Next" or BS.okayText;
+end
 
 local function BS_Pretty(name)
     return (name:gsub("(%l)(%u)", "%1 %2"));
@@ -42,43 +48,14 @@ end
 -- Presets drawer: share codes and saved presets per race and sex, in a card that slides down from a tab under the
 -- step indicator. Styled like the creator skin. Natives: BodyShapeExport/Import/Copy/Paste, Get/Save/DeleteBodyShapePreset.
 function BS.BuildDrawer(panel)
-    local GOLD, GOLD_DIM, INK = { 0.91, 0.77, 0.42 }, { 0.54, 0.43, 0.18 }, { 0.03, 0.04, 0.055 };
-    local TEXT, MUTED, GOOD, BAD = { 0.88, 0.86, 0.80 }, { 0.60, 0.59, 0.55 }, { 0.55, 0.85, 0.50 }, { 0.95, 0.42, 0.36 };
-    local FONT, WHITE = "Fonts\\FRIZQT__.TTF", "Interface\\Buttons\\WHITE8X8";
+    local ES = EsteriaStyle;
+    local GOLD, GOLD_DIM, INK, TEXT, MUTED, GOOD, BAD = ES.GOLD, ES.GOLD_DIM, ES.INK, ES.TEXT, ES.MUTED, ES.GOOD, ES.BAD;
+    local FONT = ES.FONT;
     local W, PAD, ROWS, ROW_H, ROWS_TOP = 400, 18, 5, 24, -140;
     local OPEN_TIME, CLOSE_TIME, FADE, FLASH, TOAST = 0.32, 0.18, 0.16, 0.6, 2.5;
     local D = { open = false, t = 0, presets = {}, scroll = 0, parts = {}, flashes = {} };
 
-    local function Solid(parent, layer, color, a)
-        local tex = parent:CreateTexture(nil, layer);
-        tex:SetTexture(WHITE);
-        tex:SetVertexColor(color[1], color[2], color[3], a);
-        return tex;
-    end
-    local function Text(parent, size, color)
-        local fs = parent:CreateFontString(nil, "OVERLAY", "GlueFontHighlightSmall");
-        fs:SetFont(FONT, size);
-        fs:SetTextColor(color[1], color[2], color[3]);
-        fs:SetShadowOffset(1, -1);
-        fs:SetShadowColor(0, 0, 0, 0.8);
-        return fs;
-    end
-    local function Border(frame, color, a)
-        local lines = {};
-        for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
-                                { "TOPRIGHT", "BOTTOMRIGHT" } }) do
-            local line = Solid(frame, "BORDER", color, a);
-            line:SetPoint(side[1], frame, side[1], 0, 0);
-            line:SetPoint(side[2], frame, side[2], 0, 0);
-            if side[1] == "TOPLEFT" and side[2] == "BOTTOMLEFT" or side[1] == "TOPRIGHT" then line:SetWidth(1); else line:SetHeight(1); end
-            lines[#lines + 1] = line;
-        end
-        return lines;
-    end
-    local function Tint(lines, color, a)
-        for _, line in ipairs(lines) do line:SetVertexColor(color[1], color[2], color[3], a); end
-    end
-    local function Ease(t) return 1 - (1 - t) ^ 3; end
+    local Solid, Text, Border, Tint, Ease = ES.Solid, ES.Text, ES.Border, ES.Tint, ES.Ease;
     -- Sections fade in one after another while the card opens.
     local function Stage(object, delay) D.parts[#D.parts + 1] = { object = object, delay = delay }; return object; end
 
@@ -777,10 +754,17 @@ local function BS_Install()
         local status = BS_InPersonalization() and BS_Status() or nil;
         if status then note:SetText(status); note:Show(); else note:Hide(); end
 
+        -- The Fate page owns the screen (and Accept's label) while it is open.
+        if FatePage_Open and FatePage_Open() then
+            panel:Hide();
+            return;
+        end
+
         if not BS_FlowAvailable() then
             BS.page = false;
             panel:Hide();
-            if BS.okayText and CharCreateOkayButton:GetText() ~= BS.okayText then CharCreateOkayButton:SetText(BS.okayText); end
+            local text = BS_FinalText();
+            if text and CharCreateOkayButton:GetText() ~= text then CharCreateOkayButton:SetText(text); end
             return;
         end
 
@@ -799,7 +783,8 @@ local function BS_Install()
             if ok and BS.SyncShare then ok, err = pcall(BS.SyncShare); end
             if not ok then BS.broken = tostring(err); BS.page = false; return; end
             panel:Show();
-            if BS.okayText and CharCreateOkayButton:GetText() ~= BS.okayText then CharCreateOkayButton:SetText(BS.okayText); end
+            local text = BS_FinalText();
+            if text and CharCreateOkayButton:GetText() ~= text then CharCreateOkayButton:SetText(text); end
         else
             panel:Hide();
             if CharCreateOkayButton:GetText() ~= "Next" then CharCreateOkayButton:SetText("Next"); end

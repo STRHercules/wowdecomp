@@ -2560,7 +2560,7 @@ local function EA_LIMIT()
 end
 local function EA_REFRESH()
     if not CharacterCustomizationButtonFrame1 then return; end
-    if BodyShapePage_Active and BodyShapePage_Active() then
+    if (BodyShapePage_Active and BodyShapePage_Active()) or (FatePage_Open and FatePage_Open()) then
         for i=1,64 do
             local row = _G["CharacterCustomizationButtonFrame"..i];
             if row then row:Hide(); end
@@ -3001,6 +3001,92 @@ RACE_ICON_TCOORDS["CENTAURHORDE_MALE"]=RACE_ICON_TCOORDS["ORC_MALE"];
 
 RACE_ICON_TCOORDS["CENTAURHORDE_FEMALE"]=RACE_ICON_TCOORDS["ORC_FEMALE"];
 
+-- Esteria style kit (wowdecomp)
+-- The creator's look in one place: palette, font and the solid/text/border helpers drawn from WHITE8X8. Shared by
+-- the creator skin, the Body page and the in-game Esteria UI, so glue and game stay identical. A global table, not
+-- locals: the creator chunk is near Lua's 200-locals-per-function limit.
+EsteriaStyle = EsteriaStyle or {};
+do
+    local ES = EsteriaStyle;
+    ES.GOLD = { 0.91, 0.77, 0.42 };
+    ES.GOLD_DIM = { 0.54, 0.43, 0.18 };
+    ES.INK = { 0.03, 0.04, 0.055 };
+    ES.TEXT = { 0.88, 0.86, 0.80 };
+    ES.MUTED = { 0.60, 0.59, 0.55 };
+    ES.GOOD = { 0.55, 0.85, 0.50 };
+    ES.BAD = { 0.95, 0.42, 0.36 };
+    ES.FONT = "Fonts\\FRIZQT__.TTF";
+    ES.WHITE = "Interface\\Buttons\\WHITE8X8";
+
+    function ES.Solid(parent, layer, color, a)
+        local tex = parent:CreateTexture(nil, layer or "ARTWORK");
+        tex:SetTexture(ES.WHITE);
+        tex:SetVertexColor(color[1], color[2], color[3], a or 1);
+        return tex;
+    end
+
+    function ES.Text(parent, size, color, layer, font)
+        -- Glue and the game name their font templates differently; checked per call so load order can't matter.
+        local template = GlueFontHighlightSmall and "GlueFontHighlightSmall" or "GameFontHighlightSmall";
+        local fs = parent:CreateFontString(nil, layer or "OVERLAY", template);
+        fs:SetFont(font or ES.FONT, size);
+        fs:SetTextColor(color[1], color[2], color[3]);
+        fs:SetShadowOffset(1, -1);
+        fs:SetShadowColor(0, 0, 0, 0.8);
+        return fs;
+    end
+
+    -- A 1px line on each side of the frame; returns the four lines for Tint.
+    function ES.Border(frame, color, a)
+        local lines = {};
+        for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
+                                { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+            local line = ES.Solid(frame, "BORDER", color, a);
+            line:SetPoint(side[1], frame, side[1], 0, 0);
+            line:SetPoint(side[2], frame, side[2], 0, 0);
+            if side[1] == "TOPLEFT" and side[2] == "BOTTOMLEFT" or side[1] == "TOPRIGHT" then line:SetWidth(1); else line:SetHeight(1); end
+            lines[#lines + 1] = line;
+        end
+        return lines;
+    end
+
+    function ES.Tint(lines, color, a)
+        for _, line in ipairs(lines) do line:SetVertexColor(color[1], color[2], color[3], a); end
+    end
+
+    -- Cubic ease-out: fast start, soft landing.
+    function ES.Ease(t) return 1 - (1 - t) ^ 3; end
+
+    -- Tweens: apply(p) runs with p eased from 0 to 1 over `duration` seconds after `delay`. A tween started under a
+    -- key that is still running replaces it. apply(0) runs at once so the start state shows during the delay.
+    -- With ES.reduceMotion set, apply(1) runs at once instead.
+    local tweens, driver = {}, nil;
+    function ES.Tween(key, duration, delay, apply)
+        if ES.reduceMotion then
+            tweens[key] = nil;
+            apply(1);
+            return;
+        end
+        tweens[key] = { t = -(delay or 0), d = math.max(duration, 0.001), apply = apply };
+        apply(0);
+        if not driver then
+            driver = CreateFrame("Frame");
+            driver:SetScript("OnUpdate", function(_, elapsed)
+                for k, tween in pairs(tweens) do
+                    tween.t = tween.t + elapsed;
+                    if tween.t >= 0 then
+                        local p = math.min(1, tween.t / tween.d);
+                        -- A failing tween is dropped instead of erroring every frame.
+                        if not pcall(tween.apply, ES.Ease(p)) or p >= 1 then
+                            if tweens[k] == tween then tweens[k] = nil; end
+                        end
+                    end
+                end
+            end);
+        end
+    end
+end
+
 -- Body sliders page (wowdecomp)
 -- A second creator page after Appearance: native sliders for every body/face slider the chosen race and sex
 -- supports. Flow: Appearance -> Next -> Body -> Accept. Values live in the client (SetBodyShape / GetBodyShape)
@@ -3029,6 +3115,12 @@ end
 function BodyShapePage_Active()
     return BS.page and BS_FlowAvailable();
 end
+BodyShapePage_FlowAvailable = BS_FlowAvailable;
+
+-- Accept's label on the Body page: Next while the Fate page still follows.
+local function BS_FinalText()
+    return FatePage_Follows and FatePage_Follows() and "Next" or BS.okayText;
+end
 
 local function BS_Pretty(name)
     return (name:gsub("(%l)(%u)", "%1 %2"));
@@ -3045,43 +3137,14 @@ end
 -- Presets drawer: share codes and saved presets per race and sex, in a card that slides down from a tab under the
 -- step indicator. Styled like the creator skin. Natives: BodyShapeExport/Import/Copy/Paste, Get/Save/DeleteBodyShapePreset.
 function BS.BuildDrawer(panel)
-    local GOLD, GOLD_DIM, INK = { 0.91, 0.77, 0.42 }, { 0.54, 0.43, 0.18 }, { 0.03, 0.04, 0.055 };
-    local TEXT, MUTED, GOOD, BAD = { 0.88, 0.86, 0.80 }, { 0.60, 0.59, 0.55 }, { 0.55, 0.85, 0.50 }, { 0.95, 0.42, 0.36 };
-    local FONT, WHITE = "Fonts\\FRIZQT__.TTF", "Interface\\Buttons\\WHITE8X8";
+    local ES = EsteriaStyle;
+    local GOLD, GOLD_DIM, INK, TEXT, MUTED, GOOD, BAD = ES.GOLD, ES.GOLD_DIM, ES.INK, ES.TEXT, ES.MUTED, ES.GOOD, ES.BAD;
+    local FONT = ES.FONT;
     local W, PAD, ROWS, ROW_H, ROWS_TOP = 400, 18, 5, 24, -140;
     local OPEN_TIME, CLOSE_TIME, FADE, FLASH, TOAST = 0.32, 0.18, 0.16, 0.6, 2.5;
     local D = { open = false, t = 0, presets = {}, scroll = 0, parts = {}, flashes = {} };
 
-    local function Solid(parent, layer, color, a)
-        local tex = parent:CreateTexture(nil, layer);
-        tex:SetTexture(WHITE);
-        tex:SetVertexColor(color[1], color[2], color[3], a);
-        return tex;
-    end
-    local function Text(parent, size, color)
-        local fs = parent:CreateFontString(nil, "OVERLAY", "GlueFontHighlightSmall");
-        fs:SetFont(FONT, size);
-        fs:SetTextColor(color[1], color[2], color[3]);
-        fs:SetShadowOffset(1, -1);
-        fs:SetShadowColor(0, 0, 0, 0.8);
-        return fs;
-    end
-    local function Border(frame, color, a)
-        local lines = {};
-        for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT" }, { "BOTTOMLEFT", "BOTTOMRIGHT" }, { "TOPLEFT", "BOTTOMLEFT" },
-                                { "TOPRIGHT", "BOTTOMRIGHT" } }) do
-            local line = Solid(frame, "BORDER", color, a);
-            line:SetPoint(side[1], frame, side[1], 0, 0);
-            line:SetPoint(side[2], frame, side[2], 0, 0);
-            if side[1] == "TOPLEFT" and side[2] == "BOTTOMLEFT" or side[1] == "TOPRIGHT" then line:SetWidth(1); else line:SetHeight(1); end
-            lines[#lines + 1] = line;
-        end
-        return lines;
-    end
-    local function Tint(lines, color, a)
-        for _, line in ipairs(lines) do line:SetVertexColor(color[1], color[2], color[3], a); end
-    end
-    local function Ease(t) return 1 - (1 - t) ^ 3; end
+    local Solid, Text, Border, Tint, Ease = ES.Solid, ES.Text, ES.Border, ES.Tint, ES.Ease;
     -- Sections fade in one after another while the card opens.
     local function Stage(object, delay) D.parts[#D.parts + 1] = { object = object, delay = delay }; return object; end
 
@@ -3780,10 +3843,17 @@ local function BS_Install()
         local status = BS_InPersonalization() and BS_Status() or nil;
         if status then note:SetText(status); note:Show(); else note:Hide(); end
 
+        -- The Fate page owns the screen (and Accept's label) while it is open.
+        if FatePage_Open and FatePage_Open() then
+            panel:Hide();
+            return;
+        end
+
         if not BS_FlowAvailable() then
             BS.page = false;
             panel:Hide();
-            if BS.okayText and CharCreateOkayButton:GetText() ~= BS.okayText then CharCreateOkayButton:SetText(BS.okayText); end
+            local text = BS_FinalText();
+            if text and CharCreateOkayButton:GetText() ~= text then CharCreateOkayButton:SetText(text); end
             return;
         end
 
@@ -3802,7 +3872,8 @@ local function BS_Install()
             if ok and BS.SyncShare then ok, err = pcall(BS.SyncShare); end
             if not ok then BS.broken = tostring(err); BS.page = false; return; end
             panel:Show();
-            if BS.okayText and CharCreateOkayButton:GetText() ~= BS.okayText then CharCreateOkayButton:SetText(BS.okayText); end
+            local text = BS_FinalText();
+            if text and CharCreateOkayButton:GetText() ~= text then CharCreateOkayButton:SetText(text); end
         else
             panel:Hide();
             if CharCreateOkayButton:GetText() ~= "Next" then CharCreateOkayButton:SetText("Next"); end
@@ -3861,14 +3932,11 @@ end);
 (function()
 local SK ={ on = false, broken = nil, rows = {}, sliders = {}, buttons = {} };
 
-local GOLD = { 0.91, 0.77, 0.42 };
-local GOLD_DIM = { 0.54, 0.43, 0.18 };
-local INK = { 0.03, 0.04, 0.055 };
-local TEXT = { 0.88, 0.86, 0.80 };
-local MUTED = { 0.60, 0.59, 0.55 };
+local ES = EsteriaStyle;
+local GOLD, GOLD_DIM, INK, TEXT, MUTED = ES.GOLD, ES.GOLD_DIM, ES.INK, ES.TEXT, ES.MUTED;
 -- Everything uses the game font; body text runs a size below headers.
-local HEAD_FONT, BODY_FONT = "Fonts\\FRIZQT__.TTF", "Fonts\\FRIZQT__.TTF";
-local WHITE = "Interface\\Buttons\\WHITE8X8";
+local HEAD_FONT, BODY_FONT = ES.FONT, ES.FONT;
+local WHITE = ES.WHITE;
 local PANEL_W, EDGE_X = 440, 55; -- rows sit EDGE_X in from each screen edge and are 340 wide
 
 local function SK_Log(text)
@@ -3876,19 +3944,11 @@ local function SK_Log(text)
 end
 
 local function Solid(parent, layer, r, g, b, a)
-    local tex = parent:CreateTexture(nil, layer or "ARTWORK");
-    tex:SetTexture(WHITE);
-    tex:SetVertexColor(r, g, b, a or 1);
-    return tex;
+    return ES.Solid(parent, layer, { r, g, b }, a);
 end
 
 local function Text(parent, font, size, color, layer)
-    local fs = parent:CreateFontString(nil, layer or "OVERLAY", "GlueFontHighlightSmall");
-    fs:SetFont(font, size);
-    fs:SetTextColor(color[1], color[2], color[3]);
-    fs:SetShadowOffset(1, -1);
-    fs:SetShadowColor(0, 0, 0, 0.8);
-    return fs;
+    return ES.Text(parent, size, color, layer, font);
 end
 
 local function Personalizing()
@@ -3938,22 +3998,15 @@ local function BuildChrome()
         SK[side] = { title = title, subtitle = subtitle, rule = rule, panel = panel, fade = fade };
     end
 
-    -- Step indicator: Race, Appearance, Body (the last only for races with the Body page).
+    -- Step indicator: Race, Appearance, Body, Fate, Zone (Body, Fate and Zone only when their pages are offered). SetSteps
+    -- lays out whichever are shown, centred.
     local steps, lines = {}, {};
-    for index, name in ipairs({ "RACE", "APPEARANCE", "BODY" }) do
+    for index, name in ipairs({ "RACE", "APPEARANCE", "BODY", "FATE", "ZONE" }) do
         steps[index] = Text(chrome, HEAD_FONT, 13, MUTED);
-        steps[index]:SetText(index .. "   " .. name);
-    end
-    for index = 1, 2 do
         lines[index] = Solid(chrome, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.9);
         lines[index]:SetSize(40, 1);
     end
-    steps[2]:SetPoint("TOP", chrome, "TOP", 0, -24);
-    lines[1]:SetPoint("RIGHT", steps[2], "LEFT", -12, 0);
-    steps[1]:SetPoint("RIGHT", lines[1], "LEFT", -12, 0);
-    lines[2]:SetPoint("LEFT", steps[2], "RIGHT", 12, 0);
-    steps[3]:SetPoint("LEFT", lines[2], "RIGHT", 12, 0);
-    SK.steps, SK.stepLines = steps, lines;
+    SK.steps, SK.stepLines, SK.stepNames = steps, lines, { "RACE", "APPEARANCE", "BODY", "FATE", "ZONE" };
 
     local hint = Text(chrome, BODY_FONT, 12, MUTED);
     hint:SetPoint("BOTTOM", chrome, "BOTTOM", 0, 14);
@@ -4830,11 +4883,49 @@ end
 
 local function SetSteps(active)
     local body = BodyShapePage_Active and type(GetBodyShapeNames) == "function" and EA_IS_RETAIL();
+    local fate = FatePage_Offered and FatePage_Offered();
+    local zone = StartZonePage_Offered and StartZonePage_Offered();
+    local visible = { true, true, body and true or false, fate and true or false, zone and true or false };
+    local shown, text = {}, 0;
     for index, step in ipairs(SK.steps) do
+        SK.stepLines[index]:Hide();
+        if visible[index] then
+            shown[#shown + 1] = index;
+            step:SetText(#shown .. "   " .. SK.stepNames[index]);
+            step:Show();
+            text = text + step:GetStringWidth();
+        else
+            step:Hide();
+        end
         if index == active then step:SetTextColor(GOLD[1], GOLD[2], GOLD[3]); else step:SetTextColor(MUTED[1], MUTED[2], MUTED[3]); end
     end
-    -- Only show the Body step when the race has that page.
-    if body then SK.steps[3]:Show(); SK.stepLines[2]:Show(); else SK.steps[3]:Hide(); SK.stepLines[2]:Hide(); end
+    -- Chain the shown steps left to right with a line between (4px gaps), the whole row centred. The row must fit
+    -- between the side panels (the viewport column), so the links shrink from 64px to 20px as steps are added.
+    local link = 64;
+    local room = (CharacterCreateFrame:GetWidth() or 0) - 2 * PANEL_W - 24;
+    if room > 0 and #shown > 1 then link = math.max(20, math.min(64, (room - text) / (#shown - 1))); end
+    local width = text + link * (#shown - 1);
+    local previous;
+    for _, index in ipairs(shown) do
+        local step = SK.steps[index];
+        step:ClearAllPoints();
+        if previous then
+            local line = SK.stepLines[index];
+            line:ClearAllPoints();
+            line:SetWidth(link - 8);
+            line:SetPoint("LEFT", previous, "RIGHT", 4, 0);
+            line:Show();
+            step:SetPoint("LEFT", line, "RIGHT", 4, 0);
+        else
+            step:SetPoint("TOPLEFT", SK.chrome, "TOP", -width / 2, -24);
+        end
+        previous = step;
+    end
+end
+
+-- How far the customization side panels are out: 1 open, 0 collapsed. The Fate page follows it.
+function CreatorSkin_PaneShown()
+    return 1 + (SK.slide or 0) / PANEL_W;
 end
 
 local function RaceTick()
@@ -4965,9 +5056,11 @@ local function Tick()
     local arrow = PanesOpen() and "Left" or "Right";
     SK.panelTab.arrow:SetTexture("Interface" .. "\\" .. "MoneyFrame" .. "\\" .. "Arrow-" .. arrow .. "-Up");
     SK.panelTab.arrow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]);
-    -- The stock page switch hides the gender picks here; this page offers them too.
-    if CharacterCreateGenderButtonsContainer and not CharacterCreateGenderButtonsContainer:IsShown() then
-        CharacterCreateGenderButtonsContainer:Show();
+    local fate = FatePage_Open and FatePage_Open();
+    -- The stock page switch hides the gender picks here; this page offers them too (not the Fate page).
+    if CharacterCreateGenderButtonsContainer then
+        if fate then CharacterCreateGenderButtonsContainer:Hide();
+        elseif not CharacterCreateGenderButtonsContainer:IsShown() then CharacterCreateGenderButtonsContainer:Show(); end
     end
     for button in pairs(SK.toggles) do ApplyToggle(button, true); end
 
@@ -4981,7 +5074,7 @@ local function Tick()
     for button in pairs(SK.buttons) do ApplyButton(button, true); end
 
     local body = BodyPage();
-    UpdateFormTabs(not body);
+    UpdateFormTabs(not body and not fate);
     if body then
         SkinBodyPage();
         for i = 1, 128 do
@@ -4991,11 +5084,24 @@ local function Tick()
         end
     end
 
-    SK.LEFT.title:SetText(body and "BODY" or "APPEARANCE");
-    SK.LEFT.subtitle:SetText(body and "Drag the triangle to blend body types" or RaceLine());
-    SK.RIGHT.title:SetText(body and "FACE" or "DETAILS");
-    SK.RIGHT.subtitle:SetText(body and "Right-click a slider to reset it" or "Click a value for the full list");
-    SetSteps(body and 3 or 2);
+    local zone = StartZonePage_Open and StartZonePage_Open();
+    if zone then
+        SK.LEFT.title:SetText("STARTING ZONE");
+        SK.LEFT.subtitle:SetText("Where does your story begin?");
+        SK.RIGHT.title:SetText("YOUR START");
+        SK.RIGHT.subtitle:SetText("You can travel anywhere from here");
+    elseif fate then
+        SK.LEFT.title:SetText("BACKGROUND");
+        SK.LEFT.subtitle:SetText("Who were you before the road began?");
+        SK.RIGHT.title:SetText("YOUR FATE");
+        SK.RIGHT.subtitle:SetText("Every background trades a strength for a flaw");
+    else
+        SK.LEFT.title:SetText(body and "BODY" or "APPEARANCE");
+        SK.LEFT.subtitle:SetText(body and "Drag the triangle to blend body types" or RaceLine());
+        SK.RIGHT.title:SetText(body and "FACE" or "DETAILS");
+        SK.RIGHT.subtitle:SetText(body and "Right-click a slider to reset it" or "Click a value for the full list");
+    end
+    SetSteps(zone and 5 or fate and 4 or body and 3 or 2);
 
     -- The hint replaces the rotate arrows; the whole-character randomize sits in the details header.
     CharacterCreateRotateLeft:SetAlpha(0);
@@ -5005,7 +5111,7 @@ local function Tick()
         -- Inner end of the Details header, clear of its title.
         CharCreateRandomizeButton:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPRIGHT", -(EDGE_X + 340), -58);
         local shown = 1 + (SK.slide or 0) / PANEL_W;
-        if body or shown <= 0.5 then CharCreateRandomizeButton:SetAlpha(body and 0 or shown); CharCreateRandomizeButton:EnableMouse(false);
+        if body or fate or shown <= 0.5 then CharCreateRandomizeButton:SetAlpha((body or fate) and 0 or shown); CharCreateRandomizeButton:EnableMouse(false);
         else CharCreateRandomizeButton:SetAlpha(shown); CharCreateRandomizeButton:EnableMouse(true); end
     end
 end
@@ -5063,6 +5169,681 @@ skinWaiter:SetScript("OnUpdate", function(self)
         SK_Log("install failed: " .. SK.broken);
         SK.on = true;
         pcall(SetSkin, false);
+    end
+end);
+end)();
+
+-- Fate page (wowdecomp)
+-- Paths of Fate starts here: a FATE step after Body (after Appearance for races without the Body page) where the
+-- player picks a background trait. SetCreateTrait sends it with CMSG_CHAR_CREATE (Engine/Source/Retail/
+-- PerkTraitWire.h); perk points come later, in game, from level 10. Never offered for paid customization.
+-- Everything is guarded: if anything fails the step disappears and characters are created Unmarked.
+-- Its own function: the creator chunk is near Lua's 200-locals-per-function limit.
+(function()
+local ES = EsteriaStyle;
+local GOLD, GOLD_DIM, TEXT, MUTED, GOOD, BAD = ES.GOLD, ES.GOLD_DIM, ES.TEXT, ES.MUTED, ES.GOOD, ES.BAD;
+local Solid, Text, Tween = ES.Solid, ES.Text, ES.Tween;
+local FP = { open = false, trait = 0, broken = nil, rows = {}, paths = {} };
+local EDGE_X, COLUMN_W, TOP = 55, 340, -140;
+
+-- Ids are PerkTraitWire.h's.
+local TRAITS = {
+    { id = 0, name = "Unmarked", short = "No advantage, no drawback",
+      lore = "No past shapes you. Your story starts the moment you step into the world.",
+      up = "None", down = "None" },
+    { id = 1, name = "Wanderer", short = "Faster on foot, outdoors",
+      lore = "Roads have always called you. You travel light and far, but rarely stay long enough to be known.",
+      up = "+5% movement speed outdoors, on foot and out of combat", down = "-10% reputation from quests" },
+    { id = 2, name = "Glass Cannon", short = "More damage, less health",
+      lore = "You strike first and hard, and trust that nothing gets the chance to strike back.",
+      up = "+2% damage against non-player enemies", down = "-4% maximum health in PvE",
+      note = "Inactive in rated PvP." },
+    { id = 3, name = "Ironbound", short = "More health, less damage",
+      lore = "Years of hardship left you hard to break, if a little slower to finish a fight.",
+      up = "+4% maximum health in PvE", down = "-2% damage against non-player enemies",
+      note = "Inactive in rated PvP." },
+    { id = 4, name = "Artisan Soul", short = "Learns crafts faster",
+      lore = "Your hands learn faster than your feet wander. A workshop feels more like home than the open road.",
+      up = "+10% chance of profession skill gain", down = "-10% first-discovery exploration rewards" },
+    { id = 5, name = "Curious Mind", short = "Rewarded for discovery",
+      lore = "Every horizon is a question. You learn the world by walking it, not by working at a bench.",
+      up = "+10% first-discovery exploration rewards", down = "-10% chance of profession skill gain" },
+    { id = 6, name = "Folk Hero", short = "Trusted by the factions",
+      lore = "You earned people's trust by doing right by them, even when it left your purse light.",
+      up = "+10% reputation from quests", down = "-10% gold looted from humanoids" },
+    { id = 7, name = "Outlaw Heart", short = "Richer, less trusted",
+      lore = "You take what the world will not give, and the factions have not forgotten it.",
+      up = "+10% gold looted from humanoids", down = "-10% reputation from quests" },
+    { id = 8, name = "Frugal Survivor", short = "Rations last longer",
+      lore = "You make every meal and ration last, though you never learned to trust a potion.",
+      up = "+15% duration of food, drink and other non-combat buffs", down = "-10% healing from your own potions" },
+};
+local PATHS = {
+    { "COMBAT", "The Warrior's Instinct" }, { "SURVIVAL", "The Unyielding Road" },
+    { "EXPLORATION", "The Boundless Horizon" }, { "INDUSTRY", "The Artisan's Hand" },
+    { "INFLUENCE", "The Silver Path" }, { "COMPANIONS", "The Warband's Bond" },
+};
+
+local function FP_Log(text)
+    if BodyShapeLog then BodyShapeLog("fate: " .. tostring(text)); end
+end
+
+local function Personalizing()
+    return CharacterCreate.personalizationMode and CharCreateOkayButton:IsShown();
+end
+
+-- True when this creator session offers the step (the skin shows it in the step indicator).
+function FatePage_Offered()
+    return not FP.broken and FP.built and type(SetCreateTrait) == "function" and not PAID_SERVICE_TYPE;
+end
+
+local function Available()
+    return FatePage_Offered() and Personalizing();
+end
+
+function FatePage_Open()
+    return FP.open and Available();
+end
+
+-- True on the page just before Fate: Accept reads Next there.
+function FatePage_Follows()
+    return not FP.open and Available();
+end
+
+local function TraitById(id)
+    for _, trait in ipairs(TRAITS) do if trait.id == id then return trait; end end
+    return TRAITS[1];
+end
+
+-- ---- building ------------------------------------------------------------------------------------------------
+
+local function Wrapped(parent, size, color, width)
+    local fs = Text(parent, size, color);
+    fs:SetWidth(width);
+    fs:SetJustifyH("LEFT");
+    return fs;
+end
+
+local function BuildRow(page, index, trait)
+    local row = CreateFrame("Button", "FatePageTrait" .. index, page);
+    row:SetSize(COLUMN_W, 42);
+    row.trait = trait;
+    local hairline = Solid(row, "BACKGROUND", { 1, 1, 1 }, 0.07);
+    hairline:SetHeight(1);
+    hairline:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
+    hairline:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
+    row.wash = Solid(row, "BACKGROUND", GOLD, 0);
+    row.wash:SetAllPoints(row);
+    Solid(row, "HIGHLIGHT", GOLD, 0.10):SetAllPoints(row);
+    row.accent = Solid(row, "ARTWORK", GOLD, 1);
+    row.accent:SetWidth(2);
+    row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1);
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 1);
+    row.name = Text(row, 13, TEXT);
+    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 14, -7);
+    row.name:SetText(trait.name);
+    row.short = Text(row, 11, MUTED);
+    row.short:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3);
+    row.short:SetText(trait.short);
+    row.mark = Text(row, 11, GOLD);
+    row.mark:SetPoint("RIGHT", row, "RIGHT", -10, 0);
+    row.mark:SetText("CHOSEN");
+    row:SetScript("OnEnter", function() row.accent:Show(); end);
+    row:SetScript("OnLeave", function() if FP.trait ~= trait.id then row.accent:Hide(); end end);
+    row:SetScript("OnClick", function() FP.Select(trait.id, true); end);
+    return row;
+end
+
+local function BuildDetail(page)
+    local detail = CreateFrame("Frame", "FatePageDetail", page);
+    detail:SetSize(COLUMN_W, 300);
+    FP.detail = detail;
+    local name = Text(detail, 18, GOLD);
+    name:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0);
+    local lore = Wrapped(detail, 12, MUTED, COLUMN_W);
+    lore:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -8);
+    local upLabel = Text(detail, 11, GOLD_DIM);
+    upLabel:SetPoint("TOPLEFT", lore, "BOTTOMLEFT", 0, -14);
+    upLabel:SetText("ADVANTAGE");
+    local up = Wrapped(detail, 13, GOOD, COLUMN_W);
+    up:SetPoint("TOPLEFT", upLabel, "BOTTOMLEFT", 0, -4);
+    local downLabel = Text(detail, 11, GOLD_DIM);
+    downLabel:SetPoint("TOPLEFT", up, "BOTTOMLEFT", 0, -10);
+    downLabel:SetText("DRAWBACK");
+    local down = Wrapped(detail, 13, BAD, COLUMN_W);
+    down:SetPoint("TOPLEFT", downLabel, "BOTTOMLEFT", 0, -4);
+    local note = Wrapped(detail, 11, MUTED, COLUMN_W);
+    note:SetPoint("TOPLEFT", down, "BOTTOMLEFT", 0, -10);
+    FP.text = { name = name, lore = lore, up = up, down = down, note = note };
+
+    -- What lies ahead: the six paths, locked until level 10.
+    local paths = CreateFrame("Frame", "FatePagePaths", page);
+    paths:SetSize(COLUMN_W, 260);
+    FP.pathsFrame = paths;
+    local rule = Solid(paths, "BORDER", GOLD_DIM, 0.6);
+    rule:SetSize(COLUMN_W, 1);
+    rule:SetPoint("TOPLEFT", paths, "TOPLEFT", 0, 0);
+    local head = Text(paths, 13, GOLD);
+    head:SetPoint("TOPLEFT", rule, "BOTTOMLEFT", 0, -12);
+    head:SetText("PATHS AHEAD");
+    local lock = Text(paths, 11, MUTED);
+    lock:SetPoint("TOPRIGHT", rule, "BOTTOMRIGHT", 0, -13);
+    lock:SetText("LOCKED UNTIL LEVEL 10");
+    for index, path in ipairs(PATHS) do
+        local row = CreateFrame("Frame", nil, paths);
+        row:SetSize(COLUMN_W, 24);
+        local number = Text(row, 11, GOLD_DIM);
+        number:SetPoint("LEFT", row, "LEFT", 0, 0);
+        number:SetText(index);
+        local label = Text(row, 12, TEXT);
+        label:SetPoint("LEFT", row, "LEFT", 18, 0);
+        label:SetText(path[1]);
+        local motto = Text(row, 11, MUTED);
+        motto:SetPoint("RIGHT", row, "RIGHT", 0, 0);
+        motto:SetText(path[2]);
+        FP.paths[index] = row;
+    end
+    local footer = Wrapped(paths, 11, MUTED, COLUMN_W);
+    footer:SetPoint("TOPLEFT", paths, "TOPLEFT", 0, -50 - #PATHS * 26);
+    footer:SetText("Your first perk point arrives at level 10, then one every five levels: 15 by level 80. "
+        .. "You can change this trait once for free in the world.");
+end
+
+local function Build()
+    local page = CreateFrame("Frame", "FatePagePanel", CharacterCreateFrame);
+    page:SetAllPoints(CharacterCreateFrame);
+    page:Hide();
+    FP.page = page;
+    for index, trait in ipairs(TRAITS) do FP.rows[index] = BuildRow(page, index, trait); end
+    BuildDetail(page);
+end
+
+-- ---- motion --------------------------------------------------------------------------------------------------
+
+local function PlaceRow(row, index, p)
+    row:ClearAllPoints();
+    row:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPLEFT", EDGE_X - 14 * (1 - p), TOP - (index - 1) * 46);
+    row:SetAlpha(p);
+end
+
+local function PlaceDetail(p)
+    FP.detail:ClearAllPoints();
+    FP.detail:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPRIGHT", -EDGE_X, TOP - 8 * (1 - p));
+    FP.detail:SetAlpha(p);
+end
+
+local function PlacePaths(p)
+    FP.pathsFrame:ClearAllPoints();
+    FP.pathsFrame:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPRIGHT", -EDGE_X, TOP - 230);
+    FP.pathsFrame:SetAlpha(p);
+    for index, row in ipairs(FP.paths) do
+        -- Rows land one after another inside the same tween.
+        local q = math.max(0, math.min(1, p * 1.6 - (index - 1) * 0.1));
+        row:ClearAllPoints();
+        row:SetPoint("TOPLEFT", FP.pathsFrame, "TOPLEFT", 10 * (1 - q), -44 - (index - 1) * 26);
+        row:SetAlpha(q);
+    end
+end
+
+local function Refresh()
+    for _, row in ipairs(FP.rows) do
+        local on = row.trait.id == FP.trait;
+        local color = on and GOLD or TEXT;
+        row.name:SetTextColor(color[1], color[2], color[3]);
+        if on then row.accent:Show(); row.mark:Show(); else row.accent:Hide(); row.mark:Hide(); end
+    end
+    local trait = TraitById(FP.trait);
+    FP.text.name:SetText(string.upper(trait.name));
+    FP.text.lore:SetText(trait.lore);
+    FP.text.up:SetText(trait.up);
+    FP.text.down:SetText(trait.down);
+    FP.text.note:SetText(trait.note or "");
+end
+
+function FP.Select(id, animate)
+    if not SetCreateTrait(id) then return; end
+    FP.trait = id;
+    Refresh();
+    if not animate then return; end
+    PlaySound("gsCharacterCreationLook");
+    for _, row in ipairs(FP.rows) do
+        if row.trait.id == id then
+            Tween("fate.flash", 0.6, 0, function(p) row.wash:SetAlpha(0.3 * (1 - p)); end);
+        end
+    end
+    Tween("fate.detail", 0.24, 0, PlaceDetail);
+end
+
+local function SetOpen(open)
+    if FP.open == open then return; end
+    FP.open = open;
+    if CharacterCustomization_CloseChoices then CharacterCustomization_CloseChoices(); end
+    PlaySound("gsCharacterCreationLook");
+    if not open then
+        FP.page:Hide();
+        -- The stock refresh puts back the rows the guard hid.
+        if CharacterCreate_UpdateHairCustomization then CharacterCreate_UpdateHairCustomization(); end
+        return;
+    end
+    FP.page:Show();
+    Refresh();
+    for index, row in ipairs(FP.rows) do
+        Tween("fate.row" .. index, 0.3, (index - 1) * 0.04, function(p) PlaceRow(row, index, p); end);
+    end
+    Tween("fate.detail", 0.3, 0.08, PlaceDetail);
+    Tween("fate.paths", 0.5, 0.18, PlacePaths);
+end
+
+-- ---- flow ----------------------------------------------------------------------------------------------------
+
+local function Hook()
+    -- Accept on the page before Fate opens Fate; Accept on Fate creates the character with the picked trait.
+    local okay = CharacterCreate_Okay;
+    function CharacterCreate_Okay(...)
+        if FatePage_Open() then
+            SetCreateTrait(FP.trait); -- the native pick clears after each create attempt; a failed one (name taken) retries
+            return okay(...);
+        end
+        local bodyFlow = BodyShapePage_FlowAvailable and BodyShapePage_FlowAvailable();
+        if FatePage_Follows() and (not bodyFlow or BodyShapePage_Active()) then
+            SetOpen(true);
+            return;
+        end
+        return okay(...);
+    end
+    local back = CharacterCreate_Back;
+    function CharacterCreate_Back(...)
+        if FP.open then SetOpen(false); return; end
+        return back(...);
+    end
+    local toggle = CharacterCreate_TogglePersonalization;
+    function CharacterCreate_TogglePersonalization(...)
+        if FP.open then SetOpen(false); return; end
+        return toggle(...);
+    end
+    -- Every new character starts Unmarked.
+    local onShow = CharacterCreate_OnShow;
+    function CharacterCreate_OnShow(...)
+        FP.open = false;
+        FP.trait = 0;
+        if SetCreateTrait then SetCreateTrait(0); end
+        if FP.page then FP.page:Hide(); end
+        return onShow(...);
+    end
+end
+
+local function Tick()
+    if not FatePage_Open() then
+        FP.open = false;
+        FP.page:Hide();
+        return;
+    end
+    for i = 1, 64 do
+        local row = _G["CharacterCustomizationButtonFrame" .. i];
+        if row and row:IsShown() then row:Hide(); end
+    end
+    -- Follow the skin's collapsible side panels.
+    local shown = CreatorSkin_PaneShown and CreatorSkin_PaneShown() or 1;
+    FP.page:SetAlpha(shown);
+    for _, row in ipairs(FP.rows) do row:EnableMouse(shown > 0.5); end
+    -- The starting zone page covers this one; Accept reads Next here while it still follows.
+    if StartZonePage_Open and StartZonePage_Open() then FP.page:Hide(); else FP.page:Show(); end
+    local label = StartZonePage_Follows and StartZonePage_Follows() and "Next" or FP.okayText;
+    if label and CharCreateOkayButton:GetText() ~= label then CharCreateOkayButton:SetText(label); end
+end
+
+local function Install()
+    if type(SetCreateTrait) ~= "function" then FP_Log("no SetCreateTrait native; step off"); return; end
+    Build();
+    Hook();
+    FP.built = true;
+    local driver = CreateFrame("Frame");
+    driver:SetScript("OnUpdate", function(self, elapsed)
+        self.elapsed = (self.elapsed or 0) + elapsed;
+        if self.elapsed < 0.1 then return; end
+        self.elapsed = 0;
+        -- Accept's own label (the Body page swaps it for Next), read before anyone changes it.
+        if not FP.okayText and CharCreateOkayButton:GetText() ~= "Next" then FP.okayText = CharCreateOkayButton:GetText(); end
+        local ok, err = pcall(Tick);
+        if not ok then
+            FP.broken = tostring(err);
+            FP.open = false;
+            pcall(function() FP.page:Hide(); SetCreateTrait(0); end);
+            FP_Log("tick error: " .. FP.broken);
+            self:SetScript("OnUpdate", nil);
+        end
+    end);
+    FP_Log("installed");
+end
+
+-- The creator's frames do not exist yet while this file loads, so build the page on the first frame that has them.
+local waiter = CreateFrame("Frame");
+waiter:SetScript("OnUpdate", function(self)
+    if not (CharacterCreate and CharacterCreateFrame and CharCreateOkayButton) then return; end
+    self:SetScript("OnUpdate", nil);
+    local ok, err = pcall(Install);
+    if not ok then
+        FP.broken = tostring(err);
+        FP_Log("install failed: " .. FP.broken);
+    end
+end);
+end)();
+
+-- Starting zone page (wowdecomp)
+-- The last step, after Fate: pick where the character begins. Retail's zone art (EsteriaStartZones.blp, built by
+-- start_zone_art.py) sits beside a list of every starting zone; SetCreateStartZone sends the pick with
+-- CMSG_CHAR_CREATE (Engine/Source/Retail/StartZoneWire.h) and the server places the character and its hearthstone
+-- there. The race's own zone starts chosen (id 0, left to the server, for custom races). Needs the Fate page (Accept on Fate opens this page; Accept here
+-- creates). Everything is guarded: if anything fails the step disappears and the race's own zone is used.
+-- Its own function: the creator chunk is near Lua's 200-locals-per-function limit.
+(function()
+local ES = EsteriaStyle;
+local GOLD, GOLD_DIM, TEXT, MUTED = ES.GOLD, ES.GOLD_DIM, ES.TEXT, ES.MUTED;
+local Solid, Text, Tween = ES.Solid, ES.Text, ES.Tween;
+local SZ = { open = false, zone = 0, broken = nil, rows = {} };
+local EDGE_X, COLUMN_W, TOP, ROW_H = 55, 340, -140, 46;
+local ART = "Interface\\Glues\\CharacterCreate\\EsteriaStartZones";
+local ART_W, ART_H = 340, 227; -- one 512x341 slot of the 2048x1024 atlas
+
+-- Ids are StartZoneWire.h's; slot is the zone's place in the art atlas (4 per row).
+local ZONES = {
+    [1] = { name = "Northshire Valley", region = "Elwynn Forest", slot = 0,
+            lore = "The abbey's bells call every new recruit of Stormwind. Wolves and kobolds trouble the farms below, and the Stormwind Guard teaches the rest." },
+    [2] = { name = "Coldridge Valley", region = "Dun Morogh", slot = 1,
+            lore = "Snow, pine and the forges of the dwarves and gnomes. Troggs and Frostmane trolls crowd the pass to Anvilmar." },
+    [3] = { name = "Shadowglen", region = "Teldrassil", slot = 2,
+            lore = "Moonlit glades beneath the World Tree. The sentinels train you here while the corruption of Teldrassil stirs." },
+    [4] = { name = "Ammen Vale", region = "Azuremyst Isle", slot = 3,
+            lore = "The Exodar fell from the sky and broke on these shores. Survivors gather among the wreckage and the strange crystals." },
+    [5] = { name = "Valley of Trials", region = "Durotar", slot = 4,
+            lore = "A red, hard land where Orcs and Trolls prove themselves before the road to Orgrimmar opens to them." },
+    [6] = { name = "Camp Narache", region = "Mulgore", slot = 5,
+            lore = "Green plains, still lakes and the totems of the Tauren. The Earthmother watches over the hunters of Red Cloud Mesa." },
+    [7] = { name = "Deathknell", region = "Tirisfal Glades", slot = 6,
+            lore = "The Forsaken wake among the graves of a ruined chapel and take back what the Scourge left behind." },
+    [8] = { name = "Sunstrider Isle", region = "Eversong Woods", slot = 7,
+            lore = "Golden trees and the glow of the Sunwell. The blood elves rebuild beneath the spires of Quel'Thalas." },
+};
+-- Stock race id -> its own zone id, chosen when the page opens. Custom races have none.
+local HOME = { [1] = 1, [3] = 2, [7] = 2, [4] = 3, [11] = 4, [2] = 5, [8] = 5, [6] = 6, [5] = 7, [10] = 8 };
+
+local function SZ_Log(text)
+    if BodyShapeLog then BodyShapeLog("zone: " .. tostring(text)); end
+end
+
+local function Personalizing()
+    return CharacterCreate.personalizationMode and CharCreateOkayButton:IsShown();
+end
+
+local function IsDeathKnight()
+    -- The native reads the creator's character, which only exists once the player is customizing one: any earlier call
+    -- (the frame is "shown" even on the login screen) crashes the client.
+    if not CharacterCreate.personalizationMode then return false; end
+    local _, class = GetSelectedClass();
+    return class == "DEATHKNIGHT"; -- Acherus is the only start
+end
+
+-- True when this creator session offers the step.
+function StartZonePage_Offered()
+    return not SZ.broken and SZ.built and type(SetCreateStartZone) == "function" and FatePage_Offered
+        and FatePage_Offered() and not IsDeathKnight();
+end
+
+local function Available()
+    return StartZonePage_Offered() and FatePage_Open and FatePage_Open();
+end
+
+function StartZonePage_Open()
+    return SZ.open and Available();
+end
+
+-- True on the Fate page: Accept reads Next there.
+function StartZonePage_Follows()
+    return not SZ.open and Available();
+end
+
+-- Every zone, whatever the race (the realm is faction free).
+local function Entries()
+    local list = {};
+    for id = 1, #ZONES do list[id] = { id = id, zone = ZONES[id] }; end
+    return list;
+end
+
+-- ---- building ------------------------------------------------------------------------------------------------
+
+local function Art(parent, width, height, slot)
+    local tex = parent:CreateTexture(nil, "ARTWORK");
+    tex:SetTexture(ART);
+    tex:SetSize(width, height);
+    SZ.Slot(tex, slot);
+    return tex;
+end
+
+function SZ.Slot(tex, slot)
+    if not slot then tex:SetTexture(ES.WHITE); tex:SetTexCoord(0, 1, 0, 1); tex:SetVertexColor(0.05, 0.06, 0.08); return; end
+    tex:SetTexture(ART);
+    tex:SetVertexColor(1, 1, 1);
+    local col, row = slot % 4, math.floor(slot / 4);
+    tex:SetTexCoord(col * 0.25, (col + 1) * 0.25, row * 341 / 1024, (row + 1) * 341 / 1024);
+end
+
+local function BuildRow(page, index)
+    local row = CreateFrame("Button", "StartZonePageRow" .. index, page);
+    row:SetSize(COLUMN_W, ROW_H);
+    local hairline = Solid(row, "BACKGROUND", { 1, 1, 1 }, 0.07);
+    hairline:SetHeight(1);
+    hairline:SetPoint("TOPLEFT", row, "TOPLEFT", 0, 0);
+    hairline:SetPoint("TOPRIGHT", row, "TOPRIGHT", 0, 0);
+    row.wash = Solid(row, "BACKGROUND", GOLD, 0);
+    row.wash:SetAllPoints(row);
+    Solid(row, "HIGHLIGHT", GOLD, 0.10):SetAllPoints(row);
+    row.accent = Solid(row, "ARTWORK", GOLD, 1);
+    row.accent:SetWidth(2);
+    row.accent:SetPoint("TOPLEFT", row, "TOPLEFT", 0, -1);
+    row.accent:SetPoint("BOTTOMLEFT", row, "BOTTOMLEFT", 0, 1);
+    row.thumb = Art(row, 51, 34, 0);
+    row.thumb:SetPoint("LEFT", row, "LEFT", 12, 0);
+    row.name = Text(row, 13, TEXT);
+    row.name:SetPoint("TOPLEFT", row, "TOPLEFT", 74, -7);
+    row.short = Text(row, 11, MUTED);
+    row.short:SetPoint("TOPLEFT", row.name, "BOTTOMLEFT", 0, -3);
+    row.mark = Text(row, 11, GOLD);
+    row.mark:SetPoint("RIGHT", row, "RIGHT", -10, 0);
+    row.mark:SetText("CHOSEN");
+    row:SetScript("OnEnter", function() row.accent:Show(); end);
+    row:SetScript("OnLeave", function() if SZ.zone ~= row.entry.id then row.accent:Hide(); end end);
+    row:SetScript("OnClick", function() SZ.Select(row.entry.id, true); end);
+    return row;
+end
+
+local function BuildDetail(page)
+    local detail = CreateFrame("Frame", "StartZonePageDetail", page);
+    detail:SetSize(COLUMN_W, 420);
+    SZ.detail = detail;
+    SZ.art = Art(detail, ART_W, ART_H, 0);
+    SZ.art:SetPoint("TOPLEFT", detail, "TOPLEFT", 0, 0);
+    local frame = CreateFrame("Frame", nil, detail);
+    frame:SetAllPoints(SZ.art);
+    ES.Border(frame, GOLD_DIM, 0.8);
+    local name = Text(detail, 18, GOLD);
+    name:SetPoint("TOPLEFT", SZ.art, "BOTTOMLEFT", 0, -16);
+    local region = Text(detail, 12, GOLD_DIM);
+    region:SetPoint("TOPLEFT", name, "BOTTOMLEFT", 0, -4);
+    local lore = Text(detail, 12, MUTED);
+    lore:SetWidth(COLUMN_W);
+    lore:SetJustifyH("LEFT");
+    lore:SetPoint("TOPLEFT", region, "BOTTOMLEFT", 0, -10);
+    local note = Text(detail, 11, MUTED);
+    note:SetWidth(COLUMN_W);
+    note:SetJustifyH("LEFT");
+    note:SetPoint("TOPLEFT", lore, "BOTTOMLEFT", 0, -14);
+    note:SetText("Your first quests, trainers and hearthstone are here. The rest of the world stays open to you.");
+    SZ.text = { name = name, region = region, lore = lore };
+end
+
+local function Build()
+    local page = CreateFrame("Frame", "StartZonePagePanel", CharacterCreateFrame);
+    page:SetAllPoints(CharacterCreateFrame);
+    page:Hide();
+    SZ.page = page;
+    for index = 1, 8 do SZ.rows[index] = BuildRow(page, index); end
+    BuildDetail(page);
+end
+
+-- ---- motion --------------------------------------------------------------------------------------------------
+
+local function PlaceRow(row, index, p)
+    row:ClearAllPoints();
+    row:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPLEFT", EDGE_X - 14 * (1 - p), TOP - (index - 1) * (ROW_H + 4));
+    row:SetAlpha(p);
+end
+
+local function PlaceDetail(p)
+    SZ.detail:ClearAllPoints();
+    SZ.detail:SetPoint("TOPRIGHT", CharacterCreateFrame, "TOPRIGHT", -EDGE_X, TOP - 8 * (1 - p));
+    SZ.detail:SetAlpha(p);
+end
+
+local function Refresh()
+    local chosen;
+    for index, row in ipairs(SZ.rows) do
+        local entry = SZ.entries[index];
+        row.entry = entry;
+        if entry then
+            local on = entry.id == SZ.zone;
+            if on then chosen = entry; end
+            local color = on and GOLD or TEXT;
+            row.name:SetTextColor(color[1], color[2], color[3]);
+            row.name:SetText(entry.zone.name);
+            row.short:SetText(entry.zone.region);
+            SZ.Slot(row.thumb, entry.zone.slot);
+            if on then row.accent:Show(); row.mark:Show(); else row.accent:Hide(); row.mark:Hide(); end
+            row:Show();
+        else
+            row:Hide();
+        end
+    end
+    local zone = chosen and chosen.zone;
+    SZ.Slot(SZ.art, zone and zone.slot);
+    SZ.text.name:SetText(zone and string.upper(zone.name) or "STARTING ZONE");
+    SZ.text.region:SetText(zone and zone.region or "");
+    SZ.text.lore:SetText(zone and zone.lore or "Pick where your story begins. Left alone, your character starts where their people do.");
+end
+
+function SZ.Select(id, animate)
+    if not SetCreateStartZone(id) then return; end
+    SZ.zone = id;
+    Refresh();
+    if not animate then return; end
+    PlaySound("gsCharacterCreationLook");
+    for _, row in ipairs(SZ.rows) do
+        if row.entry and row.entry.id == id then
+            Tween("zone.flash", 0.6, 0, function(p) row.wash:SetAlpha(0.3 * (1 - p)); end);
+        end
+    end
+    Tween("zone.detail", 0.24, 0, PlaceDetail);
+end
+
+local function SetOpen(open)
+    if SZ.open == open then return; end
+    SZ.open = open;
+    PlaySound("gsCharacterCreationLook");
+    if not open then
+        SZ.page:Hide();
+        return;
+    end
+    SZ.entries = Entries();
+    SZ.zone = HOME[CharacterCreate.selectedRaceID] or 0; -- the race's own zone; custom races leave it to the server
+    SetCreateStartZone(SZ.zone);
+    SZ.page:Show();
+    Refresh();
+    for index, row in ipairs(SZ.rows) do
+        Tween("zone.row" .. index, 0.3, (index - 1) * 0.04, function(p) PlaceRow(row, index, p); end);
+    end
+    Tween("zone.detail", 0.3, 0.08, PlaceDetail);
+end
+
+-- ---- flow ----------------------------------------------------------------------------------------------------
+
+local function Hook()
+    -- Accept on Fate opens this page; Accept here falls through to Fate's, which creates.
+    local okay = CharacterCreate_Okay;
+    function CharacterCreate_Okay(...)
+        if StartZonePage_Open() then
+            SetCreateStartZone(SZ.zone); -- the native pick clears after each create attempt; a failed one (name taken) retries
+            return okay(...);
+        end
+        if StartZonePage_Follows() then
+            SetOpen(true);
+            return;
+        end
+        return okay(...);
+    end
+    local back = CharacterCreate_Back;
+    function CharacterCreate_Back(...)
+        if SZ.open then SetOpen(false); return; end
+        return back(...);
+    end
+    local toggle = CharacterCreate_TogglePersonalization;
+    function CharacterCreate_TogglePersonalization(...)
+        if SZ.open then SetOpen(false); return; end
+        return toggle(...);
+    end
+    -- Every new character starts in its race's own zone.
+    local onShow = CharacterCreate_OnShow;
+    function CharacterCreate_OnShow(...)
+        SZ.open = false;
+        SZ.zone = 0;
+        if SetCreateStartZone then SetCreateStartZone(0); end
+        if SZ.page then SZ.page:Hide(); end
+        return onShow(...);
+    end
+end
+
+local function Tick()
+    if not StartZonePage_Open() then
+        SZ.open = false;
+        SZ.page:Hide();
+        return;
+    end
+    -- Follow the skin's collapsible side panels.
+    local shown = CreatorSkin_PaneShown and CreatorSkin_PaneShown() or 1;
+    SZ.page:SetAlpha(shown);
+    for _, row in ipairs(SZ.rows) do row:EnableMouse(shown > 0.5); end
+    SZ.page:Show();
+end
+
+local function Install()
+    if type(SetCreateStartZone) ~= "function" then SZ_Log("no SetCreateStartZone native; step off"); return; end
+    Build();
+    Hook();
+    SZ.built = true;
+    local driver = CreateFrame("Frame");
+    driver:SetScript("OnUpdate", function(self, elapsed)
+        self.elapsed = (self.elapsed or 0) + elapsed;
+        if self.elapsed < 0.1 then return; end
+        self.elapsed = 0;
+        local ok, err = pcall(Tick);
+        if not ok then
+            SZ.broken = tostring(err);
+            SZ.open = false;
+            pcall(function() SZ.page:Hide(); SetCreateStartZone(0); end);
+            SZ_Log("tick error: " .. SZ.broken);
+            self:SetScript("OnUpdate", nil);
+        end
+    end);
+    SZ_Log("installed");
+end
+
+-- The creator's frames do not exist yet while this file loads, so build the page on the first frame that has them.
+local waiter = CreateFrame("Frame");
+waiter:SetScript("OnUpdate", function(self)
+    if not (CharacterCreate and CharacterCreateFrame and CharCreateOkayButton) then return; end
+    self:SetScript("OnUpdate", nil);
+    local ok, err = pcall(Install);
+    if not ok then
+        SZ.broken = tostring(err);
+        SZ_Log("install failed: " .. SZ.broken);
     end
 end);
 end)();

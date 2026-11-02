@@ -7,6 +7,8 @@
 #include "Engine/Source/Retail/BodyShape.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
 #include "Engine/Source/Retail/EyeEffects.h"
+#include "Engine/Source/Retail/PerkTraitWire.h"
+#include "Engine/Source/Retail/StartZoneWire.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Common/ComponentCore/ComponentUtils.h"
 #include "WoW/Common/ComponentCore/CreatureAppearance.h"
@@ -2369,6 +2371,65 @@ void EsteriaCreateExtra(CDataStore* packet) {
             packet->Put(static_cast<uint8_t>((0x31435248 >> (i * 8)) & 255));
         }
     }
+}
+
+static uint8_t g_createTrait = CharacterPerkTrait::Unmarked;
+
+bool EsteriaSetCreateTrait(uint32_t trait) {
+    if (trait > 255 || !CharacterPerkTrait::Selectable(static_cast<uint8_t>(trait))) {
+        return false;
+    }
+    g_createTrait = static_cast<uint8_t>(trait);
+    return true;
+}
+
+uint32_t EsteriaGetCreateTrait() {
+    return g_createTrait;
+}
+
+void EsteriaCreateTraitFooter(CDataStore* packet) {
+    if (!packet) {
+        return;
+    }
+    uint8_t payload[CharacterPerkTrait::PayloadSize];
+    CharacterPerkTrait::WritePayload(payload, g_createTrait);
+    for (uint8_t byte : payload) {
+        packet->Put(byte);
+    }
+    for (uint32_t shift = 0; shift < 32; shift += 8) {
+        packet->Put(static_cast<uint8_t>(CharacterPerkTrait::FooterMagic >> shift));
+    }
+    g_createTrait = CharacterPerkTrait::Unmarked;
+}
+
+static uint8_t g_createStartZone = CharacterStartZone::RaceDefault;
+
+bool EsteriaSetCreateStartZone(uint32_t zone) {
+    if (zone > 255 || !CharacterStartZone::Selectable(static_cast<uint8_t>(zone))) {
+        return false;
+    }
+    g_createStartZone = static_cast<uint8_t>(zone);
+    return true;
+}
+
+uint32_t EsteriaGetCreateStartZone() {
+    return g_createStartZone;
+}
+
+// Goes out just before the trait footer, so the server strips the trait first.
+void EsteriaCreateStartZoneFooter(CDataStore* packet) {
+    if (!packet) {
+        return;
+    }
+    uint8_t payload[CharacterStartZone::PayloadSize];
+    CharacterStartZone::WritePayload(payload, g_createStartZone);
+    for (uint8_t byte : payload) {
+        packet->Put(byte);
+    }
+    for (uint32_t shift = 0; shift < 32; shift += 8) {
+        packet->Put(static_cast<uint8_t>(CharacterStartZone::FooterMagic >> shift));
+    }
+    g_createStartZone = CharacterStartZone::RaceDefault;
 }
 
 void EsteriaForgetCharacter(CCharacterComponent* character) {

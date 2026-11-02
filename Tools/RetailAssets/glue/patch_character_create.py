@@ -3,7 +3,8 @@
 The creator already draws up to 29 option rows from CycleCharCustomization("EA_GET", i). This patch makes any
 race mapped to Retail data (native "EA_RETAIL" command) use that panel, shows the real choice names and
 routes the randomizer to the native EA_RANDOM, binds viewport wheel input to
-the native face zoom and right-drag to the native camera pan, then appends the Body page and the creator skin.
+the native face zoom and right-drag to the native camera pan, then appends the style kit, the Body page, the creator
+skin, the Fate page and the starting zone page.
 It is idempotent.
 
 Default is a dry run that writes the patched files to --stage. With --apply it backs up and rewrites
@@ -23,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 
 import body_triangle
+import start_zone_art
 
 MARKER = "-- Retail race customization (wowdecomp)"
 ENTRY = "Interface" + chr(92) + "GlueXML" + chr(92) + "CharacterCreate.lua"
@@ -31,6 +33,10 @@ ARCHIVES = (Path("Data") / "patch-Z.MPQ", Path("Data") / "enUS" / "patch-enUS-Z.
             Path("Data") / "Patch-ZzzzzzzzEthereal.MPQ", Path("Data") / "Patch-ZzzzzzzzzzKyrianData.MPQ")
 BODY_MARKER = "-- Body sliders page (wowdecomp)"
 BODY_PAGE = Path(__file__).with_name("body_page.lua")
+STYLE_MARKER = "-- Esteria style kit (wowdecomp)"
+STYLE = Path(__file__).with_name("esteria_style.lua")
+FATE = Path(__file__).with_name("fate_page.lua")
+START_ZONE = Path(__file__).with_name("start_zone_page.lua")
 SKIN_MARKER = "-- Creator skin (wowdecomp)"
 SKIN = Path(__file__).with_name("creator_skin.lua")
 
@@ -150,14 +156,18 @@ def patch_pan(text):
 
 
 def patch_body_page(text):
-    """Adds the Body sliders page: hides the appearance rows while it is open, then appends the page itself.
+    """Adds the Body sliders page: hides the appearance rows while it is open, then appends the style kit (which the
+    page and the skin use) and the page itself.
 
-    Re-running replaces an older copy of the page (everything from the marker to the end of the file).
+    Re-running replaces an older copy (everything from the first of the two markers to the end of the file).
     """
     nl = "\r\n" if "\r\n" in text else "\n"
     text = text.replace("\r\n", "\n")
-    guard = "    if BodyShapePage_Active and BodyShapePage_Active() then\n"
-    if guard not in text:
+    old_guard = "    if BodyShapePage_Active and BodyShapePage_Active() then\n"
+    guard = ("    if (BodyShapePage_Active and BodyShapePage_Active()) or (FatePage_Open and FatePage_Open()) then\n")
+    if old_guard in text:
+        text = replace_once(text, old_guard, guard)
+    elif guard not in text:
         text = replace_once(text, "local function EA_REFRESH()\n    if not CharacterCustomizationButtonFrame1 then return; end\n",
             "local function EA_REFRESH()\n    if not CharacterCustomizationButtonFrame1 then return; end\n"
             + guard +
@@ -167,22 +177,27 @@ def patch_body_page(text):
             "        end\n"
             "        return;\n"
             "    end\n")
-    if BODY_MARKER in text:
-        text = text[:text.index(BODY_MARKER)].rstrip("\n") + "\n"
+    cuts = [text.index(marker) for marker in (STYLE_MARKER, BODY_MARKER) if marker in text]
+    if cuts:
+        text = text[:min(cuts)].rstrip("\n") + "\n"
+    style = STYLE.read_text(encoding="utf-8").replace("\r\n", "\n")
     page = BODY_PAGE.read_text(encoding="utf-8").replace("\r\n", "\n")
     if not text.endswith("\n"):
         text += "\n"
-    return (text + "\n" + page).replace("\n", nl)
+    return (text + "\n" + style + "\n" + page).replace("\n", nl)
 
 
 def patch_skin(text):
-    """Appends the creator skin after the Body page (re-running replaces an older copy, marker to end of file)."""
+    """Appends the creator skin and then the Fate page after the Body page (re-running replaces an older copy, skin
+    marker to end of file)."""
     nl = "\r\n" if "\r\n" in text else "\n"
     text = text.replace("\r\n", "\n")
     if SKIN_MARKER in text:
         text = text[:text.index(SKIN_MARKER)].rstrip("\n") + "\n"
     skin = SKIN.read_text(encoding="utf-8").replace("\r\n", "\n")
-    return (text + "\n" + skin).replace("\n", nl)
+    fate = FATE.read_text(encoding="utf-8").replace("\r\n", "\n")
+    zone = START_ZONE.read_text(encoding="utf-8").replace("\r\n", "\n")
+    return (text + "\n" + skin + "\n" + fate + "\n" + zone).replace("\n", nl)
 
 
 def patch_rows(text):
@@ -223,6 +238,7 @@ def main():
     storm = Storm(DLL_DEFAULT if DLL_DEFAULT.exists() else repo_storm)
     args.stage.mkdir(parents=True, exist_ok=True)
     triangle, _ = body_triangle.build()
+    zone_art = start_zone_art.build()
     patched = {}
     for relative in ARCHIVES:
         path = args.client / relative
@@ -231,17 +247,19 @@ def main():
             raise SystemExit("Cannot open " + str(path))
         try:
             original = {ENTRY: storm.read(handle, ENTRY)}
-            # Textures are locale-independent: the body triangle ships in the general archive only.
+            # Textures are locale-independent: the body triangle and the zone art ship in the general archive only.
             if relative == ARCHIVES[0]:
-                try:
-                    original[body_triangle.ENTRY] = storm.read(handle, body_triangle.ENTRY)
-                except OSError:
-                    original[body_triangle.ENTRY] = b""
+                for art in (body_triangle.ENTRY, start_zone_art.ENTRY):
+                    try:
+                        original[art] = storm.read(handle, art)
+                    except OSError:
+                        original[art] = b""
         finally:
             storm.dll.SFileCloseArchive(handle)
         result = {ENTRY: patch_all(original[ENTRY].decode("utf-8")).encode("utf-8")}
         if body_triangle.ENTRY in original:
             result[body_triangle.ENTRY] = triangle
+            result[start_zone_art.ENTRY] = zone_art
         (args.stage / (path.stem + "-CharacterCreate.lua")).write_bytes(result[ENTRY])
         patched[path] = (original, result)
         changed = [name.rsplit(chr(92), 1)[-1] for name in result if result[name] != original[name]]

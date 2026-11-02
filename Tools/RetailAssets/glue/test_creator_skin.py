@@ -143,6 +143,7 @@ end
 
 L = LuaRuntime()
 L.execute(HARNESS)
+L.execute(open(__import__("pathlib").Path(SKIN).with_name("esteria_style.lua"), encoding='utf-8').read())
 L.execute(open(SKIN, encoding='utf-8').read())
 results = L.execute(r'''
 local out = {}

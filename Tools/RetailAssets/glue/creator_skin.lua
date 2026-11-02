@@ -7,14 +7,11 @@
 (function()
 local SK ={ on = false, broken = nil, rows = {}, sliders = {}, buttons = {} };
 
-local GOLD = { 0.91, 0.77, 0.42 };
-local GOLD_DIM = { 0.54, 0.43, 0.18 };
-local INK = { 0.03, 0.04, 0.055 };
-local TEXT = { 0.88, 0.86, 0.80 };
-local MUTED = { 0.60, 0.59, 0.55 };
+local ES = EsteriaStyle;
+local GOLD, GOLD_DIM, INK, TEXT, MUTED = ES.GOLD, ES.GOLD_DIM, ES.INK, ES.TEXT, ES.MUTED;
 -- Everything uses the game font; body text runs a size below headers.
-local HEAD_FONT, BODY_FONT = "Fonts\\FRIZQT__.TTF", "Fonts\\FRIZQT__.TTF";
-local WHITE = "Interface\\Buttons\\WHITE8X8";
+local HEAD_FONT, BODY_FONT = ES.FONT, ES.FONT;
+local WHITE = ES.WHITE;
 local PANEL_W, EDGE_X = 440, 55; -- rows sit EDGE_X in from each screen edge and are 340 wide
 
 local function SK_Log(text)
@@ -22,19 +19,11 @@ local function SK_Log(text)
 end
 
 local function Solid(parent, layer, r, g, b, a)
-    local tex = parent:CreateTexture(nil, layer or "ARTWORK");
-    tex:SetTexture(WHITE);
-    tex:SetVertexColor(r, g, b, a or 1);
-    return tex;
+    return ES.Solid(parent, layer, { r, g, b }, a);
 end
 
 local function Text(parent, font, size, color, layer)
-    local fs = parent:CreateFontString(nil, layer or "OVERLAY", "GlueFontHighlightSmall");
-    fs:SetFont(font, size);
-    fs:SetTextColor(color[1], color[2], color[3]);
-    fs:SetShadowOffset(1, -1);
-    fs:SetShadowColor(0, 0, 0, 0.8);
-    return fs;
+    return ES.Text(parent, size, color, layer, font);
 end
 
 local function Personalizing()
@@ -84,22 +73,15 @@ local function BuildChrome()
         SK[side] = { title = title, subtitle = subtitle, rule = rule, panel = panel, fade = fade };
     end
 
-    -- Step indicator: Race, Appearance, Body (the last only for races with the Body page).
+    -- Step indicator: Race, Appearance, Body, Fate, Zone (Body, Fate and Zone only when their pages are offered). SetSteps
+    -- lays out whichever are shown, centred.
     local steps, lines = {}, {};
-    for index, name in ipairs({ "RACE", "APPEARANCE", "BODY" }) do
+    for index, name in ipairs({ "RACE", "APPEARANCE", "BODY", "FATE", "ZONE" }) do
         steps[index] = Text(chrome, HEAD_FONT, 13, MUTED);
-        steps[index]:SetText(index .. "   " .. name);
-    end
-    for index = 1, 2 do
         lines[index] = Solid(chrome, "BORDER", GOLD_DIM[1], GOLD_DIM[2], GOLD_DIM[3], 0.9);
         lines[index]:SetSize(40, 1);
     end
-    steps[2]:SetPoint("TOP", chrome, "TOP", 0, -24);
-    lines[1]:SetPoint("RIGHT", steps[2], "LEFT", -12, 0);
-    steps[1]:SetPoint("RIGHT", lines[1], "LEFT", -12, 0);
-    lines[2]:SetPoint("LEFT", steps[2], "RIGHT", 12, 0);
-    steps[3]:SetPoint("LEFT", lines[2], "RIGHT", 12, 0);
-    SK.steps, SK.stepLines = steps, lines;
+    SK.steps, SK.stepLines, SK.stepNames = steps, lines, { "RACE", "APPEARANCE", "BODY", "FATE", "ZONE" };
 
     local hint = Text(chrome, BODY_FONT, 12, MUTED);
     hint:SetPoint("BOTTOM", chrome, "BOTTOM", 0, 14);
@@ -976,11 +958,49 @@ end
 
 local function SetSteps(active)
     local body = BodyShapePage_Active and type(GetBodyShapeNames) == "function" and EA_IS_RETAIL();
+    local fate = FatePage_Offered and FatePage_Offered();
+    local zone = StartZonePage_Offered and StartZonePage_Offered();
+    local visible = { true, true, body and true or false, fate and true or false, zone and true or false };
+    local shown, text = {}, 0;
     for index, step in ipairs(SK.steps) do
+        SK.stepLines[index]:Hide();
+        if visible[index] then
+            shown[#shown + 1] = index;
+            step:SetText(#shown .. "   " .. SK.stepNames[index]);
+            step:Show();
+            text = text + step:GetStringWidth();
+        else
+            step:Hide();
+        end
         if index == active then step:SetTextColor(GOLD[1], GOLD[2], GOLD[3]); else step:SetTextColor(MUTED[1], MUTED[2], MUTED[3]); end
     end
-    -- Only show the Body step when the race has that page.
-    if body then SK.steps[3]:Show(); SK.stepLines[2]:Show(); else SK.steps[3]:Hide(); SK.stepLines[2]:Hide(); end
+    -- Chain the shown steps left to right with a line between (4px gaps), the whole row centred. The row must fit
+    -- between the side panels (the viewport column), so the links shrink from 64px to 20px as steps are added.
+    local link = 64;
+    local room = (CharacterCreateFrame:GetWidth() or 0) - 2 * PANEL_W - 24;
+    if room > 0 and #shown > 1 then link = math.max(20, math.min(64, (room - text) / (#shown - 1))); end
+    local width = text + link * (#shown - 1);
+    local previous;
+    for _, index in ipairs(shown) do
+        local step = SK.steps[index];
+        step:ClearAllPoints();
+        if previous then
+            local line = SK.stepLines[index];
+            line:ClearAllPoints();
+            line:SetWidth(link - 8);
+            line:SetPoint("LEFT", previous, "RIGHT", 4, 0);
+            line:Show();
+            step:SetPoint("LEFT", line, "RIGHT", 4, 0);
+        else
+            step:SetPoint("TOPLEFT", SK.chrome, "TOP", -width / 2, -24);
+        end
+        previous = step;
+    end
+end
+
+-- How far the customization side panels are out: 1 open, 0 collapsed. The Fate page follows it.
+function CreatorSkin_PaneShown()
+    return 1 + (SK.slide or 0) / PANEL_W;
 end
 
 local function RaceTick()
@@ -1111,9 +1131,11 @@ local function Tick()
     local arrow = PanesOpen() and "Left" or "Right";
     SK.panelTab.arrow:SetTexture("Interface" .. "\\" .. "MoneyFrame" .. "\\" .. "Arrow-" .. arrow .. "-Up");
     SK.panelTab.arrow:SetVertexColor(GOLD[1], GOLD[2], GOLD[3]);
-    -- The stock page switch hides the gender picks here; this page offers them too.
-    if CharacterCreateGenderButtonsContainer and not CharacterCreateGenderButtonsContainer:IsShown() then
-        CharacterCreateGenderButtonsContainer:Show();
+    local fate = FatePage_Open and FatePage_Open();
+    -- The stock page switch hides the gender picks here; this page offers them too (not the Fate page).
+    if CharacterCreateGenderButtonsContainer then
+        if fate then CharacterCreateGenderButtonsContainer:Hide();
+        elseif not CharacterCreateGenderButtonsContainer:IsShown() then CharacterCreateGenderButtonsContainer:Show(); end
     end
     for button in pairs(SK.toggles) do ApplyToggle(button, true); end
 
@@ -1127,7 +1149,7 @@ local function Tick()
     for button in pairs(SK.buttons) do ApplyButton(button, true); end
 
     local body = BodyPage();
-    UpdateFormTabs(not body);
+    UpdateFormTabs(not body and not fate);
     if body then
         SkinBodyPage();
         for i = 1, 128 do
@@ -1137,11 +1159,24 @@ local function Tick()
         end
     end
 
-    SK.LEFT.title:SetText(body and "BODY" or "APPEARANCE");
-    SK.LEFT.subtitle:SetText(body and "Drag the triangle to blend body types" or RaceLine());
-    SK.RIGHT.title:SetText(body and "FACE" or "DETAILS");
-    SK.RIGHT.subtitle:SetText(body and "Right-click a slider to reset it" or "Click a value for the full list");
-    SetSteps(body and 3 or 2);
+    local zone = StartZonePage_Open and StartZonePage_Open();
+    if zone then
+        SK.LEFT.title:SetText("STARTING ZONE");
+        SK.LEFT.subtitle:SetText("Where does your story begin?");
+        SK.RIGHT.title:SetText("YOUR START");
+        SK.RIGHT.subtitle:SetText("You can travel anywhere from here");
+    elseif fate then
+        SK.LEFT.title:SetText("BACKGROUND");
+        SK.LEFT.subtitle:SetText("Who were you before the road began?");
+        SK.RIGHT.title:SetText("YOUR FATE");
+        SK.RIGHT.subtitle:SetText("Every background trades a strength for a flaw");
+    else
+        SK.LEFT.title:SetText(body and "BODY" or "APPEARANCE");
+        SK.LEFT.subtitle:SetText(body and "Drag the triangle to blend body types" or RaceLine());
+        SK.RIGHT.title:SetText(body and "FACE" or "DETAILS");
+        SK.RIGHT.subtitle:SetText(body and "Right-click a slider to reset it" or "Click a value for the full list");
+    end
+    SetSteps(zone and 5 or fate and 4 or body and 3 or 2);
 
     -- The hint replaces the rotate arrows; the whole-character randomize sits in the details header.
     CharacterCreateRotateLeft:SetAlpha(0);
@@ -1151,7 +1186,7 @@ local function Tick()
         -- Inner end of the Details header, clear of its title.
         CharCreateRandomizeButton:SetPoint("TOPLEFT", CharacterCreateFrame, "TOPRIGHT", -(EDGE_X + 340), -58);
         local shown = 1 + (SK.slide or 0) / PANEL_W;
-        if body or shown <= 0.5 then CharCreateRandomizeButton:SetAlpha(body and 0 or shown); CharCreateRandomizeButton:EnableMouse(false);
+        if body or fate or shown <= 0.5 then CharCreateRandomizeButton:SetAlpha((body or fate) and 0 or shown); CharCreateRandomizeButton:EnableMouse(false);
         else CharCreateRandomizeButton:SetAlpha(shown); CharCreateRandomizeButton:EnableMouse(true); end
     end
 end

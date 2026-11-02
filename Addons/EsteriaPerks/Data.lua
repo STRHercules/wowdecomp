@@ -1,0 +1,190 @@
+-- Paths of Fate text: everything the Codex shows that the server does not send. Card ids, paths, tiers and ranks
+-- come from the snapshot (EsteriaWoW src/server/shared/PerkRules.h); ids here must match it.
+-- Rank values are the design's starting numbers (Esteria_Paths_of_Fate_Design_v1.md §3), with the 2026-11-01 redesign
+-- that builds every card on systems 3.3.5a already has (reputation, gold, travel, professions, PlayerBots).
+
+EsteriaPerksData = {};
+local D = EsteriaPerksData;
+
+local I = "Interface\\Icons\\";
+
+-- Distinct hues for the six paths; every place a hue is used also shows the path's number and name.
+D.PATHS = {
+    [0] = { name = "COMBAT", motto = "The Warrior's Instinct", color = { 0.90, 0.38, 0.32 },
+            identity = "Wins by timing and position, with one signature moment of endurance." },
+    [1] = { name = "SURVIVAL", motto = "The Unyielding Road", color = { 0.48, 0.80, 0.46 },
+            identity = "A resourceful traveler who lasts longer, without trivializing any encounter." },
+    [2] = { name = "EXPLORATION", motto = "The Boundless Horizon", color = { 0.42, 0.66, 0.96 },
+            identity = "Reads the land: secrets, shortcuts and travel, not just speed." },
+    [3] = { name = "INDUSTRY", motto = "The Artisan's Hand", color = { 0.94, 0.63, 0.30 },
+            identity = "A crafter and trader with tightly capped economic edges." },
+    [4] = { name = "INFLUENCE", motto = "The Silver Path", color = { 0.74, 0.57, 0.96 },
+            identity = "Shapes stories and settlements: diplomat, merchant, citizen or fixer." },
+    [5] = { name = "COMPANIONS", motto = "The Warband's Bond", color = { 0.36, 0.80, 0.78 },
+            identity = "Leads people and bots alike, through coordination rather than raw power." },
+};
+
+D.TIERS = {
+    [0] = { name = "INITIATE", level = 10, points = 0 },
+    [1] = { name = "SPECIALIST", level = 30, points = 2 },
+    [2] = { name = "VETERAN", level = 50, points = 4 },
+    [3] = { name = "LEGENDARY", level = 70, points = 6 },
+};
+
+local RATED = "Inactive in rated arenas and battlegrounds.";
+local PVP_MOVE = "Off in battlegrounds and arenas.";
+
+-- name, icon, effect text (%s takes the rank's value), values per rank, and optional pvp and feat (legendaries).
+D.CARDS = {
+    [1] = { name = "First Strike", icon = "Ability_Warrior_Charge", values = { "2%", "4%" }, pvp = RATED,
+            text = "Your first damaging ability after entering combat with a creature deals %s more damage. 30 sec cooldown." },
+    [2] = { name = "Guarded Reflex", icon = "Ability_Warrior_DefensiveStance", values = { "3%", "6%" }, pvp = RATED,
+            text = "After a creature crits you, the next hit within 8 sec deals %s less damage. 45 sec cooldown." },
+    [3] = { name = "Countermeasure", icon = "Ability_Kick", values = { "1%", "2%" }, pvp = RATED,
+            text = "Interrupting a creature's spell restores %s of your maximum health. 30 sec cooldown." },
+    [4] = { name = "Opportunist", icon = "Ability_Rogue_Ambush", values = { "3%", "6%" }, pvp = RATED,
+            text = "Your first hit on a stunned, rooted or incapacitated creature deals %s more damage. 45 sec cooldown." },
+    [5] = { name = "Steady Focus", icon = "Spell_Holy_InnerFire", values = { "10%", "20%" }, pvp = RATED,
+            text = "After a creature's spell hits you, pushback on your casts is reduced by %s for 5 sec. 30 sec cooldown." },
+    [6] = { name = "Victory's Reward", icon = "Ability_Warrior_Devastate", values = { "1.5%", "3%" }, pvp = RATED,
+            text = "Defeating a worthy creature restores %s of your maximum health. 20 sec cooldown." },
+    [7] = { name = "Finisher's Resolve", icon = "INV_Sword_48", values = { "3%" }, pvp = RATED,
+            text = "Striking a creature below 20% health grants %s more damage against it for 6 sec. 2 min cooldown." },
+    [8] = { name = "Hold the Line", icon = "Ability_Warrior_ShieldWall", values = { "4%" }, pvp = RATED,
+            text = "When a nearby group member drops below 35% health, you take %s less damage for 6 sec. 2 min cooldown." },
+    [9] = { name = "Unbroken", icon = "Spell_Holy_PowerWordShield", values = { "12%" }, pvp = RATED,
+            feat = "Complete the Trial of Resolve.",
+            text = "The first time you fall below 20% health, gain a shield of %s of your maximum health for 6 sec. Once per boss attempt; 10 min cooldown." },
+
+    [11] = { name = "Field Medic", icon = "INV_Misc_Bandage_15", values = { "15%", "30%" },
+             text = "Bandages you use on yourself heal %s more." },
+    [12] = { name = "Ration Keeper", icon = "INV_Misc_Food_15", values = { "10%", "20%" },
+             text = "Food and drink buffs last %s longer." },
+    [13] = { name = "Surefooted", icon = "Spell_Magic_FeatherFall", values = { "20%", "40%" },
+             text = "You take %s less damage from ordinary falls." },
+    [14] = { name = "Weathered", icon = "Spell_Frost_WizardMark", values = { "8%", "16%" },
+             text = "You take %s less damage from lava, fire, drowning and fatigue. Not falls: those are Surefooted's." },
+    [15] = { name = "Patchwork Repairs", icon = "INV_Misc_ArmorKit_17", values = { "10%", "20%" },
+             text = "Your gear loses %s less durability when you die to a creature." },
+    [16] = { name = "Restful Mind", icon = "Spell_Nature_Sleep", values = { "10%", "20%" },
+             text = "Rested experience builds %s faster in inns and cities. The rested cap is unchanged." },
+    [17] = { name = "Second Wind", icon = "Spell_Nature_Rejuvenation", values = { "5%" },
+             text = "Leaving combat below 30% health restores %s of your maximum health over 10 sec. 3 min cooldown." },
+    [18] = { name = "Lifeline", icon = "INV_Potion_54", values = { "3%" },
+             text = "A healing potion drunk below 35% health also shields you for %s of your maximum health for 5 sec. 5 min cooldown." },
+    [19] = { name = "Diehard", icon = "Spell_Holy_GuardianSpirit", values = { "10%" },
+             feat = "Finish the Wilderness Ordeal.",
+             text = "Once every 20 min, a killing blow from a creature in the open world leaves you at 1 health with a shield of %s of your maximum health. Not in instances or PvP." },
+
+    [21] = { name = "Wayfarer", icon = "Ability_Rogue_Sprint", values = { "5%", "10%" }, pvp = PVP_MOVE,
+             text = "You move %s faster outdoors, on foot and out of combat." },
+    [22] = { name = "Keen Eye", icon = "Ability_Hunter_EagleEye", values = { "20 yards", "40 yards" },
+             text = "Treasure chests within %s show on your map and minimap." },
+    [23] = { name = "Cartographer", icon = "INV_Misc_Map_01", values = { "10%", "20%" },
+             text = "Discovering new places grants %s more experience." },
+    [24] = { name = "Trailblazer", icon = "Ability_Mount_RidingHorse", values = { "5%", "10%" }, pvp = PVP_MOVE,
+             text = "Summoning a mount outdoors is %s faster." },
+    [25] = { name = "Surveyor", icon = "Ability_Mount_Wyvern_01", values = { "10%", "20%" },
+             text = "Flight paths cost you %s less." },
+    [26] = { name = "Relic Seeker", icon = "INV_Box_01", values = { "5%", "10%" },
+             text = "%s chance of an extra common trade material in treasure chests, up to 10 a day." },
+    [27] = { name = "Ghost Trail", icon = "Spell_Holy_SenseUndead", values = { "20%" },
+             text = "You move %s faster as a ghost, so corpse runs are shorter." },
+    [28] = { name = "Lorekeeper", icon = "INV_Misc_Book_09", values = { "5%" },
+             text = "Quests you complete in zones you have fully explored grant %s more experience." },
+    [29] = { name = "Hearthwalker", icon = "INV_Misc_Rune_01", values = { "15 min" },
+             feat = "Great Cartographic Survey: earn Explore Eastern Kingdoms or Explore Kalimdor.",
+             text = "Your Hearthstone cooldown is %s shorter, and using it grants 10% outdoor movement speed for 2 min." },
+
+    [31] = { name = "Scavenger", icon = "Trade_Herbalism", values = { "4%", "8%" },
+             text = "%s chance of one extra common material from gathering, up to 20 a day." },
+    [32] = { name = "Thrifty Buyer", icon = "INV_Misc_Coin_01", values = { "1%", "2%" },
+             text = "Vendors charge you %s less. Not the auction house or special currencies." },
+    [33] = { name = "Apprentice's Luck", icon = "Trade_BlackSmithing", values = { "5%", "10%" },
+             text = "Recipes are %s more likely to raise your profession skill." },
+    [34] = { name = "Resource Recovery", icon = "Trade_Engineering", values = { "3%", "6%" },
+             text = "%s chance to get back one common reagent after crafting, up to 10 a day." },
+    [35] = { name = "Efficient Hands", icon = "Trade_Mining", values = { "5%", "10%" },
+             text = "Gathering takes %s less time." },
+    [36] = { name = "Contract Keeper", icon = "INV_Scroll_03", values = { "10%" },
+             text = "Cooking, Fishing and Jewelcrafting daily quests award %s more gold." },
+    [37] = { name = "Artisan's Signature", icon = "INV_Inscription_Tradeskill01", values = { "5%" },
+             text = "%s chance to craft one extra common trade good or consumable, up to 5 a day." },
+    [38] = { name = "Trade Broker", icon = "INV_Misc_Coin_02", values = { "5%" },
+             text = "Auction house deposits cost %s less, saving up to 10 gold a day." },
+    [39] = { name = "Mobile Workshop", icon = "INV_Misc_Bag_10", values = { "5 min" },
+             feat = "Master Artisan: reach 450 skill in two primary professions.",
+             text = "Summon an anvil, a forge, a cooking fire and a repair merchant for %s, once an hour." },
+
+    [41] = { name = "Familiar Face", icon = "Achievement_Reputation_01", values = { "5%", "10%" },
+             text = "Reputation from killing creatures is increased by %s." },
+    [42] = { name = "Fair Dealer", icon = "INV_Misc_Coin_03", values = { "1%", "2%" },
+             text = "Vendors pay you %s more for junk and ordinary goods." },
+    [43] = { name = "Diplomat", icon = "INV_Scroll_08", values = { "3%", "6%" },
+             text = "Quests award %s more reputation." },
+    [44] = { name = "Silver Tongue", icon = "INV_Misc_Note_06", values = { "10%" },
+             text = "Class, weapon and profession training costs %s less." },
+    [45] = { name = "Civic Contributor", icon = "Achievement_Reputation_06", values = { "5%", "10%" },
+             text = "Daily quests award %s more gold." },
+    [46] = { name = "Underworld Contact", icon = "Ability_Rogue_Disguise", values = { "10%" },
+             text = "Humanoid enemies drop %s more gold, up to 10 bonus gold a day." },
+    [47] = { name = "Mediator", icon = "Spell_Holy_HolyBolt", values = { "10%" },
+             text = "Quests award %s more reputation with factions where you are Neutral or Friendly." },
+    [48] = { name = "Favored Patron", icon = "Ability_Repair", values = { "10%" },
+             text = "Repairs at vendors cost %s less." },
+    [49] = { name = "Power Broker", icon = "INV_Crown_01", values = { "10%" },
+             feat = "The Esteemed: reach Exalted with three factions.",
+             text = "Gain %s more reputation with every faction you are not yet Exalted with." },
+
+    [51] = { name = "Shared Rations", icon = "INV_Misc_Food_14", values = { "3%", "6%" },
+             text = "Nearby party members regenerate %s faster out of combat. The strongest copy in the group applies." },
+    [52] = { name = "Tutor", icon = "INV_Misc_Book_11", values = { "2%", "4%" },
+             text = "Grouped players near you earn %s more experience from shared kills." },
+    [53] = { name = "Quick Orders", icon = "Ability_Warrior_BattleShout", values = { "" },
+             text = "Save your bots' commands as presets and recall them out of combat.%s" },
+    [54] = { name = "Rally Point", icon = "INV_BannerPVP_02", values = { "10 sec", "20 sec" },
+             text = "Command your bots to move to a spot and hold it for %s. 60 sec cooldown." },
+    [55] = { name = "Watchful Guard", icon = "Spell_Holy_DevotionAura", values = { "" },
+             text = "Your bots protect a party member who drops below 30% health, as their role allows.%s" },
+    [56] = { name = "Shared Victory", icon = "INV_Misc_Horn_01", values = { "3%", "6%" },
+             text = "Nearby group members earn %s more reputation from dungeon creatures. The strongest copy in the group applies." },
+    [57] = { name = "Formation Discipline", icon = "Ability_Warrior_CommandingShout", values = { "" },
+             text = "Your bots keep role-aware spacing and pull more carefully.%s" },
+    [58] = { name = "Companion Bond", icon = "Ability_Hunter_BeastCall", values = { "5%", "10%" },
+             text = "Your bots catch up %s faster when far behind out of combat." },
+    [59] = { name = "Warband Marshal", icon = "INV_BannerPVP_01", values = { "two" },
+             feat = "Trial of Leadership: complete five dungeons at your level with at least two bots in your party.",
+             text = "Save %s tactical plans with rally markers and assignments that your party sees and your bots follow." },
+};
+for _, card in pairs(D.CARDS) do card.icon = I .. card.icon; end
+
+-- Background traits (ids: PerkTraitWire.h).
+D.TRAITS = {
+    [0] = { name = "Unmarked", up = "No advantage", down = "No drawback" },
+    [1] = { name = "Wanderer", up = "+5% movement outdoors, on foot", down = "-10% reputation from quests" },
+    [2] = { name = "Glass Cannon", up = "+2% damage against creatures", down = "-4% maximum health in PvE" },
+    [3] = { name = "Ironbound", up = "+4% maximum health in PvE", down = "-2% damage against creatures" },
+    [4] = { name = "Artisan Soul", up = "+10% profession skill-ups", down = "-10% discovery rewards" },
+    [5] = { name = "Curious Mind", up = "+10% discovery rewards", down = "-10% profession skill-ups" },
+    [6] = { name = "Folk Hero", up = "+10% reputation from quests", down = "-10% gold from humanoids" },
+    [7] = { name = "Outlaw Heart", up = "+10% gold from humanoids", down = "-10% reputation from quests" },
+    [8] = { name = "Frugal Survivor", up = "+15% non-combat buff duration", down = "-10% healing from your potions" },
+};
+
+-- Result codes (PerkWire.h), as a sentence for the player.
+D.RESULTS = {
+    [1] = "That perk does not exist.",
+    [2] = "That rank is already yours.",
+    [3] = "You need a higher level.",
+    [4] = "Spend more points in this path first.",
+    [5] = "You have no perk points to spend.",
+    [6] = "You already carry a legendary perk.",
+    [7] = "This legendary needs its feat first.",
+    [8] = "This perk is not in the world yet.",
+    [9] = "Your class cannot use this perk.",
+    [10] = "Paths of Fate is not enabled on this realm.",
+    [11] = "Rest in an inn or a city, out of combat, to reset your perks.",
+    [12] = "You cannot afford the reset.",
+    [13] = "You have no perks to reset.",
+    [14] = "Your client does not match the server. Update the game.",
+};

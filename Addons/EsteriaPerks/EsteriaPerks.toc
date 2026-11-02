@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: Esteria Paths of Fate
+## Notes: The Perk Codex. Open it from the micro menu, its key binding (Key Bindings > Esteria) or /fate. Needs the wowdecomp client and an Esteria server with Esteria.Perks.Enable.
+## Version: 1.0
+## SavedVariables: EsteriaPerksDB
+
+esteria_style.lua
+Data.lua
+Codex.lua

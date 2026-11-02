@@ -334,6 +334,25 @@ static int32_t Script_BodyShapeLoadExisting(lua_State* L) {
     return 0;
 }
 
+// SetCreateTrait(id) -> ok: the Paths of Fate trait sent with the next CMSG_CHAR_CREATE.
+static int32_t Script_SetCreateTrait(lua_State* L) {
+    const double trait = lua_isnumber(L, 1) ? lua_tonumber(L, 1) : -1;
+    lua_pushboolean(L, trait >= 0 && EsteriaSetCreateTrait(static_cast<uint32_t>(trait)));
+    return 1;
+}
+
+// SetCreateStartZone(id) -> ok: the starting zone sent with the next CMSG_CHAR_CREATE (0 = the race's own).
+static int32_t Script_SetCreateStartZone(lua_State* L) {
+    const double zone = lua_isnumber(L, 1) ? lua_tonumber(L, 1) : -1;
+    lua_pushboolean(L, zone >= 0 && EsteriaSetCreateStartZone(static_cast<uint32_t>(zone)));
+    return 1;
+}
+
+static int32_t Script_GetCreateTrait(lua_State* L) {
+    lua_pushnumber(L, EsteriaGetCreateTrait());
+    return 1;
+}
+
 static int32_t Script_CycleCharCustomization(lua_State* L) {
     // Esteria: GlueXML multiplexes EsteriaAppearance commands ("EA_PREVIEW_SCALE", "EA_SET", ...) through this
     // function. The appearance system is not ported, so they are ignored instead of raising a usage error.
@@ -753,6 +772,9 @@ static FrameScript_Method s_scriptFunctions[] = {
     { "IsRaceClassRestricted", &Script_IsRaceClassRestricted },
     { "GetCreateBackgroundModel", &Script_GetCreateBackgroundModel },
     { "BodyShapeLoadExisting", &Script_BodyShapeLoadExisting },
+    { "SetCreateTrait", &Script_SetCreateTrait },
+    { "GetCreateTrait", &Script_GetCreateTrait },
+    { "SetCreateStartZone", &Script_SetCreateStartZone },
     BODY_SHAPE_SCRIPT_ENTRIES
 };
 
