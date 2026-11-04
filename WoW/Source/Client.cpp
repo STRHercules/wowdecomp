@@ -773,6 +773,8 @@ int ForEveryRunOnceWTF::FileNameCompare(const void* a, const void* b) {
 static int32_t ClientIdle(const void* data, void* param) {
     ClientGameTimeTickHandler(data, param);
     Player_C_ZoneUpdateHandler(data, param);
+    // Esteria: CoA spell charges come back on the client's clock.
+    Spell_C_UpdateSpellCharges();
 
     return 1;
 }
@@ -1800,6 +1802,7 @@ bool InitializeGlobal() {
 
     // Not in the original: compiled-in extensions come up once the engine services exist.
     sExtensionMgr->Initialize();
+    Spell_C_RegisterSpellChargeScripts();
     sExtensionMgr->OnStartup();
 
     return true;

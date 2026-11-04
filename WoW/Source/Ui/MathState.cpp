@@ -33,7 +33,7 @@ static const MathFunction s_mathFunctions[12] = {
 };
 
 // STATIC: 0x00ACE8F8
-static const char* s_mathVariables[140] = {
+static const char* s_mathVariables[146] = {
     "STR", "AGI", "STA", "INT", "SPI", "str", "agi", "sta", "int", "spi",
     "m1", "m2", "m3", "M1", "M2", "M3", "a1", "a2", "a3", "A1", "A2", "A3",
     "d", "D", "c", "C", "p", "P", "x1", "x2", "x3", "X1", "X2", "X3",
@@ -46,6 +46,7 @@ static const char* s_mathVariables[140] = {
     "sp", "SP", "sph", "spfi", "spn", "spfr", "sps", "spa", "SPH", "SPFI", "SPN", "SPFR", "SPS", "SPA",
     "bh", "BH", "ph", "pfi", "pn", "pfr", "ps", "pa", "PH", "PFI", "PN", "PFR", "PS", "PA",
     "pbh", "pBH", "pbhd", "pBHD", "bc1", "bc2", "bc3", "BC1", "BC2", "BC3",
+    "w1", "w2", "w3", "W1", "W2", "W3",   // Esteria: MATHOP_AURA_AMOUNT_*
 };
 
 // STATIC: 0x00ACEB2C
@@ -72,7 +73,7 @@ static uint8_t LookupMathVariable(const char* name) {
         return 0;
     }
 
-    for (uint32_t i = 0; i < 140; i++) {
+    for (uint32_t i = 0; i < 146; i++) {
         if (!SStrCmp(name, s_mathVariables[i], STORM_MAX_STR)) {
             return i + MATHOP_STAT_STRENGTH;
         }
@@ -898,6 +899,19 @@ void MathState::GetVariableValue(uint32_t op, MathStack* stack, const SpellRec* 
                     value = coefficient;
                 }
 
+                break;
+            }
+
+            case MATHOP_AURA_AMOUNT_1:
+            case MATHOP_AURA_AMOUNT_2:
+            case MATHOP_AURA_AMOUNT_3:
+            case MATHOP_AURA_AMOUNT_1_UPPER:
+            case MATHOP_AURA_AMOUNT_2_UPPER:
+            case MATHOP_AURA_AMOUNT_3_UPPER: {
+                // Esteria: CoA's live aura amount (SMSG 0x535); 0 outside an aura tooltip
+                int32_t amount = 0;
+                Spell_C_GetAuraAmount(spell->m_id, (op - MATHOP_AURA_AMOUNT_1) % 3, amount);
+                value = static_cast<float>(amount);
                 break;
             }
 

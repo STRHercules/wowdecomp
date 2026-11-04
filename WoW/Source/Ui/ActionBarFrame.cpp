@@ -1554,6 +1554,10 @@ int32_t CGActionBar::IsConsumableAction(uint32_t slot) {
         return 0;
     }
 
+    if (Spell_C_GetSpellChargeCount(spell.m_id) >= 0) {
+        return 1;
+    }
+
     for (int32_t i = 0; i < 8; i++) {
         if (spell.m_reagent[i] && spell.m_reagentCount[i] > 0) {
             return 1;

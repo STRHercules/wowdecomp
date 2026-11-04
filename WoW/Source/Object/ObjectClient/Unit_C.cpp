@@ -20290,6 +20290,8 @@ void CGUnit_C::CreateMissile(const WOWGUID* target, PendingSpellCastData* data, 
         return;
     }
 
+    uint32_t multiTarget = spell.m_attributesExD & 0x40000;
+
     float scale = 1.0f;
     CM2Model* model = nullptr;
 
@@ -20436,18 +20438,30 @@ void CGUnit_C::CreateMissile(const WOWGUID* target, PendingSpellCastData* data, 
             missile->m_impactPos = data->m_sourcePos;
             missile->m_transportGuid = data->m_sourceTarget;
         } else {
-            if (!targets->m_count) {
+            // Esteria: custom server spells can arrive with an empty hit list
+            // while the cast still names its target; fly at that target rather
+            // than deleting the missile (fix from Kalibros's CoA64 notes).
+            WOWGUID missileTarget = targets->m_count ? targets->m_data[0] : data->m_objectTarget;
+            if (!missileTarget.m_guid) {
                 missile->DeleteSelf();
                 return;
             }
 
-            missile->m_targetGuid = targets->m_data[0];
+            missile->m_targetGuid = missileTarget;
             missile->m_attachmentID = attachment;
             missile->m_attachOffset = offset;
-            CGObject_C* object = ClntObjMgrObjectPtr(targets->m_data[0], TYPEMASK_OBJECT, __FILE__, __LINE__);
+            CGObject_C* object = ClntObjMgrObjectPtr(missileTarget, TYPEMASK_OBJECT, __FILE__, __LINE__);
 
             if (object) {
                 missile->m_impactPos = object->GetPosition();
+            }
+
+            if (!targets->m_count) {
+                // A single named target and no hit list is a plain hit. Left as
+                // a multi-target missile, IsHit() finds no result, the miss path
+                // runs (no impact kit or sound) and the missile is fired back.
+                missile->m_flags |= 1;
+                multiTarget = 0;
             }
 
             goto targetsDone;
@@ -20469,7 +20483,6 @@ void CGUnit_C::CreateMissile(const WOWGUID* target, PendingSpellCastData* data, 
     }
 
 targetsDone:
-    uint32_t multiTarget = spell.m_attributesExD & 0x40000;
 
     if (!*target && targets->m_count) {
         if (!multiTarget && !(data->m_targetFlags & 0x60)) {
@@ -24709,6 +24722,19 @@ void CGUnit_C::OnSpecialMountAnim() {
 // VERIFY: d5c90727 manual
 // OFFSET: 0x00720F80
 const SpellVisualRec* CGUnit_C::GetAppropriateSpellVisual(const SpellRec* spell, SpellVisualRec& visual, int32_t visualId, int32_t lowViolenceVisualId) const {
+    // Esteria: the server can draw this unit's casts of a spell with another visual (CoA's Cultist, SMSG 0x536)
+    if (uint32_t override = Spell_C_GetSpellVisualOverride(this->m_obj->m_guid.m_guid, spell->m_id)) {
+        if (override == 0xFFFFFFFF) {
+            memset(&visual, 0, sizeof(visual));
+            return &visual;
+        }
+
+        if (const SpellVisualRec* row = g_spellVisualDB.GetRecord(override)) {
+            visual = *row;
+            return &visual;
+        }
+    }
+
     int32_t id = visualId;
     const SpellVisualRec* weapon = nullptr;
     const SpellVisualRec* base;

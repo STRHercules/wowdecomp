@@ -3946,7 +3946,9 @@ int32_t SetTooltipUnitAura(CGTooltip* tooltip, ScriptAuraInfo* info) {
             uint8_t flags = unit->GetAuraFlags(slot);
             uint8_t stackCount = unit->GetAuraStackCount(slot);
             uint8_t level = unit->GetAuraLevel(slot);
+            Spell_C_SetAuraAmountUnit(unit->m_obj->m_guid.m_guid);   // Esteria: $w tokens read this unit's amounts
             tooltip->SetBuff(unit->GetAuraSpellId(slot), level, stackCount, flags, 0, 0);
+            Spell_C_SetAuraAmountUnit(0);
             AuraData* aura = unit->GetAura(slot);
 
             if (aura && aura->m_duration > 0) {

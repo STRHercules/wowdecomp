@@ -255,6 +255,14 @@ void Spell_C_ClearPetCooldowns();
 const SpellVisualRec* GetSpellVisual(const SpellRec* spell);
 void Spell_C_Destroy();
 void Spell_C_Initialize();
+// Esteria: CoA spell charges (SMSG 0x9C2..0x9C5). Register once at startup; update every idle tick in game.
+void Spell_C_RegisterSpellChargeScripts();
+void Spell_C_UpdateSpellCharges();
+int32_t Spell_C_GetSpellChargeCount(int32_t spellId);
+// Esteria: CoA's live aura amounts ($w1..$w3, SMSG 0x535) and spell visual overrides (SMSG 0x536).
+void Spell_C_SetAuraAmountUnit(uint64_t unit);
+bool Spell_C_GetAuraAmount(int32_t spellId, uint32_t index, int32_t& amount);
+uint32_t Spell_C_GetSpellVisualOverride(uint64_t unit, int32_t spellId);
 PendingSpellCast* CreatePendingSpellCast(bool assignCastCount);
 PendingSpellCast* GetPendingSpellCast(uint8_t castCount, int32_t spellId, const WOWGUID& caster);
 void Spell_C_PlayMissileTrajectoryCastVisuals(CGUnit_C* unit, PendingSpellCast* cast, const SpellRec* spell, const SpellVisualRec* visual, const SpellVisualKitRec* kit, const TSStackArray<CGUnit_C*>* targets, float time);

@@ -1,3 +1,10 @@
+#include "WoW/Common/ComponentCore/EsteriaAppearance.h"
+#include "WoW/Source/Extension/ExtensionMgr.h"
+#include "WoW/Source/WorldClient/CustomTable.h"
+#include <cstdlib>
+#include <algorithm>
+#include <unordered_map>
+#include <vector>
 #include "Spell_C.h"
 #include "WoW/Source/Ui/DigitalInventoryCounts.h"
 #include "WoW/Source/Magic/Types.h"
@@ -148,6 +155,431 @@ static int32_t s_spellPctModifiers[96][31];
 
 // STATIC: 0x00D3C658
 static int32_t s_spellFlatModifiers[96][31];
+
+// Esteria: spell modifiers per class family (SpellFamilyName 0..39), mask bit (0..95) and operation (0..30). The
+// legacy tables above hold the chassis class's modifiers (SMSG_SET_FLAT/PCT_SPELL_MODIFIER carry no family).
+static const uint32_t ESTERIA_SPELL_MOD_OPCODE = 0x530;
+static const uint32_t ESTERIA_SPELL_MOD_PAYLOAD = 11;
+static const uint32_t ESTERIA_SPELL_MOD_FAMILIES = 40;
+static const uint32_t ESTERIA_SPELL_MOD_BITS = 96;
+static const uint32_t ESTERIA_SPELL_MOD_OPS = 31;
+static const uint8_t ESTERIA_SPELL_MOD_PCT = 1;
+static const uint8_t ESTERIA_SPELL_MOD_RESET = 2;
+static int32_t s_familyPctModifiers[ESTERIA_SPELL_MOD_FAMILIES][ESTERIA_SPELL_MOD_BITS][ESTERIA_SPELL_MOD_OPS];
+static int32_t s_familyFlatModifiers[ESTERIA_SPELL_MOD_FAMILIES][ESTERIA_SPELL_MOD_BITS][ESTERIA_SPELL_MOD_OPS];
+static int32_t Packet_ESTERIA_SPELL_MOD(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg);
+
+// Received modifiers are traced to EsteriaDecomp.log only with ESTERIA_SPELLMOD_DEBUG set (the log holds 400 lines).
+static bool SpellModDebugEnabled() {
+    static int32_t s_enabled = -1;
+
+    if (s_enabled < 0) {
+        char value[8] = {};
+        size_t length = 0;
+        s_enabled = getenv_s(&length, value, sizeof(value), "ESTERIA_SPELLMOD_DEBUG") == 0 && length > 1 && value[0] != '0';
+    }
+
+    return s_enabled != 0;
+}
+
+// Esteria: Conquest of Azeroth's spell charges, relocated to Esteria's opcode range with the same wire layout. State is
+// keyed by SpellChargesCategory id; SpellCharges.dbc (col 0 spell, col 1 category) and SpellChargesCategory.dbc (col 0
+// id, col 1 max charges, col 2 recharge ms) are read from the archives on first use. Times are OsGetAsyncTimeMs.
+// Nothing here runs until one of these messages arrives: without them the map stays empty.
+static const uint32_t COA_SPELL_CHARGES_CLEAR = 0x531;  // no payload: every entry dropped
+static const uint32_t COA_SPELL_CHARGES_REMOVE = 0x532; // u32 category: that entry dropped
+static const uint32_t COA_SPELL_CHARGES_LIST = 0x533;   // u32 n, n x {u32 category, u32 remaining ms, u8 used, u32 recovery ms}
+static const uint32_t COA_SPELL_CHARGES_SET = 0x534;    // u32 category, u32 remaining ms, u32 used, u32 recovery ms (0 used drops it)
+
+struct SpellChargeState {
+    uint32_t used = 0;       // charges spent (the client shows max - used)
+    uint32_t next = 0;       // when the next charge comes back
+    uint32_t start = 0;      // when the running recharge started
+    uint32_t duration = 0;   // the category's recharge, reused after each returned charge
+};
+
+struct SpellChargeCategory {
+    uint32_t max = 0;
+    uint32_t duration = 0;
+};
+
+static std::unordered_map<uint32_t, SpellChargeState> s_spellCharges;
+static std::unordered_map<uint32_t, int32_t> s_exactSpellCosts;
+static std::unordered_map<uint32_t, uint32_t> s_spellChargeLinks;   // spell -> category
+static std::unordered_map<uint32_t, SpellChargeCategory> s_spellChargeCategories;
+
+static void LoadSpellChargeTables() {
+    static bool s_loaded = false;
+
+    if (s_loaded) {
+        return;
+    }
+
+    s_loaded = true;
+    char status[256] = {};
+    CustomTable::Table table;
+
+    if (CustomTable::LoadTable("DBFilesClient\\SpellChargesCategory.dbc", 3, table, status, sizeof(status))) {
+        for (uint32_t row = 0; row < table.Rows(); row++) {
+            uint32_t maximum = table.U(row, 1);
+            uint32_t recovery = table.U(row, 2);
+            if (maximum && maximum <= 20 && recovery && recovery <= 86400000) {
+                s_spellChargeCategories[table.U(row, 0)] = { maximum, recovery };
+            }
+        }
+    }
+
+    EsteriaTrace("spellcharges: SpellChargesCategory.dbc %s", status);
+    table = CustomTable::Table();
+
+    if (CustomTable::LoadTable("DBFilesClient\\SpellCharges.dbc", 2, table, status, sizeof(status))) {
+        for (uint32_t row = 0; row < table.Rows(); row++) {
+            s_spellChargeLinks[table.U(row, 0)] = table.U(row, 1);
+        }
+    }
+
+    EsteriaTrace("spellcharges: SpellCharges.dbc %s", status);
+}
+
+// A category with a row and a non-zero max, as CoA requires before it keeps an entry.
+static const SpellChargeCategory* FindSpellChargeCategory(uint32_t category) {
+    LoadSpellChargeTables();
+    auto it = s_spellChargeCategories.find(category);
+    return it != s_spellChargeCategories.end() && it->second.max ? &it->second : nullptr;
+}
+
+int32_t Spell_C_GetSpellChargeCount(int32_t spellId) {
+    LoadSpellChargeTables();
+    auto link = s_spellChargeLinks.find(static_cast<uint32_t>(spellId));
+    const SpellChargeCategory* category = link == s_spellChargeLinks.end() ? nullptr : FindSpellChargeCategory(link->second);
+
+    if (!category) {
+        return -1;
+    }
+
+    auto state = s_spellCharges.find(link->second);
+    uint32_t used = state == s_spellCharges.end() ? 0 : state->second.used;
+    return static_cast<int32_t>(category->max - std::min(category->max, used));
+}
+
+static uint32_t SpellChargeBytesLeft(CDataStore* msg) {
+    return msg->m_read <= msg->m_size ? msg->m_size - msg->m_read : 0;
+}
+
+// SPELL_UPDATE_CHARGES (CoA's event) while the game UI exists; the stock cooldown events too, so the stock action bars
+// and spell book redraw the charge cooldown Spell_C_GetSpellCooldown now reports.
+static void SpellChargesUpdated() {
+    uint32_t event = sExtensionMgr->GetFrameScriptEventIndex("SPELL_UPDATE_CHARGES");
+
+    if (event == UINT32_MAX) {
+        return;
+    }
+
+    FrameScript_SignalEvent(event, nullptr);
+    CGSpellBook::UpdateCooldowns();
+    for (uint32_t slot = 0; slot < 144; ++slot) {
+        int32_t petSpell;
+        int32_t spellId = CGActionBar::GetSpell(slot, petSpell);
+        if (!spellId || petSpell || CGActionBar::GetItem(slot) || Spell_C_GetSpellChargeCount(spellId) < 0) {
+            continue;
+        }
+        CGActionBar::m_slotItemCount[slot] = Spell_C_GetSpellChargeCount(spellId);
+        FrameScript_SignalEvent(SCRIPT_EVENT_ACTIONBAR_SLOT_CHANGED, "%d", slot + 1);
+    }
+    CGActionBar::SignalUpdateCooldown();
+}
+
+// Esteria: Conquest of Azeroth's live aura amounts and spell visual overrides, on Esteria opcodes (CoA used 0x673 and
+// 0x662). The amounts fill the $w1..$w3 tooltip tokens of CoA spells (Tankard fill, absorb left); the server sends them
+// only for spells whose text names one. Entries are keyed per unit by (caster, spell), as in CoA's client.
+static const uint32_t ESTERIA_AURA_AMOUNT_OPCODE = 0x535;           // u64 unit, u32 slot (0xFFFFFFFF removal), u64 caster,
+                                                                    // u32 spell, unless removal i32 amount[3]
+static const uint32_t ESTERIA_SPELL_VISUAL_OVERRIDE_OPCODE = 0x536; // u64 unit, u32 spell, u32 visual (0xFFFFFFFF hides it)
+
+struct AuraAmountEntry {
+    uint64_t caster;
+    uint32_t spell;
+    int32_t amount[3];
+};
+
+// shortcut: a unit that leaves without a removal message keeps its few entries until relog; clear them on object free
+// if this ever grows.
+static std::unordered_map<uint64_t, std::vector<AuraAmountEntry>> s_auraAmounts;
+static std::unordered_map<uint64_t, std::unordered_map<uint32_t, uint32_t>> s_spellVisualOverrides;
+static uint64_t s_auraAmountUnit = 0;   // the unit whose aura tooltip is being built
+
+static int32_t Packet_ESTERIA_AURA_AMOUNT(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    if (SpellChargeBytesLeft(msg) < 24) {
+        return 1;
+    }
+
+    uint64_t unit;
+    uint32_t slot;
+    uint64_t caster;
+    uint32_t spell;
+    msg->Get(unit);
+    msg->Get(slot);
+    msg->Get(caster);
+    msg->Get(spell);
+    std::vector<AuraAmountEntry>& entries = s_auraAmounts[unit];
+    auto same = [&](const AuraAmountEntry& e) { return e.caster == caster && e.spell == spell; };
+
+    if (slot == 0xFFFFFFFF) {
+        entries.erase(std::remove_if(entries.begin(), entries.end(), same), entries.end());
+
+        if (entries.empty()) {
+            s_auraAmounts.erase(unit);
+        }
+
+        return 1;
+    }
+
+    if (SpellChargeBytesLeft(msg) < 12) {
+        return 1;
+    }
+
+    AuraAmountEntry entry = { caster, spell, {} };
+
+    for (int32_t& amount : entry.amount) {
+        msg->Get(amount);
+    }
+
+    auto it = std::find_if(entries.begin(), entries.end(), same);
+
+    if (it != entries.end()) {
+        *it = entry;
+    } else {
+        entries.push_back(entry);
+    }
+
+    return 1;
+}
+
+static int32_t Packet_ESTERIA_SPELL_VISUAL_OVERRIDE(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    if (SpellChargeBytesLeft(msg) < 16) {
+        return 1;
+    }
+
+    uint64_t unit;
+    uint32_t spell;
+    uint32_t visual;
+    msg->Get(unit);
+    msg->Get(spell);
+    msg->Get(visual);
+    s_spellVisualOverrides[unit][spell] = visual;
+    return 1;
+}
+
+void Spell_C_SetAuraAmountUnit(uint64_t unit) {
+    s_auraAmountUnit = unit;
+}
+
+// CoA's $w tokens: the tooltip unit's last entry for the spell, whatever the caster.
+bool Spell_C_GetAuraAmount(int32_t spellId, uint32_t index, int32_t& amount) {
+    auto it = s_auraAmounts.find(s_auraAmountUnit);
+    bool found = false;
+
+    if (it != s_auraAmounts.end() && index < 3) {
+        for (const AuraAmountEntry& e : it->second) {
+            if (e.spell == static_cast<uint32_t>(spellId)) {
+                amount = e.amount[index];
+                found = true;
+            }
+        }
+    }
+
+    return found;
+}
+
+uint32_t Spell_C_GetSpellVisualOverride(uint64_t unit, int32_t spellId) {
+    auto it = s_spellVisualOverrides.find(unit);
+
+    if (it == s_spellVisualOverrides.end()) {
+        return 0;
+    }
+
+    auto visual = it->second.find(static_cast<uint32_t>(spellId));
+    return visual != it->second.end() ? visual->second : 0;
+}
+
+static int32_t Packet_COA_SPELL_CHARGES(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    uint32_t id = static_cast<uint32_t>(msgId);
+
+    if (id == COA_SPELL_CHARGES_CLEAR) {
+        s_spellCharges.clear();
+    } else if (id == COA_SPELL_CHARGES_REMOVE) {
+        if (SpellChargeBytesLeft(msg) < 4) {
+            return 1;
+        }
+
+        uint32_t category;
+        msg->Get(category);
+        s_spellCharges.erase(category);
+    } else if (id == COA_SPELL_CHARGES_LIST) {
+        if (SpellChargeBytesLeft(msg) < 4) {
+            return 1;
+        }
+
+        uint32_t count;
+        msg->Get(count);
+
+        // CoA stops when the packet is used up; a cut-off entry is not read.
+        for (; count && SpellChargeBytesLeft(msg) >= 13; count--) {
+            uint32_t category;
+            uint32_t remaining;
+            uint8_t used;
+            uint32_t recovery;
+            msg->Get(category);
+            msg->Get(remaining);
+            msg->Get(used);
+            msg->Get(recovery);
+            const SpellChargeCategory* row = FindSpellChargeCategory(category);
+
+            if (!row || !remaining || remaining > 86400000 || !recovery || recovery > 86400000 || used > row->max) {
+                continue;
+            }
+
+            uint32_t now = OsGetAsyncTimeMs();
+            SpellChargeState& state = s_spellCharges[category];
+            state.used = used;
+            state.next = now + static_cast<uint32_t>(remaining);
+            state.start = state.next - recovery;
+            state.duration = recovery;
+        }
+    } else {
+        if (SpellChargeBytesLeft(msg) < 16) {
+            return 1;
+        }
+
+        uint32_t category;
+        uint32_t ms;
+        uint32_t used;
+        uint32_t recovery;
+        msg->Get(category);
+        msg->Get(ms);
+        msg->Get(used);
+        msg->Get(recovery);
+        const SpellChargeCategory* row = FindSpellChargeCategory(category);
+
+        // CoA signals nothing for an unknown category or a zero time.
+        if (!row || !ms || ms > 86400000 || !recovery || recovery > 86400000 || used > row->max) {
+            return 1;
+        }
+
+        uint32_t now = OsGetAsyncTimeMs();
+        auto it = s_spellCharges.find(category);
+
+        if (!used) {
+            s_spellCharges.erase(category);
+        } else if (it == s_spellCharges.end()) {
+            SpellChargeState& state = s_spellCharges[category];
+            state.used = used;
+            state.next = now + ms;
+            state.start = state.next - recovery;
+            state.duration = recovery;
+        } else {
+            // The server supplies both progress and the actual interval, including cooldown modifiers.
+            it->second.used = used;
+            it->second.next = now + ms;
+            it->second.duration = recovery;
+            it->second.start = it->second.next - recovery;
+        }
+    }
+
+    SpellChargesUpdated();
+
+    return 1;
+}
+
+// Every idle tick in game: an entry whose recharge has ended gets a charge back, and the last one removes it.
+void Spell_C_UpdateSpellCharges() {
+    uint32_t now = OsGetAsyncTimeMs();
+
+    for (auto it = s_spellCharges.begin(); it != s_spellCharges.end();) {
+        if (static_cast<int32_t>(now - it->second.next) < 0) {
+            ++it;
+            continue;
+        }
+
+        uint32_t elapsed = now - it->second.next;
+        uint32_t recovered = it->second.duration ? 1 + elapsed / it->second.duration : it->second.used;
+        if (recovered >= it->second.used) {
+            it = s_spellCharges.erase(it);
+        } else {
+            it->second.used -= recovered;
+            it->second.next += recovered * it->second.duration;
+            it->second.start = it->second.next - it->second.duration;
+            ++it;
+        }
+
+        SpellChargesUpdated();
+    }
+}
+
+// The recharge of a spell whose charges are all spent; false while it has one left or has no charge state.
+static bool GetSpentSpellCharges(int32_t spellId, uint32_t& start, uint32_t& duration) {
+    auto link = s_spellChargeLinks.find(static_cast<uint32_t>(spellId));
+
+    if (link == s_spellChargeLinks.end()) {
+        return false;
+    }
+
+    auto it = s_spellCharges.find(link->second);
+    auto category = s_spellChargeCategories.find(link->second);
+
+    if (it == s_spellCharges.end() || category == s_spellChargeCategories.end() || it->second.used < category->second.max) {
+        return false;
+    }
+
+    start = it->second.start;
+    duration = it->second.next - it->second.start;
+    return true;
+}
+
+// CoA's GetSpellCharges(spell): charges left, max charges, recharge start and duration (seconds). Without an entry: max,
+// max, 0 and the category's recharge; 0, 0, 0, 0 for a non-number or a spell without charges.
+static int32_t Script_GetSpellCharges(lua_State* L) {
+    if (lua_isnumber(L, 1)) {
+        LoadSpellChargeTables();
+        auto link = s_spellChargeLinks.find(static_cast<uint32_t>(static_cast<int32_t>(lua_tonumber(L, 1))));
+        auto category = link != s_spellChargeLinks.end() ? s_spellChargeCategories.find(link->second) : s_spellChargeCategories.end();
+
+        if (category != s_spellChargeCategories.end()) {
+            int32_t max = static_cast<int32_t>(category->second.max);
+            auto it = s_spellCharges.find(category->first);
+            uint32_t duration;
+
+            if (it == s_spellCharges.end()) {
+                lua_pushnumber(L, max);
+                lua_pushnumber(L, max);
+                lua_pushnumber(L, 0.0);
+                duration = category->second.duration;
+            } else {
+                lua_pushnumber(L, max - static_cast<int32_t>(it->second.used));
+                lua_pushnumber(L, max);
+                lua_pushnumber(L, static_cast<double>(it->second.start) * 0.001);
+                duration = it->second.next - it->second.start;
+            }
+
+            // CoA converts the duration as unsigned.
+            lua_pushnumber(L, static_cast<double>(duration) * 0.001);
+            return 4;
+        }
+    }
+
+    for (int32_t i = 0; i < 4; i++) {
+        lua_pushnumber(L, 0);
+    }
+
+    return 4;
+}
+
+// Startup (after the extensions load, before any FrameScript state): the Lua function and event are recorded once and
+// put into every game state the client builds.
+void Spell_C_RegisterSpellChargeScripts() {
+    sExtensionMgr->RegisterLuaFunction("GetSpellCharges", Script_GetSpellCharges, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterFrameScriptEvent("SPELL_UPDATE_CHARGES", FRAMESCRIPT_CONTEXTS_GAME);
+}
 
 // STATIC: 0x00AF524C
 static TSList<PendingSpellCast, TSGetLink<PendingSpellCast> > s_pendingSpellCasts;
@@ -328,6 +760,11 @@ int32_t Spell_C_GetPowerCost(const SpellRec* spell, const CGUnit_C* unit) {
         return -1;
     }
 
+    auto exactCost = s_exactSpellCosts.find(spell->m_id);
+    if (exactCost != s_exactSpellCosts.end() && const_cast<CGUnit_C*>(unit)->IsActivePlayer()) {
+        return exactCost->second;
+    }
+
     uint32_t rank = unit->GetSpellRank(spell);
     int32_t cost = spell->m_manaCost + spell->m_manaCostPerLevel * (static_cast<int32_t>(rank / 5) - spell->m_baseLevel);
 
@@ -368,7 +805,7 @@ int32_t Spell_C_GetPowerCost(const SpellRec* spell, const CGUnit_C* unit) {
     int32_t pct;
 
     if (Spell_C_GetSpellModifiers(spell, 14, flat, pct)) {
-        cost = (flat + base) * pct / 100;
+        cost = base * pct / 100 + flat;
     }
 
     if (!(unit->m_obj->m_type & TYPEMASK_PLAYER) && (spell->m_attributes & 0x80000) && spell->m_spellLevel) {
@@ -722,6 +1159,17 @@ void Spell_C_Initialize() {
     ClientServices::SetMessageHandler(SMSG_PLAY_SPELL_IMPACT, Packet_SMSG_PLAY_SPELL_IMPACT, nullptr);
     ClientServices::SetMessageHandler(SMSG_SET_FLAT_SPELL_MODIFIER, Packet_Group_32, nullptr);
     ClientServices::SetMessageHandler(SMSG_SET_PCT_SPELL_MODIFIER, Packet_Group_32, nullptr);
+    // Past the stock table (NUM_MSG_TYPES 0x51F): the extension dispatcher handles opcodes the stock table lacks.
+    sExtensionMgr->RegisterMessageHandler(ESTERIA_SPELL_MOD_OPCODE, Packet_ESTERIA_SPELL_MOD, nullptr);
+    sExtensionMgr->RegisterMessageHandler(COA_SPELL_CHARGES_CLEAR, Packet_COA_SPELL_CHARGES, nullptr);
+    sExtensionMgr->RegisterMessageHandler(COA_SPELL_CHARGES_REMOVE, Packet_COA_SPELL_CHARGES, nullptr);
+    sExtensionMgr->RegisterMessageHandler(COA_SPELL_CHARGES_LIST, Packet_COA_SPELL_CHARGES, nullptr);
+    sExtensionMgr->RegisterMessageHandler(COA_SPELL_CHARGES_SET, Packet_COA_SPELL_CHARGES, nullptr);
+    sExtensionMgr->RegisterMessageHandler(ESTERIA_AURA_AMOUNT_OPCODE, Packet_ESTERIA_AURA_AMOUNT, nullptr);
+    sExtensionMgr->RegisterMessageHandler(ESTERIA_SPELL_VISUAL_OVERRIDE_OPCODE, Packet_ESTERIA_SPELL_VISUAL_OVERRIDE, nullptr);
+    s_auraAmounts.clear();
+    s_spellVisualOverrides.clear();
+    s_spellCharges.clear();
     ClientServices::SetMessageHandler(SMSG_GAME_OBJECT_RESET_STATE, Packet_SMSG_GAMEOBJECT_RESET_STATE, nullptr);
     ClientServices::SetMessageHandler(SMSG_FEIGN_DEATH_RESISTED, Packet_SMSG_FEIGN_DEATH_RESISTED, nullptr);
     ClientServices::SetMessageHandler(SMSG_SPELL_UPDATE_CHAIN_TARGETS, Packet_SMSG_SPELL_UPDATE_CHAIN_TARGETS, nullptr);
@@ -734,6 +1182,8 @@ void Spell_C_Initialize() {
     s_targetingSpell = nullptr;
     memset(s_spellFlatModifiers, 0, sizeof(s_spellFlatModifiers));
     memset(s_spellPctModifiers, 0, sizeof(s_spellPctModifiers));
+    memset(s_familyFlatModifiers, 0, sizeof(s_familyFlatModifiers));
+    memset(s_familyPctModifiers, 0, sizeof(s_familyPctModifiers));
     s_autoRepeatingSpell = 0;
     s_autoRangedCombatSpell = 0;
     s_lastAutoRangedCombatError = 187;
@@ -1174,8 +1624,30 @@ void CGUnit_C::ReleaseMissiles() {
 
 // VERIFY: 936f6df8 manual
 // OFFSET: 0x007FD970
+// Exact targets for CoA modifiers without a family mask; unrelated spells keep their existing path.
+static std::unordered_map<uint32_t, std::vector<uint32_t>> s_directModifierTargets;
+static std::unordered_map<uint64_t, int32_t> s_directModifiers;
+
+static void LoadDirectModifierTargets() {
+    static bool loaded = false;
+    if (loaded) return;
+    loaded = true;
+    CustomTable::Table table;
+    char status[256] = {};
+    if (CustomTable::LoadTable("DBFilesClient\\EsteriaSpellAffect.dbc", 3, table, status, sizeof(status))) {
+        for (uint32_t row = 0; row < table.Rows(); ++row) {
+            s_directModifierTargets[table.U(row, 1)].push_back(table.U(row, 2));
+        }
+    }
+    EsteriaTrace("spellaffect: %s", status);
+}
+
 bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t& flat, int32_t& pct) {
-    if (!spell->m_spellClassSet || spell->m_spellClassSet != s_spellClassSet) {
+    // Esteria: a spell takes the modifiers of its own class family and mask bits, whichever class the player's
+    // chassis is. Exact CoA targets may include family 0; spells ignoring caster modifiers still take none.
+    uint32_t family = spell->m_spellClassSet;
+
+    if (family >= ESTERIA_SPELL_MOD_FAMILIES || modifier < 0 || modifier >= ESTERIA_SPELL_MOD_OPS) {
         flat = 0;
         pct = 100;
         return false;
@@ -1190,14 +1662,33 @@ bool Spell_C_GetSpellModifiers(const SpellRec* spell, int32_t modifier, int32_t&
     pct = 0;
     flat = 0;
 
+    // The chassis family also has the legacy (familyless) packets' totals.
+    bool chassis = int32_t(family) == s_spellClassSet;
+
     for (uint32_t i = 0; i < sizeof(spell->m_spellClassMask) * 8; i++) {
         if ((1 << (i & 31)) & spell->m_spellClassMask[i >> 5]) {
-            flat += s_spellFlatModifiers[i][modifier];
-            pct += s_spellPctModifiers[i][modifier];
+            flat += s_familyFlatModifiers[family][i][modifier];
+            pct += s_familyPctModifiers[family][i][modifier];
+
+            if (chassis) {
+                flat += s_spellFlatModifiers[i][modifier];
+                pct += s_spellPctModifiers[i][modifier];
+            }
         }
     }
 
+    LoadDirectModifierTargets();
+    for (auto const& pair : s_directModifiers) {
+        if ((pair.first & 31) != static_cast<uint32_t>(modifier)) continue;
+        auto targets = s_directModifierTargets.find(static_cast<uint32_t>(pair.first >> 8));
+        if (targets == s_directModifierTargets.end() ||
+            std::find(targets->second.begin(), targets->second.end(), spell->m_id) == targets->second.end()) continue;
+        if (pair.first & 32) pct += pair.second;
+        else flat += pair.second;
+    }
+
     if (!flat && !pct) {
+        if (!family) pct = 100;
         return false;
     }
 
@@ -2138,6 +2629,15 @@ void PendingSpellCast::OnSpellGo(CDataStore* msg) {
         if (spell.m_speed <= 0.0f) {
             PlayImpactVisual(&spell, hits, unit, visual);
 
+            // Esteria: the same empty hit list on an instant spell played no
+            // impact at all; fall back to the target the cast names.
+            if (!hits.m_count && !missCount && (this->m_data.m_targetFlags & 0x2) && this->m_data.m_objectTarget.m_guid
+                && this->m_data.m_objectTarget.m_guid != this->m_data.m_caster.m_guid) {
+                WOWGUID single = this->m_data.m_objectTarget;
+                TSStackArray<WOWGUID> fallback(&single, 1, 1);
+                PlayImpactVisual(&spell, fallback, unit, visual);
+            }
+
             if (unit) {
                 for (uint32_t i = 0; i < missCount; i++) {
                     if (missReasons.m_data[i] == 11 && !reflectResults.m_data[i] && !(spell.m_attributesExG & 0x20000000)) {
@@ -2900,10 +3400,102 @@ int32_t Packet_Group_32(void* param, NETMESSAGE msgId, uint32_t time, CDataStore
     msg->Get(op);
     msg->Get(value);
 
+    // The stock handler indexes the tables unchecked; the tables hold 96 mask bits of 31 operations each.
+    if (group >= ESTERIA_SPELL_MOD_BITS || op >= ESTERIA_SPELL_MOD_OPS) {
+        return 1;
+    }
+
+    // Legacy packets carry no family: they are the modifiers of the chassis class (s_spellClassSet).
     if (msgId == SMSG_SET_PCT_SPELL_MODIFIER) {
         s_spellPctModifiers[group][op] = value;
     } else {
         s_spellFlatModifiers[group][op] = value;
+    }
+
+    return 1;
+}
+
+// Esteria: SMSG_ESTERIA_SPELL_MOD (0x530), server to client:
+//   u8 type (0 flat, 1 pct, 2 reset all), u8 bit (mask bit 0..95), u8 op (0..30), i32 value (a total, not a delta),
+//   u32 family (the modifier spell's SpellFamilyName, 1..39). For a reset the other fields are zero.
+// A reset clears the legacy and the family tables; the server follows it with every non-zero total.
+static int32_t Packet_ESTERIA_SPELL_MOD(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
+    static int32_t s_rejected = 0;
+
+    if (msg->m_read > msg->m_size || msg->m_size - msg->m_read != ESTERIA_SPELL_MOD_PAYLOAD) {
+        if (s_rejected++ < 8) {
+            EsteriaTrace("spellmod: rejected a message of %d bytes, expected %u", int32_t(msg->m_size) - int32_t(msg->m_read), ESTERIA_SPELL_MOD_PAYLOAD);
+        }
+
+        return 1;
+    }
+
+    uint8_t type;
+    uint8_t bit;
+    uint8_t op;
+    int32_t value;
+    uint32_t family;
+    msg->Get(type);
+    msg->Get(bit);
+    msg->Get(op);
+    msg->Get(value);
+    msg->Get(family);
+
+    if (type == ESTERIA_SPELL_MOD_RESET) {
+        memset(s_spellFlatModifiers, 0, sizeof(s_spellFlatModifiers));
+        memset(s_spellPctModifiers, 0, sizeof(s_spellPctModifiers));
+        memset(s_familyFlatModifiers, 0, sizeof(s_familyFlatModifiers));
+        memset(s_familyPctModifiers, 0, sizeof(s_familyPctModifiers));
+        s_directModifiers.clear();
+        s_exactSpellCosts.clear();
+
+        if (SpellModDebugEnabled()) {
+            EsteriaTrace("spellmod: reset");
+        }
+
+        return 1;
+    }
+
+    // Types 3/4 are exact-target flat/percent totals; field "family" carries the modifier spell ID.
+    // Type 5 resets only these totals; type 2 also clears them for a new login.
+    if (type == 6) {
+        SpellRec spell;
+        if (!bit && op == 14 && value >= 0 && g_spellDB.GetRecord(family, &spell) &&
+            spell.m_spellClassSet >= 18 && spell.m_spellClassSet <= 38) {
+            s_exactSpellCosts[family] = value;
+        }
+        return 1;
+    }
+    if (type == 5) {
+        s_exactSpellCosts.clear();
+        s_directModifiers.clear();
+        return 1;
+    }
+    if (type == 3 || type == 4) {
+        LoadDirectModifierTargets();
+        if (bit || op >= ESTERIA_SPELL_MOD_OPS || s_directModifierTargets.find(family) == s_directModifierTargets.end()) return 1;
+        uint64_t key = (static_cast<uint64_t>(family) << 8) | (type == 4 ? 32 : 0) | op;
+        if (value) s_directModifiers[key] = value;
+        else s_directModifiers.erase(key);
+        return 1;
+    }
+
+    if (type > ESTERIA_SPELL_MOD_PCT || !family || family >= ESTERIA_SPELL_MOD_FAMILIES || bit >= ESTERIA_SPELL_MOD_BITS || op >= ESTERIA_SPELL_MOD_OPS) {
+        if (s_rejected++ < 8) {
+            EsteriaTrace("spellmod: rejected type %u family %u bit %u op %u", type, family, bit, op);
+        }
+
+        return 1;
+    }
+
+    if (type == ESTERIA_SPELL_MOD_PCT) {
+        s_familyPctModifiers[family][bit][op] = value;
+    } else {
+        s_familyFlatModifiers[family][bit][op] = value;
+    }
+
+    if (SpellModDebugEnabled()) {
+        EsteriaTrace("spellmod: %s family %u bit %u op %u = %d", type == ESTERIA_SPELL_MOD_PCT ? "pct" : "flat", family, bit, op, value);
     }
 
     return 1;
@@ -3100,6 +3692,11 @@ bool SpellRec::WillSummonCritter(const SpellRec* spell) {
 // VERIFY: 54ab5610 manual
 // OFFSET: 0x007FFA30
 int32_t Spell_C_GetSpellReagentUses(const SpellRec* spell) {
+    int32_t charges = Spell_C_GetSpellChargeCount(spell->m_id);
+    if (charges >= 0) {
+        return charges;
+    }
+
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (!player) {
@@ -3274,7 +3871,26 @@ bool SpellHistory::GetSpellCooldown(int32_t spellId, int32_t itemId, uint32_t* d
 // VERIFY: a5bd03ff auto
 // OFFSET: 0x00809000
 bool Spell_C_GetSpellCooldown(int32_t spellId, int32_t petSpell, uint32_t* duration, uint32_t* start, uint32_t* enable) {
-    return s_spellHistory[petSpell].GetSpellCooldown(spellId, 0, duration, start, enable);
+    bool cooling = s_spellHistory[petSpell].GetSpellCooldown(spellId, 0, duration, start, enable);
+
+    // Esteria (CoA charges): a spell with every charge spent shows its recharge as its cooldown when it ends later.
+    // Display callers only (they ask for the times); cast checks pass null and stay with the server's cooldowns.
+    uint32_t chargeStart;
+    uint32_t chargeDuration;
+
+    if (!petSpell && duration && start && !s_spellCharges.empty() && GetSpentSpellCharges(spellId, chargeStart, chargeDuration)
+        && (!cooling || static_cast<int32_t>((chargeStart + chargeDuration) - (*start + *duration)) > 0)) {
+        *start = chargeStart;
+        *duration = chargeDuration;
+
+        if (enable) {
+            *enable = 1;
+        }
+
+        return true;
+    }
+
+    return cooling;
 }
 
 // VERIFY: f18946a2 auto

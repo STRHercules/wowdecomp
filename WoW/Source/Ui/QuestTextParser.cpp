@@ -1023,6 +1023,17 @@ static int32_t SpellParserReplaceText(const SpellRec* spell, char* buffer, uint3
             output = number;
             break;
 
+        case 'W':
+        case 'w': {
+            // Esteria: CoA's live aura amount of effect N (SMSG 0x535), for the unit whose aura tooltip is built; 0 elsewhere
+            int32_t amount = 0;
+            Spell_C_GetAuraAmount(spell->m_id, index, amount);
+            s_lastNumber = amount;
+            SStrPrintf(number, sizeof(number), "%d", amount);
+            output = number;
+            break;
+        }
+
         case 'X':
         case 'x': {
             int32_t targets = spell->m_effectChainTargets[index];
