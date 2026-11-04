@@ -176,6 +176,13 @@ enum MATHOP {
     MATHOP_AURA_AMOUNT_1_UPPER = 165,
     MATHOP_AURA_AMOUNT_2_UPPER = 166,
     MATHOP_AURA_AMOUNT_3_UPPER = 167,
+    // Esteria: CoA's points-per-level ($ppl1..$ppl3, $PPL1..$PPL3): what the effect has grown by at this level
+    MATHOP_POINTS_PER_LEVEL_1 = 168,
+    MATHOP_POINTS_PER_LEVEL_2 = 169,
+    MATHOP_POINTS_PER_LEVEL_3 = 170,
+    MATHOP_POINTS_PER_LEVEL_1_UPPER = 171,
+    MATHOP_POINTS_PER_LEVEL_2_UPPER = 172,
+    MATHOP_POINTS_PER_LEVEL_3_UPPER = 173,
 };
 
 struct MathStack {

@@ -33,7 +33,7 @@ static const MathFunction s_mathFunctions[12] = {
 };
 
 // STATIC: 0x00ACE8F8
-static const char* s_mathVariables[146] = {
+static const char* s_mathVariables[152] = {
     "STR", "AGI", "STA", "INT", "SPI", "str", "agi", "sta", "int", "spi",
     "m1", "m2", "m3", "M1", "M2", "M3", "a1", "a2", "a3", "A1", "A2", "A3",
     "d", "D", "c", "C", "p", "P", "x1", "x2", "x3", "X1", "X2", "X3",
@@ -47,6 +47,7 @@ static const char* s_mathVariables[146] = {
     "bh", "BH", "ph", "pfi", "pn", "pfr", "ps", "pa", "PH", "PFI", "PN", "PFR", "PS", "PA",
     "pbh", "pBH", "pbhd", "pBHD", "bc1", "bc2", "bc3", "BC1", "BC2", "BC3",
     "w1", "w2", "w3", "W1", "W2", "W3",   // Esteria: MATHOP_AURA_AMOUNT_*
+    "ppl1", "ppl2", "ppl3", "PPL1", "PPL2", "PPL3",   // Esteria: MATHOP_POINTS_PER_LEVEL_*
 };
 
 // STATIC: 0x00ACEB2C
@@ -73,7 +74,7 @@ static uint8_t LookupMathVariable(const char* name) {
         return 0;
     }
 
-    for (uint32_t i = 0; i < 146; i++) {
+    for (uint32_t i = 0; i < 152; i++) {
         if (!SStrCmp(name, s_mathVariables[i], STORM_MAX_STR)) {
             return i + MATHOP_STAT_STRENGTH;
         }
@@ -912,6 +913,25 @@ void MathState::GetVariableValue(uint32_t op, MathStack* stack, const SpellRec* 
                 int32_t amount = 0;
                 Spell_C_GetAuraAmount(spell->m_id, (op - MATHOP_AURA_AMOUNT_1) % 3, amount);
                 value = static_cast<float>(amount);
+                break;
+            }
+
+            case MATHOP_POINTS_PER_LEVEL_1:
+            case MATHOP_POINTS_PER_LEVEL_2:
+            case MATHOP_POINTS_PER_LEVEL_3:
+            case MATHOP_POINTS_PER_LEVEL_1_UPPER:
+            case MATHOP_POINTS_PER_LEVEL_2_UPPER:
+            case MATHOP_POINTS_PER_LEVEL_3_UPPER: {
+                // Esteria: CoA's rule -- (level - BaseLevel, the level capped at MaxLevel) x RealPointsPerLevel
+                int32_t level = player->m_unit->m_unitFieldLevel;
+                value = 0.0f;
+
+                if (spell->m_baseLevel <= level) {
+                    int32_t levels = (spell->m_maxLevel == 0 || level <= spell->m_maxLevel) ? level - spell->m_baseLevel
+                                                                                           : spell->m_maxLevel - spell->m_baseLevel;
+                    value = static_cast<float>(levels) * spell->m_effectRealPointsPerLevel[(op - MATHOP_POINTS_PER_LEVEL_1) % 3];
+                }
+
                 break;
             }
 

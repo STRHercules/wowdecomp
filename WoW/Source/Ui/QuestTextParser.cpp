@@ -20,6 +20,10 @@
 #include "WoW/Source/Ui/PaperDollInfoFrame.h"
 #include "WoW/Source/Ui/PetInfo.h"
 #include "WoW/Source/UIUtil/Tooltip.h"
+#include "Engine/Source/Event/Event.h"
+#include "WoW/Source/DB/Rec/SpellIconRec.h"
+#include <cstdio>
+#include <string>
 #include <cmath>
 #include <cstdlib>
 #include <cstring>
@@ -1105,6 +1109,93 @@ static int32_t SpellParserParseSubText(const SpellRec* spell, char* buffer, uint
     return failed == 0;
 }
 
+// Esteria: Conquest of Azeroth's spell text markup (its client's FUN_101a8e30), for the CoA spells imported into this
+// client. The text a spell's description parses to may carry @-tags that name another spell:
+//   @s:ID:FLAGS@ (and @a:, which CoA's data uses once)  that spell: a divider, its icon and name, its description.
+//                FLAGS negative = bits: 1 name only, 2 description only, 4 only with Shift, 8 only without Shift.
+//   @ext:LONG:ext@ / @ext:LONG:SHORT:ext@  the extended text with Shift held, otherwise the short one (or nothing).
+// Run after the $-tokens are resolved, as CoA does; a referenced description is parsed the same way, three deep.
+static int32_t s_markupDepth = 0;
+
+static bool SpellMarkupShift() {
+    return EventIsKeyDown(KEY_LSHIFT) || EventIsKeyDown(KEY_RSHIFT);
+}
+
+static std::string SpellMarkupRender(uint32_t id, int32_t flags) {
+    uint32_t bits = flags < 0 ? static_cast<uint32_t>(-flags) : 0;
+    bool const shift = SpellMarkupShift();
+
+    if (((bits & 4) && !shift) || ((bits & 8) && shift)) {
+        return "";
+    }
+
+    SpellRec rec;
+
+    if (!g_spellDB.GetRecord(static_cast<int32_t>(id), &rec)) {
+        return "";
+    }
+
+    SpellIconRec* icon = g_spellIconDB.GetRecord(rec.m_spellIconID);
+    std::string head = std::string("|T") + (icon && icon->m_textureFilename ? icon->m_textureFilename
+                                                                              : "Interface\\Icons\\INV_Misc_QuestionMark")
+        + ":20:20:0:0|t |cffFFFFFF" + (rec.m_name ? rec.m_name : "") + "|r";
+
+    if (bits & 1) {
+        return head;
+    }
+
+    char desc[1024] = {};
+    SpellParserParseText(&rec, desc, sizeof(desc), 0, 0, 0, 0, 1, 0);
+    std::string out = (bits & 2) ? std::string(desc) : head + "\n" + desc;
+    return "|TInterface\\Common\\ui-tooltipdivider:12:180:0:0|t\n" + out;
+}
+
+static void SpellMarkup(char* buffer, uint32_t size) {
+    if (!SStrChr(buffer, '@') || s_markupDepth >= 3) {
+        return;
+    }
+
+    ++s_markupDepth;
+    std::string t = buffer;
+    bool changed = false;
+
+    for (size_t at = t.find('@'); at != std::string::npos; at = t.find('@', at)) {
+        uint32_t id = 0;
+        int32_t flags = 0;
+        int consumed = 0;
+
+        if ((sscanf(t.c_str() + at, "@s:%u:%d@%n", &id, &flags, &consumed) == 2 ||
+             sscanf(t.c_str() + at, "@a:%u:%d@%n", &id, &flags, &consumed) == 2) && consumed) {
+            std::string const text = SpellMarkupRender(id, flags);
+            t.replace(at, consumed, text);
+            at += text.size();
+            changed = true;
+        } else if (t.compare(at, 5, "@ext:") == 0 && t.find(":ext@", at + 5) != std::string::npos) {
+            size_t const close = t.find(":ext@", at + 5);
+            std::string const body = t.substr(at + 5, close - at - 5);
+            size_t const split = body.find(':');
+            std::string const longText = split == std::string::npos ? body : body.substr(0, split);
+            std::string const shortText = split == std::string::npos ? "" : body.substr(split + 1);
+            std::string const text = SpellMarkupShift() ? longText : shortText;
+            t.replace(at, close + 5 - at, text);
+            at += text.size();
+            changed = true;
+        } else {
+            ++at;   // an '@' that opens no tag is ordinary text
+        }
+    }
+
+    if (changed) {
+        while (t.find("\n\n\n") != std::string::npos) {
+            t.replace(t.find("\n\n\n"), 3, "\n\n");
+        }
+
+        SStrCopy(buffer, t.c_str(), size);
+    }
+
+    --s_markupDepth;
+}
+
 // VERIFY: 17c38493 auto
 // OFFSET: 0x0057ABC0
 int32_t SpellParserParseText(const SpellRec* spell, char* buffer, uint32_t size, int32_t parsePet, int32_t parseUnit, int32_t spellLevel, int32_t useAuraDescription, int32_t scale, int32_t noModifiers) {
@@ -1130,6 +1221,7 @@ int32_t SpellParserParseText(const SpellRec* spell, char* buffer, uint32_t size,
     const char* cursor = SStrChr(description, '$');
     int32_t result = SpellParserParseSubText(spell, buffer, size, parsePet, parseUnit, spellLevel, scale, noModifiers, description, &cursor);
     s_spellVariables.m_count = 0;
+    SpellMarkup(buffer, size);   // Esteria: CoA's @-markup
     return result;
 }
 
