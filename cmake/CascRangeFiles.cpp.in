@@ -1,0 +1,160 @@
+#include <windows.h>
+#include <wininet.h>
+#include <algorithm>
+#include <memory>
+#include <string>
+#include <vector>
+
+// Keep upstream metadata/local-storage handling, and replace archived online asset acquisition below.
+#define FetchCascFile UpstreamFetchCascFile
+#include "@WOWDECOMP_CASCLIB_SOURCE_DIR@/src/CascFiles.cpp"
+#undef FetchCascFile
+
+namespace {
+bool ValidRange(const std::vector<BYTE>& bytes, const BYTE* key)
+{
+    if (bytes.size() < 8 || memcmp(bytes.data(), "BLTE", 4))
+        return false;
+    const DWORD header = (DWORD(bytes[4]) << 24) | (DWORD(bytes[5]) << 16)
+        | (DWORD(bytes[6]) << 8) | bytes[7];
+    if (header && (header < 12 || header > bytes.size()))
+        return false;
+    BYTE hash[MD5_HASH_SIZE];
+    CascHash_MD5(bytes.data(), header ? header : bytes.size(), hash);
+    return !memcmp(hash, key, sizeof(hash));
+}
+
+DWORD DownloadRange(LPCTSTR remote, ULONGLONG offset, std::vector<BYTE>& bytes)
+{
+    using InternetHandle = std::unique_ptr<void, decltype(&InternetCloseHandle)>;
+    InternetHandle session(InternetOpenA("EsteriaCasc/1", INTERNET_OPEN_TYPE_PRECONFIG, NULL, NULL, 0),
+        InternetCloseHandle);
+    if (!session)
+        return GetLastError();
+    DWORD timeout = 30000;
+    for (DWORD option : {INTERNET_OPTION_CONNECT_TIMEOUT, INTERNET_OPTION_SEND_TIMEOUT, INTERNET_OPTION_RECEIVE_TIMEOUT})
+        InternetSetOptionA(session.get(), option, &timeout, sizeof(timeout));
+    std::string url(remote);
+    if (url.find("://") == std::string::npos)
+        url = "http://" + url;
+    const auto end = offset + bytes.size() - 1;
+    const auto headers = "Range: bytes=" + std::to_string(offset) + "-" + std::to_string(end)
+        + "\r\nAccept-Encoding: identity\r\n";
+    InternetHandle request(InternetOpenUrlA(session.get(), url.c_str(), headers.c_str(), DWORD(headers.size()),
+        INTERNET_FLAG_RELOAD | INTERNET_FLAG_NO_CACHE_WRITE | INTERNET_FLAG_NO_UI, 0), InternetCloseHandle);
+    if (!request)
+        return GetLastError();
+    DWORD status = 0, length = sizeof(status);
+    if (!HttpQueryInfoA(request.get(), HTTP_QUERY_STATUS_CODE | HTTP_QUERY_FLAG_NUMBER, &status, &length, NULL)
+        || status != 206)
+        return ERROR_BAD_NET_RESP; // Never fall back to a full archive when the server ignores Range.
+    char contentRange[128] = {};
+    length = sizeof(contentRange);
+    unsigned long long first = 0, last = 0, total = 0;
+    char extra = 0;
+    if (!HttpQueryInfoA(request.get(), HTTP_QUERY_CONTENT_RANGE, contentRange, &length, NULL)
+        || sscanf_s(contentRange, "bytes %llu-%llu/%llu%c", &first, &last, &total, &extra, 1u) != 3
+        || first != offset || last != end || total <= end)
+        return ERROR_BAD_NET_RESP;
+    DWORD contentLength = 0;
+    length = sizeof(contentLength);
+    if (!HttpQueryInfoA(request.get(), HTTP_QUERY_CONTENT_LENGTH | HTTP_QUERY_FLAG_NUMBER,
+        &contentLength, &length, NULL) || contentLength != bytes.size())
+        return ERROR_BAD_NET_RESP;
+    for (size_t done = 0; done < bytes.size();)
+    {
+        DWORD read = 0;
+        if (!InternetReadFile(request.get(), bytes.data() + done,
+            DWORD(std::min<size_t>(65536, bytes.size() - done)), &read))
+            return GetLastError();
+        if (!read)
+            return ERROR_HANDLE_EOF;
+        done += read;
+    }
+    return ERROR_SUCCESS;
+}
+
+DWORD SaveRange(LPCTSTR path, std::vector<BYTE>& bytes)
+{
+    const DWORD error = ForcePathExist(path, true);
+    if (error != ERROR_SUCCESS)
+        return error;
+    const std::string name(path);
+    const auto parent = name.substr(0, name.find_last_of("/\\"));
+    char temporary[MAX_PATH];
+    if (!GetTempFileNameA(parent.c_str(), "rng", 0, temporary))
+        return GetLastError();
+    DWORD result = SaveLocalFile(temporary, bytes.data(), bytes.size());
+    if (result == ERROR_SUCCESS && !MoveFileExA(temporary, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH))
+        result = GetLastError();
+    DeleteFileA(temporary);
+    return result;
+}
+}
+
+DWORD FetchCascFile(TCascStorage* hs, CPATH_TYPE type, LPBYTE key, LPCTSTR extension,
+    CASC_PATH<TCHAR>& path, PCASC_ARCHIVE_INFO info)
+{
+    auto* entry = key ? static_cast<PCASC_EKEY_ENTRY>(hs->IndexMap.FindObject(key)) : nullptr;
+    if (!(hs->dwFeatures & CASC_FEATURE_ONLINE) || type != PathTypeData || extension || !info || !entry)
+        return UpstreamFetchCascFile(hs, type, key, extension, path, info);
+    if (hs->FileOffsetBits >= 64)
+        return ERROR_BAD_FORMAT;
+    const size_t archive = size_t(entry->StorageOffset >> hs->FileOffsetBits);
+    const ULONGLONG offset = entry->StorageOffset & ((ULONGLONG(1) << hs->FileOffsetBits) - 1);
+    if (archive >= hs->ArchivesKey.cbData / MD5_HASH_SIZE
+        || !entry->EncodedSize || entry->EncodedSize >= CASC_MAX_ONLINE_FILE_SIZE)
+        return ERROR_BAD_FORMAT;
+    auto* archiveKey = hs->ArchivesKey.pbData + archive * MD5_HASH_SIZE;
+    const auto* root = hs->szDataPath ? hs->szDataPath : hs->szRootPath;
+    path.Create(root, GetSubFolder(PathTypeData), NULL);
+    path.AppendEKey(key);
+    try
+    {
+        std::vector<BYTE> bytes(entry->EncodedSize);
+        ULONGLONG size = 0, start = 0;
+        TFileStream* stream = FileStream_OpenFile(path, STREAM_FLAG_READ_ONLY);
+        bool ready = stream && FileStream_GetSize(stream, &size) && size == bytes.size()
+            && FileStream_Read(stream, &start, bytes.data(), DWORD(bytes.size())) && ValidRange(bytes, key);
+        if (stream)
+            FileStream_Close(stream);
+        if (!ready)
+        {
+            // Reuse slices of an old local archive while migrating a warm cache, without downloading it.
+            CASC_PATH<TCHAR> archivePath;
+            archivePath.Create(root, GetSubFolder(PathTypeData), NULL);
+            archivePath.AppendEKey(archiveKey);
+            stream = FileStream_OpenFile(archivePath, STREAM_FLAG_READ_ONLY);
+            start = offset;
+            ready = stream && FileStream_Read(stream, &start, bytes.data(), DWORD(bytes.size()))
+                && ValidRange(bytes, key);
+            if (stream)
+                FileStream_Close(stream);
+            DWORD error = ERROR_FILE_NOT_FOUND;
+            TCHAR server[MAX_PATH];
+            const TCHAR* servers = hs->szCdnServers;
+            while (!ready && (servers = ExtractCdnServerName(server, _countof(server), servers)) != NULL)
+            {
+                CASC_PATH<TCHAR> remote(URL_SEP_CHAR);
+                remote.Create(server, hs->szCdnPath, GetSubFolder(PathTypeData), NULL);
+                remote.AppendEKey(archiveKey);
+                error = DownloadRange(remote, offset, bytes);
+                ready = error == ERROR_SUCCESS && ValidRange(bytes, key);
+                if (error == ERROR_SUCCESS && !ready)
+                    error = ERROR_FILE_CORRUPT;
+            }
+            if (!ready)
+                return error;
+            error = SaveRange(path, bytes);
+            if (error != ERROR_SUCCESS)
+                return error;
+        }
+        // The file is now a standalone BLTE stream, so the reader must start at offset zero.
+        memset(info, 0, sizeof(*info));
+        return ERROR_SUCCESS;
+    }
+    catch (const std::bad_alloc&)
+    {
+        return ERROR_NOT_ENOUGH_MEMORY;
+    }
+}

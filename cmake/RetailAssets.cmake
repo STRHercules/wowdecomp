@@ -27,6 +27,15 @@ if (CMAKE_VERSION VERSION_GREATER_EQUAL 4.0)
 endif ()
 add_subdirectory("${WOWDECOMP_CASCLIB_SOURCE_DIR}" "${CMAKE_BINARY_DIR}/casclib" EXCLUDE_FROM_ALL)
 
+# Replace only the online fetch entry point; keep the pinned decoder and the source checkout intact.
+configure_file("${CMAKE_SOURCE_DIR}/cmake/CascRangeFiles.cpp.in"
+    "${CMAKE_BINARY_DIR}/casclib/CascRangeFiles.cpp" @ONLY)
+get_target_property(casc_sources casc_static SOURCES)
+list(REMOVE_ITEM casc_sources src/CascFiles.cpp)
+set_property(TARGET casc_static PROPERTY SOURCES ${casc_sources}
+    "${CMAKE_BINARY_DIR}/casclib/CascRangeFiles.cpp")
+target_include_directories(casc_static PRIVATE "${WOWDECOMP_CASCLIB_SOURCE_DIR}/src")
+
 add_library(RetailAssets STATIC
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/CascSource.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/DecodedCache.cpp"
@@ -56,6 +65,8 @@ add_executable(CdnAssetDownload "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/download
 target_link_libraries(CdnAssetDownload PRIVATE RetailAssets)
 add_executable(CdnSourceSmoke "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/source_smoke.cpp")
 target_link_libraries(CdnSourceSmoke PRIVATE RetailAssets)
+add_executable(CdnCacheTrim "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/cache_trim.cpp")
+target_link_libraries(CdnCacheTrim PRIVATE RetailAssets)
 if (WIN32)
     add_executable(RetailShaderProbe "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/shader_probe.cpp"
         "${CMAKE_SOURCE_DIR}/Engine/Source/Gx/CGxDeviceD3d11/ShaderTranslator.cpp")
@@ -63,3 +74,13 @@ if (WIN32)
 endif ()
 enable_testing()
 add_test(NAME retail-assets COMMAND RetailAssetTests)
+add_executable(CascRangeTests "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/range_tests.cpp")
+target_include_directories(CascRangeTests PRIVATE "${WOWDECOMP_CASCLIB_SOURCE_DIR}/src")
+target_link_libraries(CascRangeTests PRIVATE casc_static)
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME casc-ranges COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/test_ranges.py" "$<TARGET_FILE:CascRangeTests>")
+    add_test(NAME casc-cache-trim COMMAND "${Python3_EXECUTABLE}"
+        "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/test_cache_trim.py" "$<TARGET_FILE:CdnCacheTrim>")
+endif ()

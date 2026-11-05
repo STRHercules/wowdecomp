@@ -105,6 +105,23 @@ as downloading from the network. It does not falsely report all reads as downloa
 
 ## Durable originals
 
+Archived online assets are acquired with an HTTP byte-range request and saved as
+individual encoded files under their own EKey. The client and `CdnAssetDownload`
+share this path. A server must return HTTP 206 with the exact Content-Range and
+Content-Length; ignored or malformed ranges fail without a whole-archive fallback.
+The EKey is checked before atomic publication, and CascLib retains its BLTE and
+decoded-content validation. Existing local archives can supply individual slices
+without network access while warming a cache.
+
+After acquiring the installed content's dependency graphs, close clients and
+downloaders and run `CdnCacheTrim <Data/Retail/Cache>` to review archive containers.
+`--apply` first validates every decoded original's length and checksum, then
+removes only hash-named archive payloads with corresponding archive indexes.
+It preserves decoded originals, standalone encoded files, indexes, manifests and
+configuration. It does not establish dependency completeness: acquire/verify the
+installed races, customizations and packs before applying. Older client or worker
+binaries must be replaced too, or they can resume whole-archive acquisition.
+
 Online sources always persist decoded assets under
 `path/<product>-<build>/decoded/<locale>/<policy>/`. An explicit `cache=` chooses
 `cache/<product>-<build>/<locale>/<policy>/` instead. Pinned local sources can use
