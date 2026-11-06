@@ -183,7 +183,9 @@ budget:SetScript("OnLeave", function() GameTooltip:Hide() end)
 -- ------------------------------------------------------------------------------------------------ decor chest
 
 local chest = CreateFrame("Frame", "EsteriaHousingDecor", UIParent)
-chest:SetSize(318, 560)
+-- sized to its contents: a 44 px header, the tile grid, and the pager row under it
+local CHEST_W, CHEST_H = 64 + COLS * (TILE + GAP) + 8, 50 + ROWS * (TILE + GAP) + 30
+chest:SetSize(CHEST_W, CHEST_H)
 chest:SetPoint("LEFT", 20, 30)
 Drag(chest)
 chest:Hide()
@@ -196,12 +198,12 @@ local chestPanel = H.Atlas(chest:CreateTexture(nil, "BACKGROUND", nil, 1), "hous
 chestPanel:SetAllPoints(chestBg); chestPanel:SetAlpha(0.6)
 local chestHeader = H.Atlas(chest:CreateTexture(nil, "BORDER"), "house-chest-header-bg")
 chestHeader:SetPoint("TOPLEFT"); chestHeader:SetPoint("TOPRIGHT"); chestHeader:SetHeight(44)
-local corbel = H.Atlas(chest:CreateTexture(nil, "OVERLAY"), "house-chest-corbel-topright", 58, 38)
-corbel:SetPoint("TOPRIGHT", 6, 4)
+local corbel = H.Atlas(chest:CreateTexture(nil, "OVERLAY"), "house-chest-corbel-topright", 44, 29)
+corbel:SetPoint("TOPRIGHT", 1, 1)
 local nav = H.Atlas(chest:CreateTexture(nil, "BORDER"), "house-chest-nav-bg_primary")
-nav:SetPoint("TOPLEFT", 0, -40); nav:SetPoint("BOTTOMLEFT", 0, 30); nav:SetWidth(54)
-local navTop = H.Atlas(chest:CreateTexture(nil, "ARTWORK"), "house-chest-nav-top-corbels", 54, 22)
-navTop:SetPoint("TOPLEFT", 0, -38)
+nav:SetPoint("TOPLEFT", 3, -42); nav:SetPoint("BOTTOMLEFT", 3, 3); nav:SetWidth(52) -- inside the border, header to foot
+local navTop = H.Atlas(chest:CreateTexture(nil, "ARTWORK"), "house-chest-nav-top-corbels", 52, 21)
+navTop:SetPoint("TOPLEFT", 3, -40)
 
 local searchBox = CreateFrame("EditBox", "EsteriaHousingDecorSearch", chest, "InputBoxTemplate")
 searchBox:SetSize(170, 20); searchBox:SetPoint("TOPLEFT", 20, -12); searchBox:SetAutoFocus(false)
@@ -283,7 +285,7 @@ chest:SetScript("OnMouseWheel", function(self, delta)
 end)
 
 local pageText = chest:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-pageText:SetPoint("BOTTOM", 30, 40)
+pageText:SetPoint("BOTTOM", 28, 10)
 local prev = H.Button(chest, "<", 24, 18); prev:SetPoint("RIGHT", pageText, "LEFT", -8, 0)
 local nextButton = H.Button(chest, ">", 24, 18); nextButton:SetPoint("LEFT", pageText, "RIGHT", 8, 0)
 prev:SetScript("OnClick", function() page = math.max(0, page - 1); H.RedrawDecor() end)
@@ -292,7 +294,8 @@ nextButton:SetScript("OnClick", function() page = page + 1; H.RedrawDecor() end)
 -- Storage | Catalog along the bottom
 local function TabButton(text, key, x)
   local b = CreateFrame("Button", nil, chest)
-  b:SetSize(100, 24); b:SetPoint("BOTTOMLEFT", x, 8)
+  b:SetSize(100, 26); b:SetPoint("TOPLEFT", chest, "BOTTOMLEFT", x, 3) -- below the panel, like retail's tabs
+  b:SetFrameLevel(chest:GetFrameLevel() - 1 >= 0 and chest:GetFrameLevel() - 1 or 0)
   b.bg = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "housing-woodsign"); b.bg:SetAllPoints()
   b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); b.text:SetPoint("CENTER", 0, 1); b.text:SetText(text)
   local hl = H.ButtonTexture(b, "Highlight", "house-chest-active-nav_selected-bg-glow")
