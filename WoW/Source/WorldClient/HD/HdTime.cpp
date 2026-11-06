@@ -62,5 +62,6 @@ bool HD::ShadowFullCasters() {
 }
 
 int32_t HD::ShadowBillboardMode() {
-    return On() ? OptionCVars::Int(s_hdShadowBillboard, 0, 2, 0) : 0;
+    // A bug fix, not a look, so every visual set gets it (stock trees' shadows turned with the camera).
+    return OptionCVars::Int(s_hdShadowBillboard, 0, 2, 1);
 }
