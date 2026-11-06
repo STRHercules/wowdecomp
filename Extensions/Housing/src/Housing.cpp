@@ -630,7 +630,7 @@ public:
 
 void AddHousingExtension() {
     s_enabled = sExtensionMgr->RegisterCVar("housingEnabled", "Esteria housing editor (needs an Esteria realm with housing on)",
-        0, "0", nullptr, CATEGORY_GAME);
+        0x1, "0", nullptr, CATEGORY_GAME); // 0x1: saved to Config.wtf, or the client forgets it on exit
     sExtensionMgr->RegisterMessageHandler(SMSG_HELLO, ReceiveHello, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_CATALOG, ReceiveCatalog, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_EDIT_ACK, ReceiveAck, nullptr);
