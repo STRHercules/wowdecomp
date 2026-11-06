@@ -466,9 +466,10 @@ end
 local divider = H.Atlas(abilityBar:CreateTexture(nil, "ARTWORK"), "decor-abilitybar-divider", 10, 46)
 divider:SetPoint("LEFT", abilityButtons[5], "LEFT", -11, 0)
 
--- Expert: the selected decor's tools above the bar
+-- Expert: retail's submodes for the selected decor (Translate, Rotate, Scale; Gizmo.lua drags their handles), Reset
+-- and Store, above the bar.
 local expert = CreateFrame("Frame", "EsteriaHousingExpert", UIParent)
-expert:SetSize(4 * 44 + 20, 72)
+expert:SetSize(5 * 44 + 20, 72)
 expert:SetPoint("BOTTOM", abilityBar, "TOP", 0, 6)
 expert:Hide()
 local expertBg = expert:CreateTexture(nil, "BACKGROUND"); expertBg:SetAllPoints(); expertBg:SetTexture(0, 0, 0, 0.55)
@@ -479,33 +480,41 @@ local function Edit(d, x, y, z, yaw)
   if not EsteriaHousing_Move(d.placedId, x, y, z, yaw) then Toast("You can only edit your own house.") end
 end
 local EXPERT = {
-  { "expert-horzmove", "Move", "Pick it up and click a new spot.",
-    function(d) H.Hold({ placedId = d.placedId, decorId = d.decorId, yaw = d.yaw }, "move") end },
-  { "expert-rotate", "Turn", "Left-click turns left, right-click right. The wheel turns it too.",
-    function(d, button) Edit(d, d.x, d.y, d.z, d.yaw + (button == "RightButton" and -TURN or TURN)) end },
-  { "expert-height", "Raise", "Left-click raises it, right-click lowers it.",
-    function(d, button) Edit(d, d.x, d.y, d.z + (button == "RightButton" and -ZSTEP or ZSTEP), d.yaw) end },
+  { "expert-horzmove", "Translate", "Drag an arrow to slide the decor along that axis. Shift: no snapping.", 1 },
+  { "expert-rotate", "Rotate", "Drag a ring to turn the decor about that axis. Shift: no snapping.", 2 },
+  { "expert-scale", "Scale", "Drag the handle above the decor up or down to resize it. Shift: no snapping.", 3 },
+  { "expert-height", "Reset", "Level it and set its size back; its heading stays.", function() H.Gizmo.Reset() end },
   { "cleanup", "Store", "Put it back in storage.", function(d)
     if not EsteriaHousing_Remove(d.placedId) then Toast("You can only edit your own house.") end end },
 }
+local submodeButtons = {}
 for i, x in ipairs(EXPERT) do
   local b = AtlasButton(expert, "EsteriaHousingExpert" .. x[2], 40, 40, "decor-ability-" .. x[1] .. "-default",
     "decor-ability-" .. x[1] .. "-active", "decor-ability-" .. x[1] .. "-pressed")
   b:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 44, 6)
-  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
-  b:SetScript("OnClick", function(self, button) local d = Placed(selected); if d then x[4](d, button) end end)
+  b:SetScript("OnClick", function()
+    local d = Placed(selected)
+    if type(x[4]) == "number" then H.Gizmo.SetMode(x[4]); H.RedrawExpert()
+    elseif d then x[4](d) end
+  end)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(x[2]); GameTooltip:AddLine(x[3], 1, 1, 1, true); GameTooltip:Show()
   end)
   b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  b.submode = type(x[4]) == "number" and x[4] or nil
+  submodeButtons[i] = b
 end
 
-local function RedrawExpert()
+function H.RedrawExpert()
   local d = Owner() and editing and ability == 2 and Placed(selected)
+  H.Gizmo.SetTarget(d or nil, d and fdids[d.decorId])
   if not d then return expert:Hide() end
-  expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360))
+  for _, b in ipairs(submodeButtons) do if b.submode then b:SetOn(b.submode == H.Gizmo.Mode()) end end
+  local scale = d.scale and math.abs(d.scale - 1) > 0.001 and string.format("  x%.2f", d.scale) or ""
+  expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176%s|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360, scale))
   expert:Show()
 end
+local RedrawExpert = H.RedrawExpert
 
 -- ------------------------------------------------------------------------------------------------ world clicks
 
@@ -558,7 +567,15 @@ end
 -- back to the ability's own tool: Expert selects, Cleanup stores
 function H.Drop() H.Hold(nil, AbilityTool()) end
 
+catcher:SetScript("OnMouseDown", function(self, button)
+  if button == "LeftButton" and tool == "select" and H.Gizmo.MouseDown() then self.dragged = true end
+end)
+catcher:SetScript("OnMouseUp", function(self, button)
+  if button == "LeftButton" then H.Gizmo.MouseUp() end
+end)
+
 catcher:SetScript("OnClick", function(self, button)
+  if self.dragged then self.dragged = nil; return end -- that press dragged a handle
   if button == "RightButton" then
     if holding then return H.Drop() end
     return H.SetAbility(1) -- right-click leaves Expert / Cleanup
@@ -590,9 +607,8 @@ catcher:SetScript("OnMouseWheel", function(self, delta)
   if holding then
     holding.yaw = holding.yaw + delta * TURN
     if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(fdids[holding.decorId], holding.yaw) end
-  elseif tool == "select" then
-    local d = Placed(selected)
-    if d then Edit(d, d.x, d.y, d.z, d.yaw + delta * TURN) end
+  elseif tool == "select" and not H.Gizmo.Dragging() then
+    if Placed(selected) and not H.Gizmo.Turn(delta * TURN) then Toast("You can only edit your own house.") end
   end
 end)
 
@@ -604,7 +620,9 @@ catcher:SetScript("OnUpdate", function(self)
   hint:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", cx / scale + 24, cy / scale - 8)
   local l, r, w = H.Icon(LEFT, 16), H.Icon(RIGHT, 16), H.Icon(WHEEL, 16)
   if tool == "select" then
-    hint:SetText("Select Decor\n" .. l .. " select   " .. w .. " turn   " .. r .. " done")
+    H.Gizmo.Update()
+    hint:SetText(Placed(selected) and ("Expert\n" .. l .. " drag a handle, or select   " .. w .. " turn   " .. r .. " done")
+      or ("Select Decor\n" .. l .. " select   " .. r .. " done"))
   elseif tool == "cleanup" then
     hint:SetText("Cleanup\n" .. l .. " store decor   " .. r .. " done")
   elseif holding then

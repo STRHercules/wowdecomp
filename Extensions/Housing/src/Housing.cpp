@@ -16,6 +16,10 @@
 #include "WoW/Source/WorldClient/World.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "Engine/Source/Model2/M2Scene.h"
+#include "Engine/Source/Base/Status.h"
+#include "Engine/Source/Gx/Gx.h"
+#include "Engine/Source/Services/Texture.h"
+#include "Engine/Source/Tempest/C4Quaternion.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -41,7 +45,9 @@ struct PlacedEntry {
     uint64_t placedId = 0;
     uint32_t decorId = 0;
     float pos[3] = { 0, 0, 0 };
-    float yaw = 0;
+    float yaw = 0;                    // heading of rot, radians
+    float rot[4] = { 0, 0, 0, 1 };    // xyzw
+    float scale = 1;
 };
 
 struct State {
@@ -79,8 +85,16 @@ struct PendingEdit {
     uint64_t placedId = 0;
     uint32_t decorId = 0;
     float pos[3] = { 0, 0, 0 };
-    float yaw = 0;
+    float rot[4] = { 0, 0, 0, 1 }; // xyzw
+    float scale = 1;
 };
+
+constexpr double Pi = 3.14159265358979323846;
+
+// Heading (radians, about Z) of a rotation quaternion xyzw.
+float Heading(float const q[4]) {
+    return float(std::atan2(2.0 * (q[3] * q[2] + q[0] * q[1]), 1.0 - 2.0 * (q[1] * q[1] + q[2] * q[2])));
+}
 
 CVar* s_enabled = nullptr;
 bool s_available = false;
@@ -99,13 +113,28 @@ constexpr float AckTimeout = 5.0f;
 
 // The ghost: a client-only copy of the decor being placed, drawn where the cursor meets the floor (the way the client
 // draws a ground-targeted spell's object, Spell_C_CreateSpellWorldObject).
+C4Quaternion Quat(float x, float y, float z, float w) {
+    C4Quaternion q;
+    q.x = x; q.y = y; q.z = z; q.w = w;
+    return q;
+}
+
 struct Ghost {
     CM2Model* model = nullptr;
     CMapEntity* entity = nullptr;
-    float yaw = 0;              // radians
-    bool onFloor = false;       // the cursor met the floor this frame
+    C4Quaternion rot = Quat(0, 0, 0, 1);
+    float scale = 1;
+    bool onFloor = false;       // the cursor met the floor this frame (or the ghost is pinned)
+    bool pinned = false;        // stays at pos instead of following the cursor
     C3Vector pos;
 } s_ghost;
+
+C44Matrix GhostMatrix() {
+    C44Matrix matrix(s_ghost.rot);
+    matrix.Scale(s_ghost.scale);
+    matrix.d0 = s_ghost.pos.x; matrix.d1 = s_ghost.pos.y; matrix.d2 = s_ghost.pos.z;
+    return matrix;
+}
 
 void DestroyGhost() {
     if (s_ghost.entity) World::ObjectDestroy(s_ghost.entity);
@@ -115,18 +144,20 @@ void DestroyGhost() {
 
 int32_t UpdateGhost(void*, uint32_t, uint64_t, uintptr_t) {
     if (!s_ghost.model) return 1;
-    C44Matrix matrix(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, s_ghost.pos.x, s_ghost.pos.y, s_ghost.pos.z, 1);
-    matrix.RotateAroundZ(s_ghost.yaw);
     s_ghost.model->m_fFlags |= 0x8000;
-    s_ghost.model->m_worldTransform = matrix;
+    s_ghost.model->m_worldTransform = GhostMatrix();
     s_ghost.model->m_baseAlpha = 0.7f;
     return 1;
 }
 
 bool CursorRay(C3Vector& out);
 
+struct Gizmo;
+void HideGizmo();
+
 void Reset() {
     DestroyGhost();
+    HideGizmo();
     s_available = false;
     s_catalog.clear();
     s_catalogNext.clear();
@@ -202,11 +233,10 @@ void SendNextEdit() {
     PendingEdit const& e = s_queue.front();
     s_inFlightSeq = ++s_seq;
     s_inFlightAge = 0;
-    float const half = e.yaw / 2;
     Writer w;
     w.Put<uint32_t>(s_inFlightSeq).Put<uint32_t>(s_state.revision).Put<uint8_t>(e.op).Put<uint64_t>(e.placedId)
         .Put<uint32_t>(e.decorId).Put(e.pos[0]).Put(e.pos[1]).Put(e.pos[2])
-        .Put(0.0f).Put(0.0f).Put(std::sin(half)).Put(std::cos(half)).Put(1.0f);
+        .Put(e.rot[0]).Put(e.rot[1]).Put(e.rot[2]).Put(e.rot[3]).Put(e.scale);
     if (!w.Send(CMSG_EDIT)) {
         s_inFlightSeq = 0;
         s_queue.clear();
@@ -268,7 +298,8 @@ int32_t ReceiveState(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     for (uint16_t i = 0; i < n; ++i) {
         PlacedEntry p;
         if (!r.Get(p.placedId) || !r.Get(p.decorId) || !r.Get(p.pos[0]) || !r.Get(p.pos[1]) || !r.Get(p.pos[2])
-            || !r.Get(p.yaw)) return 0;
+            || !r.Get(p.rot[0]) || !r.Get(p.rot[1]) || !r.Get(p.rot[2]) || !r.Get(p.rot[3]) || !r.Get(p.scale)) return 0;
+        p.yaw = Heading(p.rot);
         next.decor.push_back(p);
     }
     if (!r.Done()) return 0;
@@ -388,7 +419,9 @@ int32_t GetState(lua_State* L) {
         lua_createtable(L, 0, 6);
         NumberField(L, "placedId", double(p.placedId)); NumberField(L, "decorId", p.decorId);
         NumberField(L, "x", p.pos[0]); NumberField(L, "y", p.pos[1]); NumberField(L, "z", p.pos[2]);
-        NumberField(L, "yaw", p.yaw * 180.0 / 3.14159265358979323846);
+        NumberField(L, "yaw", std::fmod(p.yaw * 180.0 / Pi + 360.0, 360.0));
+        NumberField(L, "qx", p.rot[0]); NumberField(L, "qy", p.rot[1]); NumberField(L, "qz", p.rot[2]); NumberField(L, "qw", p.rot[3]);
+        NumberField(L, "scale", p.scale);
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "decor");
@@ -431,19 +464,27 @@ int32_t Queue(lua_State* L, PendingEdit const& e) {
     return 1;
 }
 
+// x, y, z, then either yawDegrees (snapped like the server snaps a turn about Z) or qx, qy, qz, qw, scale.
 bool Transform(lua_State* L, int first, PendingEdit& e) {
     for (int i = 0; i < 4; ++i) if (!lua_isnumber(L, first + i)) return false;
     for (int i = 0; i < 3; ++i) e.pos[i] = float(lua_tonumber(L, first + i));
-    // The server snaps too; snapping here keeps the request what the panel showed.
+    if (lua_isnumber(L, first + 7)) {
+        for (int i = 0; i < 4; ++i) e.rot[i] = float(lua_tonumber(L, first + 3 + i));
+        e.scale = lua_isnumber(L, first + 8) ? float(lua_tonumber(L, first + 8)) : 1.0f;
+        return true;
+    }
     double const step = s_snapDegrees, degrees = std::round(lua_tonumber(L, first + 3) / step) * step;
-    e.yaw = float(degrees * 3.14159265358979323846 / 180.0);
+    double const half = degrees * Pi / 360.0;
+    e.rot[0] = e.rot[1] = 0;
+    e.rot[2] = float(std::sin(half));
+    e.rot[3] = float(std::cos(half));
     return true;
 }
 
 int32_t Place(lua_State* L) {
     PendingEdit e;
     e.op = OpPlace;
-    if (!lua_isnumber(L, 1) || !Transform(L, 2, e)) return luaL_error(L, "Usage: EsteriaHousing_Place(decorId, x, y, z, yawDegrees)");
+    if (!lua_isnumber(L, 1) || !Transform(L, 2, e)) return luaL_error(L, "Usage: EsteriaHousing_Place(decorId, x, y, z, yawDegrees | qx, qy, qz, qw, scale)");
     e.decorId = uint32_t(lua_tonumber(L, 1));
     return Queue(L, e);
 }
@@ -451,7 +492,7 @@ int32_t Place(lua_State* L) {
 int32_t Move(lua_State* L) {
     PendingEdit e;
     e.op = OpMove;
-    if (!lua_isnumber(L, 1) || !Transform(L, 2, e)) return luaL_error(L, "Usage: EsteriaHousing_Move(placedId, x, y, z, yawDegrees)");
+    if (!lua_isnumber(L, 1) || !Transform(L, 2, e)) return luaL_error(L, "Usage: EsteriaHousing_Move(placedId, x, y, z, yawDegrees | qx, qy, qz, qw, scale)");
     e.placedId = uint64_t(lua_tonumber(L, 1));
     return Queue(L, e);
 }
@@ -607,20 +648,40 @@ int32_t GetCursorWorld(lua_State* L) {
     return 3;
 }
 
-// EsteriaHousing_SetGhost(fileDataId, yawDegrees) shows the decor under the cursor; EsteriaHousing_SetGhost() removes it.
+// EsteriaHousing_SetGhost(fileDataId, yawDegrees | qx, qy, qz, qw, scale) shows the decor under the cursor;
+// EsteriaHousing_SetGhost() removes it.
 int32_t SetGhost(lua_State* L) {
     uint32_t const fdid = lua_isnumber(L, 1) ? uint32_t(lua_tonumber(L, 1)) : 0;
-    if (lua_isnumber(L, 2)) s_ghost.yaw = float(lua_tonumber(L, 2) * 3.14159265358979323846 / 180.0);
+    if (lua_isnumber(L, 5)) {
+        s_ghost.rot = Quat(float(lua_tonumber(L, 2)), float(lua_tonumber(L, 3)), float(lua_tonumber(L, 4)),
+            float(lua_tonumber(L, 5)));
+        s_ghost.scale = lua_isnumber(L, 6) ? float(lua_tonumber(L, 6)) : 1.0f;
+    } else if (lua_isnumber(L, 2)) {
+        double const half = lua_tonumber(L, 2) * Pi / 360.0;
+        s_ghost.rot = Quat(0, 0, float(std::sin(half)), float(std::cos(half)));
+        s_ghost.scale = 1;
+    }
     static uint32_t shown = 0;
     if (!fdid || !s_available) { DestroyGhost(); shown = 0; return 0; }
-    if (s_ghost.model && shown == fdid) return 0; // only the yaw changed
-    float const yaw = s_ghost.yaw;
+    if (s_ghost.model && shown == fdid) return 0; // only the rotation or scale changed
+    Ghost const keep = s_ghost;
     DestroyGhost();
-    s_ghost.yaw = yaw;
+    s_ghost.rot = keep.rot;
+    s_ghost.scale = keep.scale;
+    s_ghost.pinned = keep.pinned;
+    s_ghost.pos = keep.pos;
     std::string const path = "retail/" + std::to_string(fdid) + ".m2";
     s_ghost.model = World::s_m2Scene ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
     if (s_ghost.model) s_ghost.entity = CMap::ObjectCreate(s_ghost.model, UpdateGhost, nullptr, 0, 0, 10);
     shown = fdid;
+    return 0;
+}
+
+// EsteriaHousing_PinGhost(x, y, z) holds the ghost there (a handle drag); EsteriaHousing_PinGhost() lets it follow the
+// cursor again.
+int32_t PinGhost(lua_State* L) {
+    s_ghost.pinned = lua_isnumber(L, 3) != 0;
+    if (s_ghost.pinned) s_ghost.pos = C3Vector(float(lua_tonumber(L, 1)), float(lua_tonumber(L, 2)), float(lua_tonumber(L, 3)));
     return 0;
 }
 
@@ -630,6 +691,152 @@ int32_t GetGhost(lua_State* L) {
     lua_pushnumber(L, s_ghost.pos.x); lua_pushnumber(L, s_ghost.pos.y); lua_pushnumber(L, s_ghost.pos.z);
     return 3;
 }
+
+// The cursor's ray through the world camera: start and end points (the handles pick and drag against it).
+bool CursorSegment(C3Vector& start, C3Vector& end) {
+    CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
+    if (!frame || !frame->m_camera || !frame->m_simpleTop) return false;
+    float x, y;
+    NDCToDDC(frame->m_simpleTop->m_mousePosition.m_x, frame->m_simpleTop->m_mousePosition.m_y, &x, &y);
+    CGxDevice* device = g_theGxDevicePtr;
+    C44Matrix const projection = device->m_projection;
+    CGxMatrixStack& stack = device->m_xforms[GxXform_View];
+    C44Matrix const view = stack.m_mtx[stack.m_level];
+    frame->m_camera->SetupWorldProjection(frame->m_viewportDDC);
+    bool const ok = frame->GetLineSegment(x, y, &start, &end) != 0;
+    device->XformSetProjection(projection);
+    device->XformSetView(view);
+    return ok;
+}
+
+// sx, sy, sz, ex, ey, ez of the cursor's ray, or nothing.
+int32_t GetCursorRay(lua_State* L) {
+    C3Vector start, end;
+    if (!CursorSegment(start, end)) return 0;
+    for (float v : { start.x, start.y, start.z, end.x, end.y, end.z }) lua_pushnumber(L, v);
+    return 6;
+}
+
+// The manipulator: retail draws its decor handles in the engine (the "manipulator" shader); we draw ours as
+// camera-facing ribbons after the world renders. Lua picks and drags them (Gizmo.lua); this only draws.
+struct Gizmo {
+    int mode = 0;          // 0 off, 1 translate (arrows), 2 rotate (rings), 3 scale (a handle above)
+    C3Vector pos;
+    float radius = 1.5f;
+    int hover = 0;         // axis 1 x, 2 y, 3 z (4 the scale handle) under the cursor, or being dragged
+    bool dragging = false;
+} s_gizmo;
+CTexture* s_white = nullptr;
+
+// EsteriaHousing_SetGizmo(mode, x, y, z, radius, hoverAxis, dragging); EsteriaHousing_SetGizmo(0) hides it.
+int32_t SetGizmo(lua_State* L) {
+    s_gizmo.mode = lua_isnumber(L, 1) ? int(lua_tonumber(L, 1)) : 0;
+    if (s_gizmo.mode && lua_isnumber(L, 4)) {
+        s_gizmo.pos = C3Vector(float(lua_tonumber(L, 2)), float(lua_tonumber(L, 3)), float(lua_tonumber(L, 4)));
+        s_gizmo.radius = lua_isnumber(L, 5) ? float(lua_tonumber(L, 5)) : 1.5f;
+        s_gizmo.hover = lua_isnumber(L, 6) ? int(lua_tonumber(L, 6)) : 0;
+        s_gizmo.dragging = lua_toboolean(L, 7) != 0;
+    }
+    return 0;
+}
+
+void Ribbon(C3Vector const* points, uint32_t count, CImVector color, float width, C3Vector const& eye) {
+    if (count < 2 || count > 200) return;
+    C3Vector positions[400];
+    CImVector colors[400];
+    C2Vector tex[400];
+    uint16_t indices[400];
+    for (uint32_t i = 0; i < count; ++i) {
+        C3Vector const along = points[i + 1 < count ? i + 1 : i] - points[i > 0 ? i - 1 : 0];
+        C3Vector const view = points[i] - eye;
+        C3Vector side(along.y * view.z - along.z * view.y, along.z * view.x - along.x * view.z, along.x * view.y - along.y * view.x);
+        float const length = std::sqrt(side.x * side.x + side.y * side.y + side.z * side.z);
+        if (length > 1e-6f) side = side * (width * 0.5f / length);
+        positions[2 * i] = points[i] + side;
+        positions[2 * i + 1] = points[i] - side;
+        colors[2 * i] = colors[2 * i + 1] = color;
+        tex[2 * i] = C2Vector(0, 0);
+        tex[2 * i + 1] = C2Vector(1, 1);
+        indices[2 * i] = uint16_t(2 * i);
+        indices[2 * i + 1] = uint16_t(2 * i + 1);
+    }
+    C3Vector const normal(0, 0, 1);
+    GxPrimLockVertexPtrs(2 * count, positions, sizeof(C3Vector), &normal, 0, colors, sizeof(CImVector), nullptr, 0, tex,
+        sizeof(C2Vector), nullptr, 0);
+    GxDrawLockedElements(GxPrim_TriangleStrip, 2 * count, indices);
+    GxPrimUnlockVertexPtrs();
+}
+
+CImVector AxisColor(int axis) {
+    CImVector c;
+    c.a = 0xE6;
+    bool const hot = s_gizmo.hover == axis;
+    if (hot && s_gizmo.dragging) { c.r = c.g = c.b = 0xFF; return c; }  // the handle being dragged: white
+    if (hot) { c.r = 0xFF; c.g = 0xE0; c.b = 0x30; return c; }           // under the cursor: yellow
+    c.r = axis == 1 ? 0xF0 : 0x40; c.g = axis == 2 ? 0xE0 : 0x50; c.b = axis == 3 ? 0xFF : 0x40;
+    if (axis == 4) { c.r = 0xE0; c.g = 0xE0; c.b = 0xE0; }
+    return c;
+}
+
+void DrawGizmo() {
+    if (!s_gizmo.mode || !CGWorldFrame::GetActiveCamera()) return;
+    if (!s_white) {
+        CStatus status;
+        s_white = TextureCreate("Interface\\Buttons\\WHITE8X8", CGxTexFlags(GxTex_Linear, 1, 1, 0, 0, 0, 1, 0, 0, 0), &status, 0);
+    }
+    CGxTex* white = s_white ? TextureGetGxTex(s_white, 0, nullptr) : nullptr;
+    if (!white) return;
+    C3Vector const eye = CGWorldFrame::GetActiveCamera()->m_position;
+    g_theGxDevicePtr->RsPush();
+    GxXformPush(GxXform_World);
+    GxXformTranslate(GxXform_World, -eye);
+    GxRsSet(GxRs_Culling, 0);
+    GxRsSet(GxRs_Fog, 0);
+    GxRsSet(GxRs_Lighting, 0);
+    GxRsSet(GxRs_DepthTest, 0);   // always on top, like retail's handles
+    GxRsSet(GxRs_DepthWrite, 0);
+    GxRsSet(GxRs_ColorOp0, 0);
+    GxRsSet(GxRs_AlphaOp0, 0);
+    GxRsSet(GxRs_BlendingMode, 3);
+    g_theGxDevicePtr->RsSet(GxRs_Texture0, white);
+    GxRsSet(GxRs_TextureShader0, 1);
+    float const r = s_gizmo.radius, width = r * 0.045f;
+    C3Vector const c = s_gizmo.pos;
+    C3Vector const axes[3] = { C3Vector(1, 0, 0), C3Vector(0, 1, 0), C3Vector(0, 0, 1) };
+    for (int a = 0; a < 3; ++a) {
+        C3Vector const& d = axes[a];
+        if (s_gizmo.mode == 1) {
+            C3Vector shaft[2] = { c, c + d * r };
+            Ribbon(shaft, 2, AxisColor(a + 1), width, eye);
+            C3Vector head[2] = { c + d * r, c + d * (r * 1.28f) }; // a wide-to-thin tip
+            Ribbon(head, 2, AxisColor(a + 1), width * 3.5f, eye);
+        } else if (s_gizmo.mode == 2) {
+            C3Vector ring[49];
+            C3Vector const u = axes[(a + 1) % 3], v = axes[(a + 2) % 3];
+            for (int i = 0; i <= 48; ++i) {
+                float const t = float(i) / 48.0f * 6.2831853f;
+                ring[i] = c + (u * std::cos(t) + v * std::sin(t)) * r;
+            }
+            Ribbon(ring, 49, AxisColor(a + 1), width, eye);
+        }
+    }
+    if (s_gizmo.mode == 3) {
+        C3Vector stem[2] = { c, c + axes[2] * (r * 1.3f) };
+        Ribbon(stem, 2, AxisColor(4), width, eye);
+        C3Vector knob[2] = { c + axes[2] * (r * 1.24f), c + axes[2] * (r * 1.42f) };
+        Ribbon(knob, 2, AxisColor(4), width * 6.0f, eye);
+    }
+    GxXformPop(GxXform_World);
+    g_theGxDevicePtr->RsPop();
+}
+
+void HideGizmo() { s_gizmo.mode = 0; }
+
+class GizmoRender : public RenderScript {
+public:
+    GizmoRender() : RenderScript("HousingGizmo") { }
+    void OnWorldRendered() override { DrawGizmo(); }
+};
 
 bool CursorRay(C3Vector& out) {
     CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
@@ -670,7 +877,7 @@ public:
     Ticks() : ClientScript("HousingTicks") { }
     void OnUpdate(float elapsedSec) override {
         if (s_ghost.model && s_ghost.entity) {
-            s_ghost.onFloor = CursorRay(s_ghost.pos);
+            s_ghost.onFloor = s_ghost.pinned || CursorRay(s_ghost.pos);
             // Move the map entity too (CGWorldFrame does this for a spell's ground object), or it stays culled at 0,0,0.
             CAaBox box;
             box.b = C3Vector(0, 0, 0);
@@ -682,9 +889,7 @@ public:
                 sphere = s_ghost.model->GetBoundingSphere();
                 center = sphere.c;
             }
-            C44Matrix matrix;
-            matrix.d0 = s_ghost.pos.x; matrix.d1 = s_ghost.pos.y; matrix.d2 = s_ghost.pos.z;
-            matrix.RotateAroundZ(s_ghost.yaw);
+            C44Matrix matrix = GhostMatrix();
             CMap::ObjectUpdate(s_ghost.entity, matrix, box, sphere, center, false, 0xFFFFFFFF);
             World::ObjectSetHidden(s_ghost.entity, !s_ghost.onFloor);
         }
@@ -740,6 +945,9 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_PinGhost", PinGhost, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorRay", GetCursorRay, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGizmo", SetGizmo, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_AVAILABLE", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_CATALOG", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_STATE", FRAMESCRIPT_CONTEXTS_GAME);
@@ -748,5 +956,6 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_LAYOUT", FRAMESCRIPT_CONTEXTS_GAME);
     new Maps();
     new Ticks();
+    new GizmoRender();
     new Lifecycle();
 }

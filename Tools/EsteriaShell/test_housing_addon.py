@@ -47,6 +47,11 @@ function EsteriaHousing_GetLayout() return layout end
 function EsteriaHousing_GetPlayerPosition() return px, py, pz, facing end
 function EsteriaHousing_GetCursorWorld() if cursor then return cursor[1], cursor[2], cursor[3] end end
 function EsteriaHousing_SetGhost(fdid, yaw) ghost = fdid and { fdid, yaw } or nil end
+function EsteriaHousing_GetCursorRay() if ray then return unpack(ray) end end
+function GetCursorPosition() return 500, 400 end
+function UIParent:GetEffectiveScale() return 1 end
+function EsteriaHousing_SetGizmo(...) gizmo = { ... } end
+function EsteriaHousing_PinGhost(...) pinned = { ... } end
 function EsteriaHousing_GetGhost() if ghost and cursor then return cursor[1], cursor[2], math.abs(cursor[3] - pz) > 4 and pz or cursor[3] end end
 local function log(...) sent[#sent + 1] = { ... } return state == nil or state.isOwner end
 function EsteriaHousing_Place(...) return log("place", ...) end
@@ -80,7 +85,7 @@ end
 L = LuaRuntime()
 L.execute(HARNESS + "\nHarnessWidget = W\n")
 L.execute(GAME)
-for name in ("Atlas.lua", "Editor.lua", "Layout.lua", "Plot.lua"):
+for name in ("Atlas.lua", "Gizmo.lua", "Editor.lua", "Layout.lua", "Plot.lua"):
     L.execute((ADDON / name).read_text(encoding="utf-8"))
 g = L.globals()
 
@@ -142,21 +147,50 @@ op, decor, x, y, z, yaw = last()
 assert (op, decor, x, y, z, yaw) == ("place", 498, 12, 21, 5, 285), (op, decor, x, y, z, yaw)
 assert not catcher.IsShown(catcher) and g.ghost is None, "a plain click places one and drops the ghost"
 
-# Expert (2): the ack's decor is selected; its tools turn, raise, move and store it.
-L.execute('state.decor = { { placedId = 7, decorId = 498, x = 12, y = 21, z = 5, yaw = 285 } }; state.placed = 1')
+# Expert (2): the ack's decor is selected and its handles drag it. The cursor's ray is faked; the handles' size comes
+# from the camera distance (about 10 yd here, so radius 1.2).
+L.execute('state.decor = { { placedId = 7, decorId = 498, x = 12, y = 21, z = 5, yaw = 285, qx = 0, qy = 0, qz = math.sin(math.rad(285) / 2), qw = math.cos(math.rad(285) / 2), scale = 1 } }; state.placed = 1')
 g.event("ESTERIA_HOUSING_RESULT", 0, 1, 7)
 g.EsteriaHousingAbility2.Click(g.EsteriaHousingAbility2)
 assert g.EsteriaHousingExpert.IsShown(g.EsteriaHousingExpert) and catcher.IsShown(catcher)
-g.EsteriaHousingExpertTurn.Click(g.EsteriaHousingExpertTurn)
-assert last()[:2] == ["move", 7] and last()[5] == 300
-g.EsteriaHousingExpertRaise.Click(g.EsteriaHousingExpertRaise, "RightButton")
-assert abs(last()[4] - 4.9) < 1e-6
-g.EsteriaHousingExpertMove.Click(g.EsteriaHousingExpertMove)
-L.execute('cursor = { 14, 22, 5.2 }')
-catcher.Click(catcher)
-assert last()[:5] == ["move", 7, 14, 22, 5.2]
+
+def drag(start, end):
+    """Hover with the ray `start`, press, move to `end`, release."""
+    L.execute(f"ray = {{ {', '.join(map(str, start))} }}")
+    catcher._scripts.OnUpdate(catcher)
+    catcher._scripts.OnMouseDown(catcher, "LeftButton")
+    L.execute(f"ray = {{ {', '.join(map(str, end))} }}")
+    catcher._scripts.OnUpdate(catcher)
+    catcher._scripts.OnMouseUp(catcher, "LeftButton")
+    catcher._scripts.OnClick(catcher, "LeftButton")  # the press that dragged a handle selects nothing
+
+def heading(q):
+    import math
+    return math.degrees(math.atan2(2 * (q[3] * q[2] + q[0] * q[1]), 1 - 2 * (q[1] ** 2 + q[2] ** 2))) % 360
+
+# Translate: grab the X arrow 0.6 yd out from straight above, drag 1 yd along X.
+drag((12.6, 21, 15, 12.6, 21, -5), (13.6, 21, 15, 13.6, 21, -5))
+op, placed, x, y, z, qx, qy, qz, qw, scale = last()
+assert (op, placed) == ("move", 7) and abs(x - 13) < 1e-6 and (y, z, scale) == (21, 5, 1), last()
+assert abs(heading((qx, qy, qz, qw)) - 285) < 1e-3
+# Rotate: grab the Z ring on its +X side, drag a quarter turn round to +Y: the heading goes from 285 to 15.
+g.EsteriaHousingExpertRotate.Click(g.EsteriaHousingExpertRotate)
+drag((13.2, 21, 15, 13.2, 21, -5), (12, 22.2, 15, 12, 22.2, -5))
+op, placed, x, y, z, qx, qy, qz, qw, scale = last()
+assert op == "move" and abs(heading((qx, qy, qz, qw)) - 15) < 1e-3, heading((qx, qy, qz, qw))
+# Scale: grab the handle above (1.6 yd up) with a level ray and drag it to 3.2 yd: twice the size, the most allowed.
+g.EsteriaHousingExpertScale.Click(g.EsteriaHousingExpertScale)
+drag((2, 21, 6.6, 22, 21, 6.6), (2, 21, 8.2, 22, 21, 8.2))
+assert last()[9] == 2, last()
+# Reset levels it and sets the size back; Store puts it away.
+L.execute('state.decor[1].qx, state.decor[1].qw, state.decor[1].scale = 0.3, 0.95, 1.5')
+g.event("ESTERIA_HOUSING_STATE")
+g.EsteriaHousingExpertReset.Click(g.EsteriaHousingExpertReset)
+op, placed, x, y, z, qx, qy, qz, qw, scale = last()
+assert (qx, qy, scale) == (0, 0, 1), last()
 g.EsteriaHousingExpertStore.Click(g.EsteriaHousingExpertStore)
 assert last() == ["remove", 7]
+L.execute('ray = nil')
 # Selecting picks the decor nearest the click.
 L.execute('cursor = { 30, 30, 5 }')
 catcher.Click(catcher)
