@@ -299,6 +299,14 @@ int32_t CVar::Delete(const char* fileName) {
 // OFFSET: 0x00766640
 int32_t CVar::SaveCvar(const char* name, const char* value, void* arg) {
     char line[260];
+
+    // Not in the original binary: a line too long for the buffer was written cut off, without its closing quote and
+    // newline, so the next load read every following SET as part of that value and lost them (status cvars such as
+    // surfaceCoverInfo swallowed housingEnabled). Skip such a value instead.
+    if (SStrLen(name) + SStrLen(value) + 9 > sizeof(line)) { // 9: SET, space, space, two quotes, newline, NUL
+        return 1;
+    }
+
     SStrPrintf(line, sizeof(line), "SET %s \"%s\"\n", name, value);
 
     uint32_t written = 0;
