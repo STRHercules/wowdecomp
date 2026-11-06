@@ -36,6 +36,10 @@ function H.Panel(name, w, h)
     tile = true, tileSize = 16, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
   f:SetBackdropBorderColor(0.8, 0.65, 0.3)
   f:EnableMouse(true)
+  -- every housing panel drags; the client keeps a named, user-placed frame where it was left (layout-local.txt)
+  f:SetMovable(true); f:SetClampedToScreen(true); f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); self:SetUserPlaced(true) end)
   f:Hide()
   return f
 end

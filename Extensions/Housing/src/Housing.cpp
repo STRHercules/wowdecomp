@@ -59,8 +59,9 @@ struct PlotInfo {
     std::string neighborhood, owner, message;
 };
 
-struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; std::string name; };
-struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; };
+struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
+struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; uint32_t theme[3] = { 0, 0, 0 }; uint8_t ceilingHidden = 0; };
+struct LayoutTheme { uint32_t id = 0; std::string name; };
 struct LayoutSocket { uint8_t room = 0, piece = 0; float x = 0, y = 0, nx = 0, ny = 0; std::vector<uint32_t> fits; };
 struct Layout {
     bool valid = false;
@@ -69,6 +70,7 @@ struct Layout {
     std::vector<LayoutKind> kinds;
     std::vector<LayoutRoom> rooms;
     std::vector<LayoutSocket> sockets;
+    std::vector<LayoutTheme> themes;
 };
 
 struct PendingEdit {
@@ -324,13 +326,14 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     if (!r.Get(next.maxRooms) || !r.Get(next.origin[0]) || !r.Get(next.origin[1]) || !r.Get(kinds)) return 0;
     for (uint8_t i = 0; i < kinds; ++i) {
         LayoutKind k;
-        if (!r.Get(k.id) || !r.Get(k.size[0]) || !r.Get(k.size[1]) || !r.Get(k.name)) return 0;
+        if (!r.Get(k.id) || !r.Get(k.size[0]) || !r.Get(k.size[1]) || !r.Get(k.price) || !r.Get(k.name)) return 0;
         next.kinds.push_back(std::move(k));
     }
     if (!r.Get(rooms)) return 0;
     for (uint8_t i = 0; i < rooms; ++i) {
         LayoutRoom room;
-        if (!r.Get(room.kind) || !r.Get(room.x) || !r.Get(room.y) || !r.Get(room.quarter)) return 0;
+        if (!r.Get(room.kind) || !r.Get(room.x) || !r.Get(room.y) || !r.Get(room.quarter) || !r.Get(room.theme[0])
+            || !r.Get(room.theme[1]) || !r.Get(room.theme[2]) || !r.Get(room.ceilingHidden)) return 0;
         next.rooms.push_back(room);
     }
     if (!r.Get(sockets)) return 0;
@@ -345,6 +348,13 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
             socket.fits.push_back(kind);
         }
         next.sockets.push_back(std::move(socket));
+    }
+    uint8_t themes;
+    if (!r.Get(themes)) return 0;
+    for (uint8_t i = 0; i < themes; ++i) {
+        LayoutTheme theme;
+        if (!r.Get(theme.id) || !r.Get(theme.name)) return 0;
+        next.themes.push_back(std::move(theme));
     }
     if (!r.Done()) return 0;
     next.valid = true;
@@ -495,8 +505,9 @@ int32_t AddRoom(lua_State* L) {
     return 1;
 }
 
-// { maxRooms, originX, originY, kinds = { [id] = { id, name, sizeX, sizeY } },
-//   rooms = { { kind, x, y, quarter } }, sockets = { { room, piece, x, y, nx, ny, fits = { kind... } } } }
+// { maxRooms, originX, originY, kinds = { [id] = { id, name, sizeX, sizeY, price } },
+//   rooms = { { kind, x, y, quarter, wallTheme, floorTheme, ceilingTheme, ceilingHidden } },
+//   sockets = { { room, piece, x, y, nx, ny, fits = { kind... } } }, themes = { { id, name } } }
 // Room offsets and socket positions are relative to the origin (world = origin + offset).
 int32_t GetLayout(lua_State* L) {
     if (!s_available || !s_layout.valid) { lua_pushnil(L); return 1; }
@@ -507,6 +518,7 @@ int32_t GetLayout(lua_State* L) {
     for (LayoutKind const& k : s_layout.kinds) {
         lua_createtable(L, 0, 4);
         NumberField(L, "id", k.id); NumberField(L, "sizeX", k.size[0]); NumberField(L, "sizeY", k.size[1]);
+        NumberField(L, "price", k.price);
         lua_pushstring(L, k.name.c_str()); lua_setfield(L, -2, "name");
         lua_rawseti(L, -2, int(k.id));
     }
@@ -517,6 +529,9 @@ int32_t GetLayout(lua_State* L) {
         lua_createtable(L, 0, 4);
         NumberField(L, "kind", room.kind); NumberField(L, "x", room.x); NumberField(L, "y", room.y);
         NumberField(L, "quarter", room.quarter);
+        NumberField(L, "wallTheme", room.theme[0]); NumberField(L, "floorTheme", room.theme[1]);
+        NumberField(L, "ceilingTheme", room.theme[2]);
+        lua_pushboolean(L, room.ceilingHidden); lua_setfield(L, -2, "ceilingHidden");
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "rooms");
@@ -533,6 +548,33 @@ int32_t GetLayout(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "sockets");
+    lua_createtable(L, int(s_layout.themes.size()), 0);
+    i = 0;
+    for (LayoutTheme const& theme : s_layout.themes) {
+        lua_createtable(L, 0, 2);
+        NumberField(L, "id", theme.id);
+        lua_pushstring(L, theme.name.c_str()); lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "themes");
+    return 1;
+}
+
+// EsteriaHousing_StyleRoom(room, part, theme): room 0-based, part 1 walls 2 floor 3 ceiling, theme from GetLayout().themes.
+int32_t StyleRoom(lua_State* L) {
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2) || !lua_isnumber(L, 3))
+        return luaL_error(L, "Usage: EsteriaHousing_StyleRoom(room, part, theme)");
+    lua_pushboolean(L, s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionRoomStyle)
+        .Put<uint8_t>(uint8_t(lua_tonumber(L, 1))).Put<uint8_t>(uint8_t(lua_tonumber(L, 2)))
+        .Put<uint32_t>(uint32_t(lua_tonumber(L, 3))).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_SetCeilingHidden(room, hidden): room 0-based.
+int32_t SetCeilingHidden(lua_State* L) {
+    if (!lua_isnumber(L, 1)) return luaL_error(L, "Usage: EsteriaHousing_SetCeilingHidden(room, hidden)");
+    lua_pushboolean(L, s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionRoomCeiling)
+        .Put<uint8_t>(uint8_t(lua_tonumber(L, 1))).Put<uint8_t>(lua_toboolean(L, 2) ? 1 : 0).Send(CMSG_ACTION));
     return 1;
 }
 
@@ -670,6 +712,8 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetLayout", GetLayout, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_AddRoom", AddRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RemoveRoom", RemoveRoom, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StyleRoom", StyleRoom, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetCeilingHidden", SetCeilingHidden, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);

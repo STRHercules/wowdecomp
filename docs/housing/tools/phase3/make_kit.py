@@ -1,10 +1,11 @@
 """Build the room-kit table mod-esteria-housing spawns rooms from, using the retail housing DB2s.
 
-    python -I make_kit.py <tables.json> <community-listfile.csv> <raw dir> <out.tsv>
+    python -I make_kit.py <tables.json> <community-listfile.csv> <raw dir> <out.tsv> [<themes.tsv>]
 
 tables.json comes from ../phase2/dump.py (HouseRoom, RoomWmoData, RoomComponent, RoomComponentOption).
 <raw dir> holds original WMO roots as <fdid>.bin (RetailAssetProbe --extract); each solid wall's MOHD bounding
-box gives its width. Only the Generic theme (HouseTheme 3) is used.
+box gives its width. <out.tsv> is the Generic theme (HouseTheme 3); <themes.tsv> lists the same pieces in the other
+mesh themes (THEMES), only where retail has a different model. Medium/Dark/Light themes are texture swaps, not meshes.
 
 How retail's tables fit together (docs/housing/maps-recon.md, "Phase 3a" findings):
 - A component's MeshStyleFilterID selects RoomComponentOption rows; Type 0 is the solid piece, Type 1 SubType 1
@@ -21,6 +22,7 @@ import sys
 
 KINDS = [1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 14, 15]  # generic single-floor rooms: no stairwells, prefabs or plot
 THEME = 3
+THEMES = [1, 2, 4, 5]  # Folk, Rugged, Bel'ameth, Silvermoon
 
 
 def wall_width(raw, fdid):
@@ -31,7 +33,15 @@ def wall_width(raw, fdid):
     return round(box[4] - box[1], 2)  # walls run along local y
 
 
-def main(tables, listfile, raw, out):
+def options_for(options, theme):
+    option = collections.defaultdict(dict)
+    for o in options.values():
+        if o["Theme"] == theme and o["ModelFileDataID"]:
+            option[o["MeshStyleFilterID"]].setdefault((o["Type"], o["SubType"]), o["ModelFileDataID"])
+    return option
+
+
+def main(tables, listfile, raw, out, themes_out=None):
     t = json.load(open(tables))
     rooms, wmo, comps, options = t["HouseRoom"], t["RoomWmoData"], t["RoomComponent"], t["RoomComponentOption"]
     names = {}
@@ -66,7 +76,28 @@ def main(tables, listfile, raw, out):
                     "x", "y", "z", "rot_deg", "solid", "door", "wide", "door_frame", "wide_frame", "width", "solid_path"])
         w.writerows(rows)
     print(f"{len(rows)} pieces in {len(KINDS)} kinds; {sum(1 for r in rows if r[15])} sockets; skipped {skipped}")
+    if not themes_out:
+        return
+    themed = []
+    by_id = {c["ID"]: c for c in comps.values()}
+    for theme in THEMES:
+        styles_of = options_for(options, theme)
+        for r in rows:
+            c = by_id[r[8]]
+            styles = styles_of[c["MeshStyleFilterID"]]
+            solid = styles.get((0, 0), 0)
+            if not solid or solid == r[14]:
+                continue
+            socket = bool(r[15])
+            models = [styles.get(k, 0) if socket else 0 for k in ((1, 1), (1, 2), (2, 1), (2, 2))]
+            themed.append([r[0], r[8], theme, solid, *models])
+    with open(themes_out, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter="\t", lineterminator="\n")
+        w.writerow(["kind", "piece", "theme", "solid", "door", "wide", "door_frame", "wide_frame"])
+        w.writerows(themed)
+    names_of = {int(k): v["Name_lang"] for k, v in t["HouseTheme"].items()}
+    print(f"{len(themed)} themed pieces in {', '.join(names_of[x] for x in THEMES)}")
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:5])
+    main(*sys.argv[1:6])

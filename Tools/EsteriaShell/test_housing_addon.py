@@ -52,6 +52,11 @@ function EsteriaHousing_BuyPlot() sent[#sent + 1] = { "buy" } return true end
 function EsteriaHousing_EnterPlot() sent[#sent + 1] = { "enter" } return true end
 function EsteriaHousing_AddRoom(...) return log("addroom", ...) end
 function EsteriaHousing_RemoveRoom() return log("removeroom") end
+function EsteriaHousing_StyleRoom(...) return log("styleroom", ...) end
+function EsteriaHousing_SetCeilingHidden(...) return log("ceiling", ...) end
+function EasyMenu(items) lastMenu = items end
+function CloseDropDownMenus() end
+CANCEL = "Cancel"
 function event(name, ...)
   for _, o in ipairs(created) do local f = o._scripts.OnEvent if f then f(o, name, ...) end end
 end
@@ -150,17 +155,28 @@ assert not catcher.IsShown(catcher)
 g.event("ESTERIA_HOUSING_RESULT", 9, 2, 0)
 assert toast() == "That spot is outside your rooms."
 
-# Layout: a free wall's "+" lists the kinds that fit; picking one builds it.
+# Layout: a free wall's "+" opens a menu of the kinds that fit with their prices (too dear: greyed); picking one builds it.
 L.execute('''layout = { maxRooms = 8, originX = 100, originY = 200,
-  kinds = { [1] = { id = 1, name = "Square Room (Small)", sizeX = 23, sizeY = 23 }, [2] = { id = 2, name = "Hallway", sizeX = 23, sizeY = 11 } },
-  rooms = { { kind = 1, x = 0, y = 0, quarter = 0 } },
-  sockets = { { room = 0, piece = 4, x = 12, y = 0, nx = 1, ny = 0, fits = { 1, 2 } } } }''')
+  kinds = { [1] = { id = 1, name = "Square Room (Small)", sizeX = 23, sizeY = 23, price = 250000 },
+            [2] = { id = 2, name = "Hallway", sizeX = 23, sizeY = 11, price = 3000000 } },
+  rooms = { { kind = 1, x = 0, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, ceilingHidden = false } },
+  sockets = { { room = 0, piece = 4, x = 12, y = 0, nx = 1, ny = 0, fits = { 1, 2 } } },
+  themes = { { id = 1, name = "Folk" }, { id = 3, name = "Generic" } } }''')
 click("Layout")
 assert g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and not g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor)
 L.execute('for _, o in ipairs(created) do if o.socket then o._scripts.OnClick(o) end end')
-assert g.EsteriaHousingRoomPicker.IsShown(g.EsteriaHousingRoomPicker)
-L.execute('for _, o in ipairs(created) do if o.kind == 2 and o._shown then o._scripts.OnClick(o) end end')
-assert last() == ["addroom", 0, 4, 2], last()
+items = list(g.lastMenu.values())
+assert items[1].disabled is False and items[2].disabled is True, "the 300 g hallway is out of reach with 200 g"
+items[1].func()
+assert last() == ["addroom", 0, 4, 1], last()
+# A room's menu styles its walls, floor or ceiling and hides the ceiling.
+L.execute('for _, o in ipairs(created) do if o.index == 1 and o.border then o._scripts.OnClick(o) end end')
+items = list(g.lastMenu.values())
+walls = list(items[1].menuList.values())
+walls[0].func()
+assert last() == ["styleroom", 0, 1, 1], last()
+items[4].func()
+assert last() == ["ceiling", 0, True], last()
 
 # A visitor sees only Leave; leaving the house hides everything.
 L.execute('state.isOwner = false')
