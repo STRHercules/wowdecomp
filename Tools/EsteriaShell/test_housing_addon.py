@@ -39,7 +39,9 @@ function EsteriaHousing_GetCatalog() return catalog end
 function EsteriaHousing_GetPlot() return plot end
 function EsteriaHousing_GetLayout() return layout end
 function EsteriaHousing_GetPlayerPosition() return px, py, pz, facing end
-function EsteriaHousing_GetCursorWorld() if cursor then return unpack(cursor) end end
+function EsteriaHousing_GetCursorWorld() if cursor then return cursor[1], cursor[2], cursor[3] end end
+function EsteriaHousing_SetGhost(fdid, yaw) ghost = fdid and { fdid, yaw } or nil end
+function EsteriaHousing_GetGhost() if ghost and cursor then return cursor[1], cursor[2], math.abs(cursor[3] - pz) > 4 and pz or cursor[3] end end
 local function log(...) sent[#sent + 1] = { ... } return state == nil or state.isOwner end
 function EsteriaHousing_Place(...) return log("place", ...) end
 function EsteriaHousing_Move(...) return log("move", ...) end
@@ -108,12 +110,14 @@ assert "none of that" in toast()
 L.execute('for _, o in ipairs(created) do if o.entry and o.entry.decorId == 498 then o._scripts.OnClick(o) end end')
 catcher = g.EsteriaHousingCatcher
 assert catcher.IsShown(catcher)
+assert list(g.ghost.values()) == [111, 270], "the ghost shows the held decor, facing the player"
 catcher._scripts.OnMouseWheel(catcher, 1)  # turn it 15 degrees first
+assert g.ghost[2] == 285
 L.execute('cursor = { 12, 21, -40 }')
 catcher.Click(catcher)
 op, decor, x, y, z, yaw = last()
 assert (op, decor, x, y, z, yaw) == ("place", 498, 12, 21, 5, 285), (op, decor, x, y, z, yaw)
-assert not catcher.IsShown(catcher), "a plain click places one"
+assert not catcher.IsShown(catcher) and g.ghost is None, "a plain click places one and drops the ghost"
 
 # The ack selects the new decor; the selection bar turns, raises, moves and stores it.
 L.execute('state.decor = { { placedId = 7, decorId = 498, x = 12, y = 21, z = 5, yaw = 285 } }; state.placed = 1')

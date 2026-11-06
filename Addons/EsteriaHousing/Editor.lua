@@ -246,8 +246,10 @@ function H.Hold(what, which)
   tool = which or (what and "place")
   if what and not what.yaw then
     local _, _, _, facing = EsteriaHousing_GetPlayerPosition()
-    what.yaw = (facing or 0) + 180 -- face the player
+    what.yaw = math.floor(((facing or 0) + 180) / TURN + 0.5) * TURN -- face the player, on the server's 15 degree snap
   end
+  -- the ghost: a see-through copy under the cursor that the click drops in place
+  if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(what and fdids[what.decorId] or nil, what and what.yaw) end
   if tool then catcher:Show() else catcher:Hide() end
   H.RedrawDecor()
 end
@@ -256,7 +258,9 @@ function H.Drop() H.Hold(nil) end
 
 catcher:SetScript("OnClick", function(self, button)
   if button == "RightButton" then return H.Drop() end
-  local x, y, z = CursorFloor()
+  local x, y, z
+  if holding and EsteriaHousing_GetGhost then x, y, z = EsteriaHousing_GetGhost() end -- exactly where the ghost stands
+  if not x then x, y, z = CursorFloor() end
   if not x then return Toast("Point at the floor.") end
   if tool == "place" then
     if not EsteriaHousing_Place(holding.decorId, x, y, z, holding.yaw) then Toast("You can only edit your own house.") end
@@ -280,6 +284,7 @@ end)
 catcher:SetScript("OnMouseWheel", function(self, delta)
   if holding then
     holding.yaw = holding.yaw + delta * TURN
+    if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(fdids[holding.decorId], holding.yaw) end
   elseif tool == "select" then
     local d = Placed(selected)
     if d then Edit(d, d.x, d.y, d.z, d.yaw + delta * TURN) end

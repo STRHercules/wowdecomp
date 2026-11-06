@@ -12,6 +12,10 @@
 #include "WoW/Source/ObjectMgrClient/ObjectMgrClient.h"
 #include "WoW/Source/UIUtil/Camera.h"
 #include "WoW/Source/Ui/WorldFrame.h"
+#include "WoW/Source/WorldClient/Map.h"
+#include "WoW/Source/WorldClient/World.h"
+#include "Engine/Source/Model2/M2Model.h"
+#include "Engine/Source/Model2/M2Scene.h"
 #include <algorithm>
 #include <cmath>
 #include <cstring>
@@ -90,7 +94,36 @@ bool s_helloDue = false;
 float s_helloWait = 0;
 constexpr float AckTimeout = 5.0f;
 
+// The ghost: a client-only copy of the decor being placed, drawn where the cursor meets the floor (the way the client
+// draws a ground-targeted spell's object, Spell_C_CreateSpellWorldObject).
+struct Ghost {
+    CM2Model* model = nullptr;
+    CMapEntity* entity = nullptr;
+    float yaw = 0;              // radians
+    bool onFloor = false;       // the cursor met the floor this frame
+    C3Vector pos;
+} s_ghost;
+
+void DestroyGhost() {
+    if (s_ghost.entity) World::ObjectDestroy(s_ghost.entity);
+    if (s_ghost.model) s_ghost.model->Release();
+    s_ghost = Ghost{};
+}
+
+int32_t UpdateGhost(void*, uint32_t, uint64_t, uintptr_t) {
+    if (!s_ghost.model) return 1;
+    C44Matrix matrix(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, s_ghost.pos.x, s_ghost.pos.y, s_ghost.pos.z, 1);
+    matrix.RotateAroundZ(s_ghost.yaw);
+    s_ghost.model->m_fFlags |= 0x8000;
+    s_ghost.model->m_worldTransform = matrix;
+    s_ghost.model->m_baseAlpha = s_ghost.onFloor ? 0.7f : 0.0f; // nothing to stand on: hide it
+    return 1;
+}
+
+bool CursorRay(C3Vector& out);
+
 void Reset() {
+    DestroyGhost();
     s_available = false;
     s_catalog.clear();
     s_catalogNext.clear();
@@ -505,8 +538,39 @@ int32_t GetLayout(lua_State* L) {
 
 // x, y, z where the mouse cursor's ray meets terrain or a world model, or nothing.
 int32_t GetCursorWorld(lua_State* L) {
+    C3Vector hit;
+    if (!CursorRay(hit)) return 0;
+    lua_pushnumber(L, hit.x); lua_pushnumber(L, hit.y); lua_pushnumber(L, hit.z);
+    return 3;
+}
+
+// EsteriaHousing_SetGhost(fileDataId, yawDegrees) shows the decor under the cursor; EsteriaHousing_SetGhost() removes it.
+int32_t SetGhost(lua_State* L) {
+    uint32_t const fdid = lua_isnumber(L, 1) ? uint32_t(lua_tonumber(L, 1)) : 0;
+    if (lua_isnumber(L, 2)) s_ghost.yaw = float(lua_tonumber(L, 2) * 3.14159265358979323846 / 180.0);
+    static uint32_t shown = 0;
+    if (!fdid || !s_available) { DestroyGhost(); shown = 0; return 0; }
+    if (s_ghost.model && shown == fdid) return 0; // only the yaw changed
+    float const yaw = s_ghost.yaw;
+    DestroyGhost();
+    s_ghost.yaw = yaw;
+    std::string const path = "retail/" + std::to_string(fdid) + ".m2";
+    s_ghost.model = World::s_m2Scene ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
+    if (s_ghost.model) s_ghost.entity = CMap::ObjectCreate(s_ghost.model, UpdateGhost, nullptr, 0, 0, 10);
+    shown = fdid;
+    return 0;
+}
+
+// x, y, z of the ghost (where a click places it), or nothing when the cursor is off the floor.
+int32_t GetGhost(lua_State* L) {
+    if (!s_ghost.model || !s_ghost.onFloor) return 0;
+    lua_pushnumber(L, s_ghost.pos.x); lua_pushnumber(L, s_ghost.pos.y); lua_pushnumber(L, s_ghost.pos.z);
+    return 3;
+}
+
+bool CursorRay(C3Vector& out) {
     CGWorldFrame* frame = CGWorldFrame::s_currentWorldFrame;
-    if (!frame || !frame->m_camera || !frame->m_simpleTop) return 0;
+    if (!frame || !frame->m_camera || !frame->m_simpleTop) return false;
     float x, y;
     NDCToDDC(frame->m_simpleTop->m_mousePosition.m_x, frame->m_simpleTop->m_mousePosition.m_y, &x, &y);
     // Same projection dance as CGWorldFrame::HitTestPoint: the ray needs the world camera's projection.
@@ -520,9 +584,12 @@ int32_t GetCursorWorld(lua_State* L) {
     bool const found = frame->GetLineSegment(x, y, &start, &end) && frame->HitTest(start, end, 0x3, &hit) != 0;
     device->XformSetProjection(projection);
     device->XformSetView(view);
-    if (!found) return 0;
-    lua_pushnumber(L, hit.m_point.x); lua_pushnumber(L, hit.m_point.y); lua_pushnumber(L, hit.m_point.z);
-    return 3;
+    if (!found) return false;
+    out = hit.m_point;
+    // A ray that slips past the room's floor meets the map's ground plane; keep things at the player's floor then.
+    if (CGPlayer_C* player = ClntObjMgrGetActivePlayerObj())
+        if (std::fabs(out.z - player->GetPosition().z) > 4.0f) out.z = player->GetPosition().z;
+    return true;
 }
 
 class Maps : public WorldScript {
@@ -539,6 +606,7 @@ class Ticks : public ClientScript {
 public:
     Ticks() : ClientScript("HousingTicks") { }
     void OnUpdate(float elapsedSec) override {
+        if (s_ghost.model) s_ghost.onFloor = CursorRay(s_ghost.pos);
         if (s_helloDue && !LoadingScreenDrawing() && ClntObjMgrGetActivePlayerObj() && (s_helloWait += elapsedSec) >= 1.0f) {
             s_helloDue = false;
             SendHello();
@@ -585,6 +653,8 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_AddRoom", AddRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RemoveRoom", RemoveRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_AVAILABLE", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_CATALOG", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_STATE", FRAMESCRIPT_CONTEXTS_GAME);

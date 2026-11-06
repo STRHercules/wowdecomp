@@ -18,7 +18,7 @@ local canvas = CreateFrame("Frame", nil, f)
 canvas:SetSize(CANVAS, CANVAS); canvas:SetPoint("TOP", 0, -44)
 local grid = canvas:CreateTexture(nil, "BACKGROUND"); grid:SetAllPoints(); grid:SetTexture(0.05, 0.08, 0.12, 0.9)
 local north = canvas:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-north:SetPoint("TOPRIGHT", -6, -4); north:SetText("N \226\134\145")
+north:SetPoint("TOPRIGHT", -6, -4); north:SetText("North")
 
 local remove = H.Button(f, "Remove Newest Room", 170, 22)
 remove:SetPoint("BOTTOM", 0, 10)
@@ -138,7 +138,9 @@ function H.RedrawLayout()
     b:Show()
   end
 
-  count:SetText(string.format("Rooms %d / %d", #layout.rooms, layout.maxRooms))
+  count:SetText(#layout.rooms >= layout.maxRooms
+    and string.format("|cffff8040Rooms %d / %d: full. Remove a room to build elsewhere.|r", #layout.rooms, layout.maxRooms)
+    or string.format("Rooms %d / %d", #layout.rooms, layout.maxRooms))
   if #layout.rooms > 1 then remove:Enable() else remove:Disable() end
 
   if chosen then
