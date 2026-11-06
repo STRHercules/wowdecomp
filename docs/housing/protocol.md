@@ -16,6 +16,15 @@
 >   The seq counter is per account and resets on each HELLO.
 > - The client sends one edit at a time and waits for its ack.
 
+> **Phase 5 (2026-11-06): protocol 2.** Three more opcodes, so `NUM_MSG_TYPES` is now 0x542. `HousingWire.h` has
+> the layouts.
+> - `0x53F CMSG_ACTION`: buy the plot whose cornerstone you last clicked, enter it, add a room through a free wall, or
+>   remove the newest room. The server re-checks range (15 yd), money, ownership and fit.
+> - `0x540 SMSG_PLOT`: the plot window's contents. Clicking a cornerstone sends this instead of a gossip menu to
+>   clients that said HELLO with protocol 2; older clients get a gossip line saying they need it.
+> - `0x541 SMSG_LAYOUT`: the owner's blueprint (room kinds, rooms, free walls and the kinds that fit each). It goes with
+>   every `SMSG_STATE` to the owner.
+
 ## Opcode range: 0x537–0x540
 
 Evidence that these are unused:

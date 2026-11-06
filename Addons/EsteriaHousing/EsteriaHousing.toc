@@ -1,6 +1,8 @@
 ## Interface: 30300
 ## Title: Esteria Housing
-## Notes: Phase 1 housing editor. /housing opens it. Needs the wowdecomp client with housingEnabled 1 and an Esteria realm with EsteriaHousing.Enable.
-## Version: 0.1
+## Notes: Plot purchase window and House Editor (decor, room layout). Needs the wowdecomp client with housingEnabled 1 and an Esteria realm with EsteriaHousing.Enable.
+## Version: 0.2
 
-EsteriaHousing.lua
+Editor.lua
+Layout.lua
+Plot.lua
