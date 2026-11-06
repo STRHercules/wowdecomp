@@ -50,7 +50,8 @@ action:SetSize(150, 26); action:SetPoint("BOTTOM", 0, 20)
 local plot, openedAt
 
 StaticPopupDialogs["ESTERIA_HOUSING_BUY_PLOT"] = {
-  text = "Buy plot %s in %s for %s?\n\nA house is built on it right away.",
+  -- StaticPopup_Show formats with two values only, so the whole question arrives as the first
+  text = "%s",
   button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
   OnAccept = function() EsteriaHousing_BuyPlot() end,
 }
@@ -92,7 +93,8 @@ end
 action:SetScript("OnClick", function()
   if not plot then return end
   if plot.status == "sale" then
-    StaticPopup_Show("ESTERIA_HOUSING_BUY_PLOT", plot.plot, plot.neighborhood, GetCoinTextureString(plot.price))
+    StaticPopup_Show("ESTERIA_HOUSING_BUY_PLOT", string.format("Buy plot %d in %s for %s?\n\nA house is built on it right away.",
+      plot.plot, plot.neighborhood, GetCoinTextureString(plot.price)))
   else
     EsteriaHousing_EnterPlot()
     f:Hide()

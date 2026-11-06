@@ -24,7 +24,12 @@ UIParent = W.new("UIParent")
 GameTooltip = W.new("GameTooltip")
 STANDARD_TEXT_FONT = "Fonts\FRIZQT__.TTF"
 UIErrorsFrame = { AddMessage = function(_, m) toasts[#toasts + 1] = m end }
-function StaticPopup_Show(which, ...) shownPopup = which; StaticPopupDialogs[which].OnAccept() end
+-- like the client's: the dialog text is formatted with two values at most, so a third %s errors
+function StaticPopup_Show(which, a1, a2)
+  shownPopup = which
+  popupText = string.format(StaticPopupDialogs[which].text, a1, a2)
+  StaticPopupDialogs[which].OnAccept()
+end
 function StaticPopup_Hide() end
 function GetCoinTextureString(c) return c .. "c" end
 function IsShiftKeyDown() return shift end
@@ -94,6 +99,7 @@ g.event("ESTERIA_HOUSING_PLOT")
 assert g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHousingPlotFrame)
 click("Buy Plot")
 assert g.shownPopup == "ESTERIA_HOUSING_BUY_PLOT" and last() == ["buy"]
+assert "Buy plot 4 in Founder's Point" in g.popupText, g.popupText
 # Bought: the same window now enters the house.
 L.execute('plot.status = "yours"; plot.message = "Welcome home!"')
 g.event("ESTERIA_HOUSING_PLOT")
