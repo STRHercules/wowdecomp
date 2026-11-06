@@ -104,8 +104,8 @@ def main(tables, listfile, raw, out, themes_out=None, stairs_out=None):
     if not stairs_out:
         return
     # Every staircase variant (Type 4 SubType 1-4) in every theme. Measured from the generic models: 1 and 4 close the
-    # floor over the bottom flight (another stairwell above), 2 and 3 leave it open with a railing (the empty stairwell
-    # room above); 3 and 4 reach 6 yd below the floor (a stairwell below).
+    # floor over the bottom flight, 2 and 3 leave it open with a railing (for the flight of a stairwell above); 3 and 4
+    # reach 6 yd below the floor (a stairwell below). In game the open variant under the empty top room read as a hole.
     stairs = []
     for theme in [THEME] + THEMES:
         styles_of = options_for(options, theme)
