@@ -22,6 +22,7 @@ tinsert = table.insert
 YES, NO = "Yes", "No"
 UIParent = W.new("UIParent")
 GameTooltip = W.new("GameTooltip")
+STANDARD_TEXT_FONT = "Fonts\FRIZQT__.TTF"
 UIErrorsFrame = { AddMessage = function(_, m) toasts[#toasts + 1] = m end }
 function StaticPopup_Show(which, ...) shownPopup = which; StaticPopupDialogs[which].OnAccept() end
 function StaticPopup_Hide() end

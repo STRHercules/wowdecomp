@@ -116,7 +116,7 @@ int32_t UpdateGhost(void*, uint32_t, uint64_t, uintptr_t) {
     matrix.RotateAroundZ(s_ghost.yaw);
     s_ghost.model->m_fFlags |= 0x8000;
     s_ghost.model->m_worldTransform = matrix;
-    s_ghost.model->m_baseAlpha = s_ghost.onFloor ? 0.7f : 0.0f; // nothing to stand on: hide it
+    s_ghost.model->m_baseAlpha = 0.7f;
     return 1;
 }
 
@@ -606,7 +606,25 @@ class Ticks : public ClientScript {
 public:
     Ticks() : ClientScript("HousingTicks") { }
     void OnUpdate(float elapsedSec) override {
-        if (s_ghost.model) s_ghost.onFloor = CursorRay(s_ghost.pos);
+        if (s_ghost.model && s_ghost.entity) {
+            s_ghost.onFloor = CursorRay(s_ghost.pos);
+            // Move the map entity too (CGWorldFrame does this for a spell's ground object), or it stays culled at 0,0,0.
+            CAaBox box;
+            box.b = C3Vector(0, 0, 0);
+            box.t = C3Vector(0, 0, 0);
+            CAaSphere sphere;
+            C3Vector center(0, 0, 0);
+            if (s_ghost.model->IsLoaded(0, 0)) {
+                box = s_ghost.model->GetBoundingBox();
+                sphere = s_ghost.model->GetBoundingSphere();
+                center = sphere.c;
+            }
+            C44Matrix matrix;
+            matrix.d0 = s_ghost.pos.x; matrix.d1 = s_ghost.pos.y; matrix.d2 = s_ghost.pos.z;
+            matrix.RotateAroundZ(s_ghost.yaw);
+            CMap::ObjectUpdate(s_ghost.entity, matrix, box, sphere, center, false, 0xFFFFFFFF);
+            World::ObjectSetHidden(s_ghost.entity, !s_ghost.onFloor);
+        }
         if (s_helloDue && !LoadingScreenDrawing() && ClntObjMgrGetActivePlayerObj() && (s_helloWait += elapsedSec) >= 1.0f) {
             s_helloDue = false;
             SendHello();

@@ -8,7 +8,7 @@ EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
 local TURN, ZSTEP, PICK = 15, 0.1, 2.5
-local COLS, ROWS = 3, 4
+local COLS, ROWS, TILE = 4, 5, 64 -- 20 tiles a page
 local RESULT = {
   [1] = "Housing is disabled on this realm.", [2] = "You are not in a house.", [3] = "Only the owner can edit this house.",
   [4] = "Duplicate request ignored.", [5] = "The house changed; resynced. Try again.", [6] = "Unknown decor.",
@@ -68,7 +68,7 @@ leaveButton:SetScript("OnClick", function() EsteriaHousing_Leave() end)
 
 -- ------------------------------------------------------------------------------------------------ decor catalog
 
-local decor = H.Panel("EsteriaHousingDecor", 300, 500)
+local decor = H.Panel("EsteriaHousingDecor", 300, 530)
 decor:SetPoint("RIGHT", -30, 20)
 local decorTitle = decor:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 decorTitle:SetPoint("TOP", 0, -12); decorTitle:SetText("Decor")
@@ -110,16 +110,17 @@ end
 local tiles = {}
 for i = 1, COLS * ROWS do
   local t = CreateFrame("Button", nil, decor)
-  t:SetSize(88, 90)
-  t:SetPoint("TOPLEFT", 12 + ((i - 1) % COLS) * 92, -118 - math.floor((i - 1) / COLS) * 94)
+  t:SetSize(TILE, TILE)
+  t:SetPoint("TOPLEFT", 13 + ((i - 1) % COLS) * (TILE + 5), -116 - math.floor((i - 1) / COLS) * (TILE + 5))
   t.bg = t:CreateTexture(nil, "BACKGROUND"); t.bg:SetAllPoints(); t.bg:SetTexture(0, 0, 0, 0.45)
   t:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
   t.model = CreateFrame("Model", nil, t)
-  t.model:SetPoint("TOPLEFT", 2, -2); t.model:SetPoint("BOTTOMRIGHT", -2, 22)
+  t.model:SetPoint("TOPLEFT", 2, -2); t.model:SetPoint("BOTTOMRIGHT", -2, 13)
   t.name = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  t.name:SetPoint("BOTTOMLEFT", 3, 3); t.name:SetPoint("BOTTOMRIGHT", -3, 3); t.name:SetHeight(20)
-  t.count = t:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
-  t.count:SetPoint("TOPRIGHT", -4, -4)
+  t.name:SetFont(STANDARD_TEXT_FONT, 9)
+  t.name:SetPoint("BOTTOMLEFT", 2, 2); t.name:SetPoint("BOTTOMRIGHT", -2, 2); t.name:SetHeight(11)
+  t.count = t:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
+  t.count:SetPoint("TOPRIGHT", -3, -3)
   t:SetScript("OnClick", function(self)
     if not self.entry then return end
     if self.entry.available < 1 then return Toast("You have none of that left to place.") end
@@ -137,11 +138,11 @@ for i = 1, COLS * ROWS do
   tiles[i] = t
 end
 
-local prev = H.Button(decor, "<", 28, 22); prev:SetPoint("BOTTOMLEFT", 14, 44)
-local nextButton = H.Button(decor, ">", 28, 22); nextButton:SetPoint("BOTTOMRIGHT", -14, 44)
+local prev = H.Button(decor, "<", 28, 20); prev:SetPoint("BOTTOMLEFT", 14, 42)
+local nextButton = H.Button(decor, ">", 28, 20); nextButton:SetPoint("BOTTOMRIGHT", -14, 42)
 local pageText = decor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-pageText:SetPoint("BOTTOM", 0, 50)
-local selectButton = H.Button(decor, "Select Placed Decor", 180, 24); selectButton:SetPoint("BOTTOM", 0, 14)
+pageText:SetPoint("BOTTOM", 0, 46)
+local selectButton = H.Button(decor, "Select Placed Decor", 180, 22); selectButton:SetPoint("BOTTOM", 0, 12)
 selectButton:SetScript("OnClick", function() if tool == "select" then H.Drop() else H.Hold(nil, "select") end end)
 
 local function Filtered()
