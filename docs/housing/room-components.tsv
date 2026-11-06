@@ -1,0 +1,250 @@
+HouseRoomID	Room	HouseRoomFlags	RoomWmoDataID	BBox	ComponentID	Type	ConnectionType	MeshStyleFilterID	OffsetPos	OffsetRotDeg	ModelFileDataID	Path
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	25	2	1	7	0.000,0.000,0.000	0.0,0.0,0.0	6431804	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_floor_0_0_generic01.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	26	1	1	6	-12.000,0.000,0.000	0.0,0.0,0.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	27	1	1	6	0.000,12.000,0.000	0.0,0.0,90.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	28	1	1	6	0.000,-12.000,0.000	0.0,0.0,-90.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	29	1	1	6	12.000,0.000,0.000	0.0,0.0,-180.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	30	1	1	46	-11.495,11.500,0.000	0.0,0.0,-90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	31	1	1	46	11.500,11.500,0.000	0.0,0.0,0.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	32	1	1	46	11.495,-11.500,0.000	0.0,0.0,90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	33	1	1	46	-11.500,-11.495,0.000	0.0,0.0,-180.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+1	Square Room (Small)	4	5	-11.51,-11.51,-0.00,11.51,11.51,11.00	64	3	1	8	0.000,0.000,7.000	0.0,0.0,0.0	6431786	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_ceiling_0_0_generic01.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	45	2	1	21	0.000,0.000,0.000	0.0,0.0,0.0	6431797	world/wmo/expansion11/playerhousing/room/12ph_hallway_floor_0_0_generic01.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	46	1	1	3	-12.000,0.000,0.000	0.0,0.0,0.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	47	1	1	3	12.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	48	1	0	6	0.000,6.000,0.000	0.0,0.0,90.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	49	1	0	6	0.000,-6.000,0.000	0.0,0.0,-90.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+2	Hallway	4	7	-11.50,-5.50,-0.00,11.50,5.50,7.00	50	3	1	22	0.000,0.000,7.000	0.0,0.0,0.0	6431776	world/wmo/expansion11/playerhousing/room/12ph_hallway_ceiling_0_0_generic01.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	19	2	1	43	0.000,0.000,0.000	0.0,0.0,0.0	6431795	world/wmo/expansion11/playerhousing/room/12ph_generic_floor_0_0_multitheme01.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	20	1	1	3	-3.000,0.000,0.000	0.0,0.0,0.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	21	1	1	3	3.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	22	1	0	20	0.000,6.000,0.000	0.0,0.0,90.0	6431824	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme17.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	23	1	0	20	0.000,-6.000,0.000	0.0,0.0,-90.0	6431824	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme17.wmo
+3	Closet	4	4	-2.50,-5.50,-0.00,2.50,5.50,7.00	24	3	1	44	0.000,0.000,7.000	0.0,0.0,0.0	6431774	world/wmo/expansion11/playerhousing/room/12ph_generic_ceiling_0_0_multitheme06.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	135	2	1	15	0.000,0.000,0.000	0.0,0.0,0.0	6431808	world/wmo/expansion11/playerhousing/room/12ph_t-shaped_room_floor_0_0_generic01.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	136	1	0	6	-6.000,0.000,0.000	0.0,0.0,0.0	6431855	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme01.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	137	1	1	3	0.000,12.000,0.000	0.0,0.0,90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	138	1	1	3	12.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	139	1	1	3	0.000,-12.000,0.000	0.0,0.0,-90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	140	1	0	23	9.000,9.000,0.000	0.0,0.0,0.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	141	1	0	23	9.000,-9.000,0.000	0.0,0.0,90.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+6	T-Shaped Room	4	162	-5.50,-11.50,-0.00,11.50,11.50,7.00	142	3	1	16	0.000,0.000,7.000	0.0,0.0,0.0	6431793	world/wmo/expansion11/playerhousing/room/12ph_t-shaped_room_ceiling_0_0_generic01.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	13	2	1	4	0.000,0.000,0.000	0.0,0.0,0.0	6431805	world/wmo/expansion11/playerhousing/room/12ph_square_room_tiny_floor_0_0_generic01.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	14	1	1	3	-6.000,0.000,0.000	0.0,0.0,0.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	15	1	1	3	0.000,6.000,0.000	0.0,0.0,90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	16	1	1	3	6.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	17	1	1	3	0.000,-6.000,0.000	0.0,0.0,-90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+7	Square Room (Tiny)	4	3	-5.50,-5.50,-0.00,5.50,5.50,7.00	18	3	1	5	0.000,0.000,7.000	0.0,0.0,0.0	6431787	world/wmo/expansion11/playerhousing/room/12ph_square_room_tiny_ceiling_0_0_generic01.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	143	2	1	17	0.000,0.000,0.000	0.0,0.0,0.0	6431798	world/wmo/expansion11/playerhousing/room/12ph_l-shaped_room_floor_0_0_generic01.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	144	1	0	24	3.500,3.500,0.000	0.0,0.0,-90.0	6431840	world/wmo/expansion11/playerhousing/room/12ph_l-shaped_room_wall_0_0_generic01.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	145	1	0	23	9.000,9.000,0.000	0.0,0.0,0.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	146	1	1	3	0.000,12.000,0.000	0.0,0.0,90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	147	1	1	3	12.000,0.000,0.000	0.0,0.0,180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+8	L-Shaped Room	4	163	-5.50,-5.50,-0.00,11.50,11.50,7.00	148	3	1	18	0.000,0.000,7.000	0.0,0.0,0.0	6431777	world/wmo/expansion11/playerhousing/room/12ph_l-shaped_room_ceiling_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	159	2	1	32	0.000,0.000,0.000	0.0,0.0,0.0	6431800	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_floor_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	160	1	0	38	-12.374,-12.400,0.000	0.0,0.0,-45.0	6431853	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	161	1	0	38	12.374,-12.400,0.000	0.0,0.0,-135.0	6431853	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	162	1	0	38	12.374,12.400,0.000	0.0,0.0,135.0	6431853	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	163	1	0	38	-12.374,12.400,0.000	0.0,0.0,45.0	6431853	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic01.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	164	1	1	35	-18.000,0.000,0.000	0.0,0.0,0.0	6431847	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic02.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	165	1	1	35	18.000,0.000,0.000	0.0,0.0,-180.0	6431847	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic02.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	166	1	1	35	0.000,-18.000,0.000	0.0,0.0,-90.0	6431847	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic02.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	167	1	1	35	0.000,18.000,0.000	0.0,0.0,90.0	6431847	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_wall_0_0_generic02.wmo
+9	Octagon Room (Medium)	4	165	-18.20,-18.20,-0.00,18.20,18.20,11.00	168	3	1	41	0.000,0.000,7.000	0.0,0.0,0.0	6431779	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_medium_ceiling_0_0_generic01.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	51	2	1	27	-0.000,0.000,0.000	0.0,0.0,0.0	6431804	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_floor_0_0_generic01.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	52	1	1	25	-12.000,0.000,0.000	0.0,0.0,0.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	53	1	0	25	-0.000,12.000,0.000	0.0,0.0,90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	54	1	0	25	12.000,0.000,0.000	0.0,0.0,-180.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	55	1	0	25	-0.000,-12.000,0.000	0.0,0.0,-90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	56	4	1	28	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+10	Stairwell (Left)	6	8	-11.50,-11.50,-1.00,11.50,11.50,14.00	57	3	1	26	-0.000,0.000,12.000	0.0,0.0,0.0	6431786	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_ceiling_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	115	2	1	10	0.000,0.000,0.000	0.0,0.0,0.0	6431803	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_floor_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	116	1	1	9	-18.000,0.000,0.000	0.0,0.0,0.0	6431842	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_wall_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	117	1	1	9	0.000,18.000,0.000	0.0,0.0,90.0	6431842	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_wall_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	118	1	1	9	18.000,0.000,0.000	0.0,0.0,-180.0	6431842	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_wall_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	119	1	1	9	0.000,-18.000,0.000	0.0,0.0,-90.0	6431842	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_wall_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	120	3	1	11	0.000,0.000,7.000	0.0,0.0,0.0	6431785	world/wmo/expansion11/playerhousing/room/12ph_square_room_medium_ceiling_0_0_generic01.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	121	1	1	46	-17.500,-17.495,0.000	0.0,0.0,-180.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	122	1	1	46	-17.500,17.495,0.000	0.0,0.0,-90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	123	1	1	46	17.500,17.500,0.000	0.0,0.0,0.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+11	Square Room (Medium)	0	160	-17.51,-17.51,-0.00,17.51,17.50,11.00	124	1	1	46	17.495,-17.500,0.000	0.0,0.0,90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	35	2	1	13	0.000,0.000,0.000	0.0,0.0,0.0	6431802	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_floor_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	36	1	1	12	-24.000,0.000,0.000	0.0,0.0,0.0	6431839	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_wall_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	37	1	1	12	0.000,24.000,0.000	0.0,0.0,90.0	6431839	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_wall_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	38	1	1	12	24.000,0.000,0.000	0.0,0.0,-180.0	6431839	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_wall_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	39	1	1	12	0.000,-24.000,0.000	0.0,0.0,-90.0	6431839	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_wall_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	40	3	1	14	0.000,0.000,7.000	0.0,0.0,0.0	6431784	world/wmo/expansion11/playerhousing/room/12ph_square_room_large_ceiling_0_0_generic01.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	41	1	1	46	-23.495,23.500,0.000	0.0,0.0,-90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	42	1	1	46	23.500,23.500,0.000	0.0,0.0,0.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	43	1	1	46	23.495,-23.500,0.000	0.0,0.0,90.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+12	Square Room (Large)	0	6	-23.51,-23.51,-0.00,23.51,23.51,11.00	44	1	1	46	-23.500,-23.495,0.000	0.0,0.0,180.0	6431794	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme06.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	125	1	1	3	-12.000,0.000,0.000	0.0,0.0,0.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	126	1	1	3	0.000,12.000,0.000	0.0,0.0,90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	127	1	1	3	12.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	128	1	0	23	9.000,9.000,0.000	0.0,0.0,0.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	129	1	0	23	-9.000,9.000,0.000	0.0,0.0,-90.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	130	2	1	29	0.000,0.000,0.000	0.0,0.0,0.0	6431796	world/wmo/expansion11/playerhousing/room/12ph_cross-shaped_room_floor_0_0_generic01.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	131	1	1	3	0.000,-12.000,0.000	0.0,0.0,-90.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	132	1	0	23	9.000,-9.000,0.000	0.0,0.0,90.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	133	1	0	23	-9.000,-9.000,0.000	0.0,0.0,180.0	6431841	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme22.wmo
+13	Cross-Shaped Room	4	161	-11.50,-11.50,-0.00,11.50,11.50,7.00	134	3	1	30	0.000,0.000,7.000	0.0,0.0,0.0	6431775	world/wmo/expansion11/playerhousing/room/12ph_cross-shaped_room_ceiling_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	149	2	1	31	0.000,0.000,0.000	0.0,0.0,0.0	6431801	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_floor_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	150	1	0	37	8.132,-8.100,0.000	0.0,0.0,-135.0	6431854	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	151	1	0	37	-8.132,-8.100,0.000	0.0,0.0,-45.0	6431854	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	152	1	0	37	8.132,8.100,0.000	0.0,0.0,135.0	6431854	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	153	1	0	37	-8.132,8.100,0.000	0.0,0.0,45.0	6431854	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic01.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	154	1	1	34	0.000,12.000,0.000	0.0,0.0,90.0	6431848	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic02.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	155	1	1	34	11.993,0.000,0.000	0.0,0.0,-180.0	6431848	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic02.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	156	1	1	34	0.000,-12.000,0.000	0.0,0.0,-90.0	6431848	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic02.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	157	1	1	34	-12.000,0.000,0.000	0.0,0.0,0.0	6431848	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_wall_0_0_generic02.wmo
+14	Octagon Room (Small)	4	164	-12.14,-12.14,-0.00,12.14,12.14,11.00	158	3	1	40	0.000,0.000,7.000	0.0,0.0,0.0	6431780	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_small_ceiling_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	169	2	1	33	0.000,0.000,0.000	0.0,0.0,0.0	6431799	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_floor_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	170	1	0	39	-16.617,-16.600,0.000	0.0,0.0,-45.0	6431852	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	171	1	0	39	16.617,-16.600,0.000	0.0,0.0,-135.0	6431852	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	172	1	0	39	16.617,16.600,0.000	0.0,0.0,135.0	6431852	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	173	1	0	39	-16.617,16.600,0.000	0.0,0.0,45.0	6431852	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic01.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	174	1	1	36	0.000,24.000,0.000	0.0,0.0,90.0	6431846	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic02.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	175	1	1	36	24.000,0.000,0.000	0.0,0.0,-180.0	6431846	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic02.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	176	1	1	36	0.000,-24.000,0.000	0.0,0.0,-90.0	6431846	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic02.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	177	1	1	36	-24.000,0.000,0.000	0.0,0.0,0.0	6431846	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_wall_0_0_generic02.wmo
+15	Octagon Room (Large)	0	166	-24.14,-24.14,-0.00,24.14,24.14,11.00	178	3	1	42	0.000,0.000,7.000	0.0,0.0,0.0	6431778	world/wmo/expansion11/playerhousing/room/12ph_octagon_room_large_ceiling_0_0_generic01.wmo
+18	Base Plot Medium	5	172	-35.00,-30.00,-1.00,35.00,30.00,125.00	196	2	1	48	0.000,0.000,0.000	0.0,0.0,0.0	6322976	world/wmo/expansion11/playerhousing/room/12ph_base_plot_medium_floor_0_0_rugged01.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	201	3	1	44	0.000,0.000,7.000	0.0,0.0,0.0	6431774	world/wmo/expansion11/playerhousing/room/12ph_generic_ceiling_0_0_multitheme06.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	202	2	1	43	0.000,0.000,0.000	0.0,0.0,0.0	6431795	world/wmo/expansion11/playerhousing/room/12ph_generic_floor_0_0_multitheme01.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	203	1	0	20	0.000,6.000,0.000	0.0,0.0,90.0	6431824	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme17.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	204	1	0	20	0.000,-6.000,0.000	0.0,0.0,-90.0	6431824	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme17.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	205	1	0	3	-3.000,0.000,0.000	0.0,0.0,0.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+46	Entry	5	177	-2.50,-5.50,-0.00,2.50,5.50,7.00	206	1	1	3	3.000,0.000,0.000	0.0,0.0,-180.0	6431837	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme12.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	210	3	1	26	-0.000,0.000,12.000	0.0,0.0,0.0	6431786	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_ceiling_0_0_generic01.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	211	2	1	27	-0.000,0.000,0.000	0.0,0.0,0.0	6431804	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_floor_0_0_generic01.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	212	1	1	25	-12.000,0.000,0.000	0.0,0.0,0.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	213	1	1	25	-0.000,12.000,0.000	0.0,0.0,90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	214	1	1	25	12.000,0.000,0.000	0.0,0.0,-180.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+48	Stairwell Room (Empty)	6	179	-11.50,-11.50,-0.00,11.50,11.50,14.00	215	1	1	25	-0.000,-12.000,0.000	0.0,0.0,-90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	216	3	1	26	-0.000,0.000,12.000	0.0,0.0,0.0	6431786	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_ceiling_0_0_generic01.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	217	2	1	27	-0.000,0.000,0.000	0.0,0.0,0.0	6431804	world/wmo/expansion11/playerhousing/room/12ph_square_room_small_floor_0_0_generic01.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	218	4	1	52	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	219	1	1	25	-12.000,0.000,0.000	0.0,0.0,0.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	220	1	0	25	-0.000,12.000,0.000	0.0,0.0,90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	221	1	0	25	12.000,0.000,0.000	0.0,0.0,-180.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+50	Stairwell (Right)	6	180	-11.50,-11.50,-1.00,11.50,11.50,14.00	222	1	0	25	-0.000,-12.000,0.000	0.0,0.0,-90.0	6431857	world/wmo/expansion11/playerhousing/room/12ph_generic_wall_0_0_multitheme27.wmo
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	272	1	0	122	23.210,0.307,0.475	0.0,0.0,0.0	7112578	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_l01_wall_2_0_rugged01.wmo
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	273	1	0	124	0.000,0.000,0.475	0.0,0.0,0.0	7112576	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_l01_wall_0_0_rugged01.wmo
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	274	3	0	121	0.000,0.000,0.475	0.0,0.0,0.0	7112575	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_l01_ceiling_0_1_rugged01.wmo
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	275	2	0	123	0.000,0.000,0.475	0.0,0.0,0.0	7112577	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_l01_floor_0_0_rugged01.wmo
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	722	7	1	51	23.210,0.307,0.475	0.0,0.0,0.0	0	
+132	Orgrimmar Council Room	8	202	-24.43,-23.84,-1.40,24.06,23.83,33.42	723	1	1	122	23.210,0.307,0.000	0.0,0.0,180.0	0	
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	290	3	0	129	-0.054,0.000,0.000	0.0,0.0,0.0	7284247	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_s01_ceiling_0_1_rugged01.wmo
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	291	1	0	130	-9.754,0.000,0.000	0.0,0.0,0.0	7284248	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_s01_wall_0_0_rugged02.wmo
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	292	2	0	131	-0.054,0.000,0.000	0.0,0.0,0.0	7284249	world/wmo/expansion11/playerhousing/room/12ph_full_layout_rugged_prefab_s01_floor_0_0_rugged01.wmo
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	293	1	0	132	-0.054,0.000,0.000	0.0,0.0,0.0	0	
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	515	7	1	51	-9.754,0.000,0.000	0.0,0.0,0.0	0	
+151	Orgrimmar Stone Pit Room	8	219	-12.01,-11.75,-0.74,11.57,11.69,17.70	516	1	1	130	-9.754,0.000,0.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	307	3	0	65	0.244,0.014,0.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	308	1	0	66	23.180,0.066,0.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	309	2	0	67	-0.450,0.000,0.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	310	1	0	68	0.140,0.014,0.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	311	7	1	51	22.900,0.100,9.000	0.0,0.0,0.0	0	
+223	Daylight Circle Room	8	233	-24.11,-24.82,-1.13,24.11,24.82,63.00	315	1	1	66	22.900,0.100,0.000	0.0,0.0,180.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	330	3	0	69	0.244,0.014,0.000	0.0,0.0,0.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	331	1	0	70	23.180,0.066,0.000	0.0,0.0,0.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	332	2	0	71	-0.450,0.000,0.000	0.0,0.0,0.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	333	1	0	72	0.140,0.014,0.000	0.0,0.0,0.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	335	7	1	51	22.900,0.100,0.000	0.0,0.0,0.0	0	
+233	Evening Circle Room	8	255	-24.11,-24.82,-1.13,24.11,24.82,63.00	336	1	1	70	22.900,0.100,0.000	0.0,0.0,180.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	378	3	0	73	-0.002,0.001,0.000	0.0,0.0,0.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	379	1	0	74	17.508,0.001,0.000	0.0,0.0,0.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	380	2	0	75	-0.002,0.001,0.000	0.0,0.0,0.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	381	1	0	76	-0.002,0.001,0.000	0.0,0.0,0.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	382	7	1	51	17.508,0.001,0.000	0.0,0.0,0.0	0	
+273	Stormwind Armory	8	305	-17.59,-17.78,-0.85,18.42,18.78,11.81	383	1	1	74	17.508,1.001,0.000	0.0,0.0,180.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	410	3	0	77	0.053,0.000,0.000	0.0,0.0,0.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	411	7	1	51	12.051,0.000,0.000	0.0,0.0,0.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	412	1	1	78	11.120,0.000,0.000	0.0,0.0,180.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	413	1	0	78	12.051,0.000,0.000	0.0,0.0,0.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	414	2	0	79	0.089,0.000,0.000	0.0,0.0,0.0	0	
+277	Stormwind Kitchen	8	326	-11.52,-11.58,-0.78,12.45,11.58,10.19	415	1	0	80	0.053,0.000,0.000	0.0,0.0,0.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	427	3	0	81	-0.031,0.000,0.000	0.0,0.0,0.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	428	7	1	51	11.475,0.004,0.000	0.0,0.0,0.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	429	1	1	82	11.475,0.004,0.000	0.0,0.0,180.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	430	1	0	82	11.475,0.004,0.000	0.0,0.0,0.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	431	2	0	83	-0.031,0.000,0.000	0.0,0.0,0.0	0	
+281	Stormwind Display Room	8	328	-11.55,-11.56,-0.10,12.37,11.56,7.29	432	1	0	84	-0.031,0.000,0.000	0.0,0.0,0.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	440	3	0	85	-4.581,0.000,0.000	0.0,0.0,0.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	441	7	1	51	19.278,0.000,0.000	0.0,0.0,180.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	442	1	1	86	19.278,0.000,0.000	0.0,0.0,180.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	443	1	0	86	19.278,0.000,0.000	0.0,0.0,180.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	444	2	0	87	-4.581,0.000,0.000	0.0,0.0,0.0	0	
+282	Stormwind Grand Hall	8	336	-27.25,-22.51,-0.91,19.89,22.51,11.31	445	1	0	88	-4.581,0.000,0.000	0.0,0.0,0.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	446	3	0	89	0.029,0.000,0.000	0.0,0.0,0.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	447	7	1	51	17.526,0.073,0.000	0.0,0.0,0.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	448	1	1	90	17.526,0.073,0.000	0.0,0.0,180.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	449	1	0	90	17.526,0.073,0.000	0.0,0.0,0.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	450	2	0	91	0.029,0.000,0.000	0.0,0.0,0.0	0	
+283	Silvermoon Armory	8	337	-17.09,-17.12,-0.09,18.81,17.12,12.88	451	1	0	92	0.029,0.000,0.000	0.0,0.0,0.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	466	3	0	97	-0.590,0.000,0.000	0.0,0.0,0.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	467	7	1	51	23.252,0.000,0.000	0.0,0.0,0.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	468	1	1	98	23.252,0.000,0.000	0.0,0.0,180.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	469	1	0	98	23.252,0.000,0.000	0.0,0.0,0.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	470	2	0	99	-0.590,0.000,0.000	0.0,0.0,0.0	0	
+285	Silvermoon Lofty Study	8	345	-24.41,-23.87,-0.33,24.41,23.87,30.63	471	1	0	100	-0.590,0.000,0.000	0.0,0.0,0.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	472	7	1	51	11.843,0.000,0.000	0.0,0.0,0.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	473	1	1	101	11.643,0.000,0.000	0.0,0.0,180.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	474	1	0	101	11.843,0.000,0.000	0.0,0.0,0.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	475	2	0	102	0.243,0.000,0.000	0.0,0.0,0.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	476	3	0	103	0.243,0.000,0.000	0.0,0.0,0.0	0	
+286	Silvermoon Display Room	8	346	-11.79,-11.70,-0.06,13.13,11.70,13.52	477	1	0	104	0.243,0.000,0.000	0.0,0.0,0.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	478	3	0	105	0.195,-0.069,0.000	0.0,0.0,0.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	479	7	1	51	24.261,-0.069,0.000	0.0,0.0,0.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	480	1	1	106	24.261,-0.069,0.000	0.0,0.0,180.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	481	1	0	106	24.261,-0.069,0.000	0.0,0.0,0.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	482	2	0	107	0.195,-0.069,0.000	0.0,0.0,0.0	0	
+287	Bel'ameth Temple Room	8	347	-23.81,-23.32,-0.65,25.36,23.18,24.37	483	1	0	108	0.195,-0.069,0.000	0.0,0.0,0.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	484	7	1	51	17.513,0.000,0.000	0.0,0.0,0.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	485	1	1	109	17.513,0.000,0.000	0.0,0.0,180.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	486	1	0	109	17.513,0.000,0.000	0.0,0.0,0.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	487	3	0	110	0.018,0.000,0.000	0.0,0.0,0.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	488	2	0	111	0.018,0.000,0.000	0.0,0.0,0.0	0	
+288	Bel'ameth Meeting Room	8	348	-17.44,-16.93,-0.38,18.72,16.93,17.75	489	1	0	112	0.018,0.000,0.000	0.0,0.0,0.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	490	7	1	51	11.509,0.000,0.000	0.0,0.0,0.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	491	1	1	113	11.509,0.000,0.000	0.0,0.0,180.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	492	1	0	113	11.509,0.000,0.000	0.0,0.0,0.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	493	2	0	114	0.014,0.000,0.000	0.0,0.0,0.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	494	3	0	115	0.014,0.000,0.000	0.0,0.0,0.0	0	
+289	Bel'ameth Theater	8	349	-11.48,-11.56,-0.09,12.72,11.56,16.85	495	1	0	116	0.014,0.000,0.000	0.0,0.0,0.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	496	7	1	51	11.696,-0.069,0.000	0.0,0.0,0.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	497	1	1	117	11.696,-0.069,0.000	0.0,0.0,180.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	498	1	0	117	11.696,-0.069,0.000	0.0,0.0,0.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	499	3	0	118	0.274,-0.069,0.000	0.0,0.0,0.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	500	2	0	119	0.274,-0.069,0.000	0.0,0.0,0.0	0	
+290	Bel'ameth Nestled Bedroom	8	350	-11.69,-11.92,-0.06,12.90,11.78,14.38	501	1	0	120	0.274,-0.069,0.000	0.0,0.0,0.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	508	3	0	125	0.189,0.000,0.000	0.0,0.0,0.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	509	7	1	51	17.171,0.000,0.000	0.0,0.0,0.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	510	1	1	126	17.171,0.000,0.000	0.0,0.0,180.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	511	1	0	126	17.171,0.000,0.000	0.0,0.0,0.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	512	2	0	127	0.189,0.000,0.000	0.0,0.0,0.0	0	
+292	Orgrimmar Theater	8	352	-18.33,-18.46,-0.40,18.72,18.43,19.21	513	1	0	128	0.189,0.000,0.000	0.0,0.0,0.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	520	3	0	133	0.212,0.000,0.000	0.0,0.0,0.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	521	7	1	51	10.227,0.007,0.000	0.0,0.0,-180.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	522	1	1	134	10.227,0.007,0.000	0.0,0.0,180.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	523	1	0	134	10.227,0.007,0.000	0.0,0.0,-180.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	524	2	0	135	0.212,0.000,0.000	0.0,0.0,0.0	0	
+294	Orgrimmar Display Room	8	353	-11.55,-11.63,-0.21,11.90,11.71,16.35	525	1	0	136	0.212,0.000,0.000	0.0,0.0,0.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	586	3	0	149	0.135,0.000,0.000	0.0,0.0,0.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	587	7	1	51	11.551,0.000,0.000	0.0,0.0,0.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	588	1	1	150	11.551,0.000,0.000	0.0,0.0,180.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	589	1	0	150	11.551,0.000,0.000	0.0,0.0,0.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	590	2	0	151	0.135,0.000,0.000	0.0,0.0,0.0	0	
+307	Silvermoon Small Study	8	371	-11.65,-11.70,-0.13,12.84,11.70,13.45	591	1	0	152	0.135,0.000,0.000	0.0,0.0,0.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	764	3	0	153	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	765	7	1	51	27.912,0.010,0.000	0.0,0.0,0.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	766	1	1	154	27.912,0.010,0.000	0.0,0.0,180.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	767	1	0	154	27.912,0.010,0.000	0.0,0.0,0.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	768	2	0	155	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+400	Autumnal Westfall Barn	8	378	-15.53,-24.06,-0.73,28.99,19.29,27.22	769	1	0	156	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	770	3	0	157	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	771	7	1	51	27.893,0.010,0.000	0.0,0.0,0.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	772	1	1	158	27.893,0.010,0.000	0.0,0.0,180.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	773	1	0	158	27.893,0.010,0.000	0.0,0.0,0.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	774	2	0	159	-0.000,0.000,0.000	0.0,0.0,0.0	0	
+401	Springtime Westfall Barn	8	379	-15.53,-24.06,-0.73,28.97,19.29,27.22	775	1	0	160	-0.000,0.000,0.000	0.0,0.0,0.0	0	

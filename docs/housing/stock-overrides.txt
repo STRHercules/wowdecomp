@@ -1,0 +1,99 @@
+world\azeroth\duskwood\passivedoodads\coffin\coffin.m2
+world\azeroth\duskwood\passivedoodads\coffinlid\coffinlid.m2
+world\expansion01\doodads\generic\ancientorc\banners\ao_banner02.m2
+world\expansion01\doodads\generic\arakkoa\ak_alchemybottle01.m2
+world\expansion01\doodads\generic\arakkoa\ak_alchemybottle02.m2
+world\expansion01\doodads\generic\arakkoa\scarecrow\ak_scarecrow01.m2
+world\expansion01\doodads\generic\bloodelf\bottles\be_bottle04.m2
+world\expansion01\doodads\generic\draenei\banner\dr_banner01.m2
+world\expansion01\doodads\generic\draenei\blacksmith\dr_anvil_01.m2
+world\expansion01\doodads\generic\draenei\cups\dr_cup_02.m2
+world\expansion01\doodads\generic\draenei\holo\dr_draenei_holorunes01.m2
+world\expansion01\doodads\generic\draenei\holo\dr_draenei_holorunes02.m2
+world\expansion01\doodads\generic\draenei\holo\dr_draenei_holorunes03.m2
+world\expansion01\doodads\generic\draenei\holographicstand\dr_holographic_stand.m2
+world\expansion01\doodads\generic\draenei\knickknacks\dr_cryopod_intact2.m2
+world\expansion01\doodads\generic\draenei\loom\dr_loom_01.m2
+world\expansion01\doodads\generic\draenei\machines\dr_machineparts01.m2
+world\expansion01\doodads\generic\draenei\mailbox\dalaranpostbox.m2
+world\expansion01\doodads\generic\draenei\posters\dr_signs_wanted.m2
+world\expansion01\doodads\generic\draenei\tables\dr_table_medium_01.m2
+world\expansion01\doodads\generic\ethereal\barrel\et_barrel01.m2
+world\expansion01\doodads\generic\ethereal\barrel\et_barrel01off.m2
+world\expansion01\doodads\generic\ethereal\collector\et_collector01.m2
+world\expansion01\doodads\generic\ethereal\crate\et_crate01.m2
+world\expansion01\doodads\generic\ethereal\crate\et_crate01off.m2
+world\expansion01\doodads\generic\ethereal\standard\et_standard.m2
+world\expansion01\doodads\generic\shadowcouncil\torch\shadowcouncil_torch.m2
+world\expansion01\doodads\shattrath\passivedoodads\bookshelf\ancient_d_bookshelf.m2
+world\expansion01\doodads\shattrath\passivedoodads\lighting\ancient_d_sconce.m2
+world\expansion01\doodads\shattrath\passivedoodads\lighting\ancient_d_standing_light.m2
+world\expansion01\doodads\theexodar\passivedoodads\clothobjects\exodar_wide_banner.m2
+world\expansion01\doodads\zangar\lamp\zangarlamppost01.m2
+world\expansion01\doodads\zangar\mushroom\zangarmushroom05.m2
+world\expansion01\doodads\zangar\mushroom\zangarmushroomshelf01.m2
+world\expansion01\doodads\zangar\mushroom\zangarmushroomtree06.m2
+world\expansion01\doodads\zangar\mushroom\zangarmushroomwater02.m2
+world\expansion01\doodads\zangar\mushroom\zangarmushroomwater03.m2
+world\expansion01\doodads\zangar\mushroomtrees\zangartreeblue03.m2
+world\expansion01\doodads\zangar\mushroomtrees\zangartreegreen03.m2
+world\expansion01\doodads\zangar\mushroomtrees\zangartreepurple03.m2
+world\expansion01\doodads\zangar\mushroomtrees\zangartreewithered01.m2
+world\expansion01\doodads\zangar\mushroomtrees\zangartreewithered02.m2
+world\expansion01\doodads\zangar\plantgroups\zangarplantgroup01.m2
+world\expansion02\doodads\dalaran\dalaran_aquarium_01.m2
+world\expansion02\doodads\dalaran\dalaran_banner_02.m2
+world\expansion02\doodads\dalaran\dalaran_bannerwall_02.m2
+world\expansion02\doodads\dalaran\dalaran_bench01.m2
+world\expansion02\doodads\dalaran\dalaran_bookcase_empty_01.m2
+world\expansion02\doodads\dalaran\dalaran_crate_03.m2
+world\expansion02\doodads\dalaran\dalaran_eye_01.m2
+world\expansion02\doodads\dalaran\dalaran_forsale_01.m2
+world\expansion02\doodads\dalaran\dalaran_sconce_indoor_03.m2
+world\expansion02\doodads\dalaran\dalaran_signpost.m2
+world\expansion02\doodads\dalaran\dalaran_table_01.m2
+world\expansion02\doodads\generic\ebonblade\ebonblade_banner01.m2
+world\expansion02\doodads\generic\human\fence\hu_fence01_northrend.m2
+world\expansion02\doodads\generic\human\fence\hu_fencepost_northrend.m2
+world\expansion02\doodads\generic\northrend fires\northrendundeadcampfire.m2
+world\expansion02\doodads\generic\potions\potion_black01.m2
+world\expansion02\doodads\generic\scourge\sc_bodyjar.m2
+world\expansion02\doodads\generic\scourge\sc_eyeofacherus_03.m2
+world\expansion02\doodads\generic\wolvar\wolvar_totem02_dragonblight.m2
+world\expansion03\doodads\twilighthammer\magicaldevices\twilightshammer_magicaldevice_04fire.m2
+world\generic\darkirondwarf\passive doodads\grindingwheels\darkirongrindingwheel.m2
+world\generic\darkirondwarf\passive doodads\lamps\darkironhanginglamp02.m2
+world\generic\darkirondwarf\passive doodads\tools\darkironsaw01.m2
+world\generic\dwarf\passive doodads\beds\dwarvenbed01.m2
+world\generic\dwarf\passive doodads\benches\ironforgebench_ornate01.m2
+world\generic\dwarf\passive doodads\bookshelves\bookshelfdwarvenornate03.m2
+world\generic\dwarf\passive doodads\bookshelves\bookshelfdwarvenornate04.m2
+world\generic\dwarf\passive doodads\bookshelves\dwarvenbookshelflarge.m2
+world\generic\dwarf\passive doodads\chairs\dwarvenhighendchair.m2
+world\generic\dwarf\passive doodads\lanterns\ironforgehanginglantern_new.m2
+world\generic\dwarf\passive doodads\tables\dwarventableaverage01.m2
+world\generic\dwarf\passive doodads\tables\dwarventableaverage03.m2
+world\generic\dwarf\passive doodads\tables\dwarventableornate02.m2
+world\generic\dwarf\passive doodads\tables\dwarventableornate07.m2
+world\generic\gnome\passive doodads\furniture\gnomebed01.m2
+world\generic\gnome\passive doodads\gears&levers\gnomebiggear.m2
+world\generic\gnome\passive doodads\gnomewalladdons\gnomewalladdon01.m2
+world\generic\human\passive doodads\books\book_troll_03.m2
+world\generic\human\passive doodads\sacks\sackherbsstranglekelp01.m2
+world\generic\passivedoodads\duelingflag\duelingflag.m2
+world\generic\passivedoodads\postboxes\postboxwolvar.m2
+world\generic\pvp\battlefieldbanners\battlefieldbanneralliance.m2
+world\generic\pvp\battlefieldbanners\battlefieldbanneralliancelarge.m2
+world\generic\pvp\battlefieldbanners\battlefieldbannerhorde.m2
+world\generic\pvp\battlefieldbanners\battlefieldbannerhordelarge.m2
+world\generic\pvp\ctfflags\neutralctfflag.m2
+world\generic\pvp\runes\pvp_rune_berserker.m2
+world\generic\pvp\runes\pvp_rune_invis.m2
+world\generic\pvp\runes\pvp_rune_restoration.m2
+world\generic\pvp\runes\pvp_rune_speed.m2
+world\generic\tauren\passive doodads\signposts\taurensignpost01.m2
+world\generic\undead\passive doodads\undeadalchemytable\undead_alchemy_table.m2
+world\goober\g_sporemushroom.m2
+world\kalimdor\mauradon\passivedoodads\sporelight\sporelight01.m2
+world\kalimdor\mauradon\passivedoodads\sporelight\sporelightyellow01.m2
+world\lordaeron\scholomance\passivedoodads\brazier\scholomancebrazier01purple.m2
