@@ -6,7 +6,7 @@ if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
-local CANVAS, PLUS, PLUS_GAP = 380, 16, 11 -- the "+" sits PLUS_GAP px outside its wall
+local CANVAS, PLUS, PLUS_GAP = 380, 16, 1 -- the "+" sits PLUS_GAP px outside its wall
 local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, "Ceiling", "ceilingTheme" } }
 local layout
 
