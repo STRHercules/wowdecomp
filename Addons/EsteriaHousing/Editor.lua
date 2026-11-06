@@ -187,8 +187,13 @@ chest:SetSize(318, 560)
 chest:SetPoint("LEFT", 20, 30)
 Drag(chest)
 chest:Hide()
-local chestBg = chest:CreateTexture(nil, "BACKGROUND"); chestBg:SetPoint("TOPLEFT", 0, -36); chestBg:SetPoint("BOTTOMRIGHT", 0, 30)
-chestBg:SetTexture(0.05, 0.035, 0.025, 0.92)
+chest:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
+  insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+chest:SetBackdropBorderColor(0.55, 0.42, 0.25)
+local chestBg = chest:CreateTexture(nil, "BACKGROUND"); chestBg:SetPoint("TOPLEFT", 3, -3); chestBg:SetPoint("BOTTOMRIGHT", -3, 3)
+chestBg:SetTexture(0.06, 0.045, 0.03, 0.95)
+local chestPanel = H.Atlas(chest:CreateTexture(nil, "BACKGROUND", nil, 1), "housing-basic-panel-background")
+chestPanel:SetAllPoints(chestBg); chestPanel:SetAlpha(0.6)
 local chestHeader = H.Atlas(chest:CreateTexture(nil, "BORDER"), "house-chest-header-bg")
 chestHeader:SetPoint("TOPLEFT"); chestHeader:SetPoint("TOPRIGHT"); chestHeader:SetHeight(44)
 local corbel = H.Atlas(chest:CreateTexture(nil, "OVERLAY"), "house-chest-corbel-topright", 58, 38)
@@ -287,8 +292,8 @@ nextButton:SetScript("OnClick", function() page = page + 1; H.RedrawDecor() end)
 -- Storage | Catalog along the bottom
 local function TabButton(text, key, x)
   local b = CreateFrame("Button", nil, chest)
-  b:SetSize(92, 28); b:SetPoint("BOTTOMLEFT", x, 0)
-  b.bg = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "house-chest-parent-category-bg"); b.bg:SetAllPoints()
+  b:SetSize(100, 24); b:SetPoint("BOTTOMLEFT", x, 8)
+  b.bg = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "housing-woodsign"); b.bg:SetAllPoints()
   b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); b.text:SetPoint("CENTER", 0, 1); b.text:SetText(text)
   local hl = H.ButtonTexture(b, "Highlight", "house-chest-active-nav_selected-bg-glow")
   if hl then hl:SetBlendMode("ADD") end
@@ -296,8 +301,8 @@ local function TabButton(text, key, x)
   b.key = key
   return b
 end
-local storageTab = TabButton("Storage", "storage", 60)
-local catalogTab = TabButton("Catalog", "catalog", 156)
+local storageTab = TabButton("Storage", "storage", 62)
+local catalogTab = TabButton("Catalog", "catalog", 170)
 
 local function Filtered()
   local list = {}

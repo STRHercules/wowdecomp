@@ -12,6 +12,10 @@ local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, 
 local layout
 local floor = 0 -- the floor shown: 0 the ground, -1 the basement
 local LEVEL, MIN_LEVEL, MAX_LEVEL, STAIRWELL_TOP = 12, -1, 3, 48
+-- each floor's colour on its rooms and in the floor list: basement violet, then amber, teal, green, rose
+local FLOOR_COLORS = { [-1] = { 0.55, 0.4, 0.8 }, [0] = { 0.85, 0.62, 0.28 }, [1] = { 0.3, 0.72, 0.75 },
+  [2] = { 0.45, 0.78, 0.35 }, [3] = { 0.85, 0.42, 0.5 } }
+local function FloorColor(level) return unpack(FLOOR_COLORS[level] or FLOOR_COLORS[0]) end
 -- retail's room icon (housingroomicons) for each room kind; stairs down share their stairwell's
 local ROOM_ICONS = { [1] = "layout_square_s_icon", [2] = "layout_hallway_s_icon", [3] = "layout_closet_xs_icon",
   [6] = "layout_t-shape_s_icon", [7] = "layout_square_xs_icon", [8] = "layout_l-shape_s_icon", [9] = "layout_octogon_m_icon",
@@ -31,9 +35,9 @@ end
 
 local f = H.Panel("EsteriaHousingLayout", CANVAS + 24 + 110, CANVAS + 80)
 f:SetPoint("CENTER", -80, 40)
-local roomLimit = H.Atlas(f:CreateTexture(nil, "OVERLAY"), "house-room-limit-icon", 20, 20)
+local roomLimit = H.Atlas(f:CreateTexture(nil, "OVERLAY"), "house-room-limit-icon", 16, 16)
 local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-title:SetPoint("TOP", 0, -12); title:SetText("Layout")
+title:SetPoint("TOP", 0, -7); title:SetText("Layout")
 local count = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 count:SetPoint("TOP", title, "BOTTOM", 0, -2)
 roomLimit:SetPoint("RIGHT", count, "LEFT", -4, 0)
@@ -44,8 +48,7 @@ local inner = H.Atlas(canvas:CreateTexture(nil, "BORDER"), "housing-basic-panel-
 inner:SetAllPoints(); inner:SetAlpha(0.5)
 local north = canvas:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 north:SetPoint("TOPRIGHT", -6, -4); north:SetText("North")
-local hint = canvas:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-hint:SetPoint("BOTTOM", 0, 4); hint:SetText("+ builds a room    Click a room to style it")
+
 
 local remove = H.Button(f, "Remove Newest Room", 170, 22)
 remove:SetPoint("BOTTOM", -55, 10)
@@ -91,6 +94,8 @@ local function Arrow(dir, y)
   return b
 end
 local floorUp, floorDown = Arrow("up", 30), Arrow("down", 10)
+local hint = floors:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+hint:SetPoint("BOTTOM", 0, 56); hint:SetWidth(90); hint:SetText("+ builds a room\n\nClick a room to style it")
 
 local function LowestLevel()
   local lowest = 0
@@ -242,6 +247,8 @@ function H.RedrawLayout()
       b:ClearAllPoints(); b:SetPoint("TOP", floors, "TOP", 0, y); y = y - 28
       b.bg:SetAlpha(b.level == floor and 1 or 0)
       H.Atlas(b.door, b.level == floor and "housing-floor-door" or "housing-floor-door-inactive")
+      b.door:SetVertexColor(FloorColor(b.level))
+      b:GetFontString():SetTextColor(FloorColor(b.level))
       b:Show()
     else
       b:Hide()
@@ -268,7 +275,10 @@ function H.RedrawLayout()
       r:EnableMouse(here) -- the floor below is a faint guide only
       r:SetAlpha(here and 1 or 0.25)
       local newest = i == #layout.rooms and i > 1
-      if newest then r.fill:SetTexture(0.36, 0.26, 0.15, 0.95) else r.fill:SetTexture(0.22, 0.16, 0.1, 0.95) end
+      local cr, cg, cb = FloorColor(room.level)
+      r.border:SetTexture(cr, cg, cb, 1)
+      local shade = newest and 0.45 or 0.28 -- the newest room a little brighter
+      r.fill:SetTexture(cr * shade, cg * shade, cb * shade, 0.95)
       -- names only where they fit; the tooltip always has them
       local name = room.kind == STAIRWELL_TOP and "Stairs down" or (kind and kind.name or "Room")
       if kind and kind.name:find("^Stairwell %(") then name = "Stairs up" end
