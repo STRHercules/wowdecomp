@@ -295,6 +295,12 @@ int main(int argc, char** argv) {
         }
         std::printf("M2 version %u; skeleton %u; %zu skins, %zu textures, %zu animations\n",
             files.version, files.skeleton, files.skins.size(), files.textures.size(), files.animations.size());
+        if (!inspect && bytes.size() >= 0xD8) {
+            float box[14];
+            std::memcpy(box, bytes.data() + 0xA0, sizeof(box));
+            std::printf("bounds (%.1f %.1f %.1f)-(%.1f %.1f %.1f) r %.1f; collision (%.1f %.1f %.1f)-(%.1f %.1f %.1f) r %.1f\n",
+                box[0], box[1], box[2], box[3], box[4], box[5], box[6], box[7], box[8], box[9], box[10], box[11], box[12], box[13]);
+        }
         if (bytes.size() >= 0x138) {
             const size_t body = bytes[3] == '1' ? 8 : 0;
             uint32_t count;

@@ -936,6 +936,15 @@ bool PrepareModel(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& prepa
             b[p + 175] = 0;
         }
     }
+    // Retail marks "no bounds" with an inverted box (min +1e7, max -1e7), mostly on collision bounds; legacy models
+    // use zeros. CMapDoodadDef turns the collision box into its world box (MapDoodadDef.cpp:65-78), so the sentinel
+    // made a 20,000 km doodad: invisible tree leaves (12elw_elwynn_treeleaves02) and shadows thrown about.
+    for (const size_t box : {size_t(0xA0), size_t(0xBC)}) {
+        if (b.size() < box + 28) break;
+        float v[7];
+        std::memcpy(v, b.data() + box, sizeof(v)); // min xyz, max xyz, radius
+        if (v[0] > v[3] || v[1] > v[4] || v[2] > v[5]) std::memset(b.data() + box, 0, sizeof(v));
+    }
     // Retail writes 0 in the texture-transform lookup of models with no transforms (6390443, 915383); legacy files
     // say "none" with 0xffff, which is what the renderer checks for.
     if (Array(b, 0x98, 2))
