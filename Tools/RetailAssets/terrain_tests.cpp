@@ -35,6 +35,27 @@ void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
     Check(!(U32(a, h) & 1) || U32(a, h + U32(a, h + 36)) == Tag("MFBO"), name + ": MFBO flag matches");
     Check(U32(a, h + U32(a, h + 44)) == Tag("MTXF"), name + ": MTXF");
     const auto table = [&](int i) { return h + U32(a, h + 4 + i * 4); };
+    // MH2O: what Liquid::CInstanceVertexData reads (WoW/Source/LiquidSystem/LiquidData.cpp).
+    if (U32(a, h + 40)) {
+        const size_t m = table(9);
+        Check(U32(a, m) == Tag("MH2O"), name + ": MHDR points at MH2O");
+        const size_t base = m + 8, size = U32(a, m + 4);
+        size_t instances = 0;
+        bool ok = true;
+        for (int c = 0; ok && c < 256; ++c) {
+            const uint32_t at = U32(a, base + c * 12), layers = U32(a, base + c * 12 + 4);
+            for (uint32_t l = 0; ok && l < layers; ++l, ++instances) {
+                const size_t inst = base + at + l * 24;
+                const uint32_t type = U32(a, inst) & 0xFFFF, lvf = U32(a, inst) >> 16;
+                const uint32_t w = a[inst + 14], hh = a[inst + 15], n = (w + 1) * (hh + 1);
+                const uint32_t bitmap = U32(a, inst + 16), vertices = U32(a, inst + 20), per = lvf == 0 ? 5 : lvf == 1 ? 8 : 1;
+                ok = type >= 1 && type <= 4 && lvf <= 2 && a[inst + 12] + w <= 8 && a[inst + 13] + hh <= 8
+                    && (!bitmap || bitmap + (w * hh + 7) / 8 <= size) && vertices && vertices + n * per <= size;
+            }
+        }
+        Check(ok, name + ": MH2O instances are stock types in 3.3.5 vertex formats");
+        std::printf("%s: %zu liquid instances\n", name.c_str(), instances);
+    }
     const uint32_t mmdxSize = U32(a, table(2) + 4), mmidCount = U32(a, table(3) + 4) / 4;
     const uint32_t mwmoSize = U32(a, table(4) + 4), mwidCount = U32(a, table(5) + 4) / 4;
     for (uint32_t i = 0; i < mmidCount; ++i) Check(U32(a, table(3) + 8 + i * 4) < mmdxSize, name + ": MMID inside MMDX");

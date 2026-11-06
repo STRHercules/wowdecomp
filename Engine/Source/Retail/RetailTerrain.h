@@ -8,7 +8,7 @@ namespace Retail {
 
 // Retail (Legion and later) terrain rewritten in memory into the 3.3.5 layout CMap::LoadWdt and
 // CMapArea::ProcessIffChunks read (WoW/Source/WorldClient/Map.cpp, MapArea.cpp). Port of wotlkconv's adt/convert.py
-// and adt/wdt.py, without MH2O liquid, MCSE sound emitters or layer limiting.
+// and adt/wdt.py (liquid from adt/mh2o.py), without MCSE sound emitters or layer limiting.
 
 struct WdtTile {
     uint32_t x = 0, y = 0;      // tile column and row, as in <map>_<x>_<y>.adt

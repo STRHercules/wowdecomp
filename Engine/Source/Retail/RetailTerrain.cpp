@@ -86,6 +86,102 @@ bool Placements(const Chunks& obj, uint32_t defsTag, size_t stride, size_t flags
     return true;
 }
 
+// MH2O since Warlords stores a LiquidObject id (42 and up) where 3.3.5 expects the instance's vertex format (LVF):
+// 0 height+depth (5 bytes per vertex), 1 height+UV (8), 2 depth (1), 3 height+UV+depth (9). Each instance is decoded
+// in its retail format and rewritten in the one 3.3.5 uses for its kind of liquid (wotlkconv adt/mh2o.py), with retail
+// liquid types mapped onto the stock ones so the client's own water draws them: 1 water, 2 ocean, 3 magma, 4 slime.
+// shortcut: a retail type above 4 is water unless its data carries UVs (then magma); read LiquidType.db2's SoundBank
+// if slime or lava rivers show up as water.
+bool ConvertLiquid(const std::vector<uint8_t>& in, std::vector<uint8_t>& out) {
+    constexpr size_t kHeader = 12, kInstance = 24, kAttributes = 16;
+    static const uint32_t kBytes[4] = {5, 8, 1, 9};
+    out.clear();
+    if (in.size() < kMcnk * kHeader) return false;
+    // Where every block starts, so a vertex block's length can be read off the next start (blocks are packed).
+    std::vector<uint32_t> starts{uint32_t(in.size())};
+    for (size_t c = 0; c < kMcnk; ++c) {
+        const uint32_t at = Get<uint32_t>(&in[c * kHeader]), layers = Get<uint32_t>(&in[c * kHeader + 4]);
+        const uint32_t attributes = Get<uint32_t>(&in[c * kHeader + 8]);
+        if (layers && (at > in.size() || size_t(layers) * kInstance > in.size() - at)) return false;
+        if (layers) starts.push_back(at);
+        if (attributes) starts.push_back(attributes);
+        for (uint32_t l = 0; l < layers; ++l) {
+            const uint8_t* inst = &in[at + l * kInstance];
+            for (size_t f : {16u, 20u}) if (Get<uint32_t>(inst + f)) starts.push_back(Get<uint32_t>(inst + f));
+        }
+    }
+    std::sort(starts.begin(), starts.end());
+    const auto room = [&](uint32_t offset) {
+        const auto next = std::upper_bound(starts.begin(), starts.end(), offset);
+        return next == starts.end() ? 0u : *next - offset;
+    };
+
+    out.resize(kMcnk * kHeader);
+    for (size_t c = 0; c < kMcnk; ++c) {
+        const uint32_t at = Get<uint32_t>(&in[c * kHeader]), layers = Get<uint32_t>(&in[c * kHeader + 4]);
+        const uint32_t attributes = Get<uint32_t>(&in[c * kHeader + 8]);
+        if (!layers) continue;
+        const size_t table = out.size();
+        out.resize(table + layers * kInstance);
+        Put(&out[c * kHeader], uint32_t(table));
+        Put(&out[c * kHeader + 4], layers);
+        if (attributes && attributes + kAttributes <= in.size()) {
+            Put(&out[c * kHeader + 8], uint32_t(out.size()));
+            out.insert(out.end(), in.begin() + attributes, in.begin() + attributes + kAttributes);
+        }
+        for (uint32_t l = 0; l < layers; ++l) {
+            const uint8_t* src = &in[at + l * kInstance];
+            uint16_t type = Get<uint16_t>(src);
+            const uint16_t field = Get<uint16_t>(src + 2);
+            const float minimum = Get<float>(src + 4), maximum = Get<float>(src + 8);
+            const uint32_t x = src[12], y = src[13], w = src[14], h = src[15];
+            const uint32_t bitmapAt = Get<uint32_t>(src + 16), verticesAt = Get<uint32_t>(src + 20);
+            if (x + w > 8 || y + h > 8) return false;
+            const uint32_t n = (w + 1) * (h + 1);
+            int format = field < 42 ? (field < 4 ? int(field) : -1) : type == 2 ? 2 : -1;
+            if (verticesAt && (format < 0 || kBytes[format] * n > room(verticesAt))) {
+                format = -1; // the only format whose block fills the space up to the next block (up to 3 pad bytes)
+                for (int f = 0; f < 4; ++f)
+                    if (room(verticesAt) >= kBytes[f] * n && room(verticesAt) - kBytes[f] * n < 4) format = format == -1 ? f : -2;
+            }
+            if (verticesAt && format < 0) return false;
+            const uint8_t* v = verticesAt ? &in[verticesAt] : nullptr;
+            const bool hasHeights = v && format != 2, hasUvs = v && (format == 1 || format == 3);
+            const bool hasDepths = v && format != 1;
+            if (type > 4) type = hasUvs ? 3 : 1;
+            const uint16_t lvf = type == 3 || type == 4 ? 1 : type == 2 && minimum == 0 && maximum == 0 ? 2 : 0;
+
+            uint8_t* dst = &out[table + l * kInstance];
+            Put(dst, type);
+            Put(dst + 2, lvf);
+            std::memcpy(dst + 4, src + 4, 12); // min, max, x, y, w, h
+            Put(dst + 16, 0u);
+            Put(dst + 20, 0u);
+            if (bitmapAt) {
+                const uint32_t bits = (w * h + 7) / 8;
+                if (bitmapAt + bits > in.size()) return false;
+                Put(&out[table + l * kInstance + 16], uint32_t(out.size()));
+                out.insert(out.end(), in.begin() + bitmapAt, in.begin() + bitmapAt + bits);
+            }
+            std::vector<uint8_t> block;
+            const auto height = [&](uint32_t i) { return hasHeights ? Get<float>(v + i * 4) : minimum; };
+            const uint8_t* depths = hasDepths ? v + (format == 2 ? 0 : format == 3 ? 8 * n : 4 * n) : nullptr;
+            if (lvf != 2) for (uint32_t i = 0; i < n; ++i) { block.resize(block.size() + 4); Put(&block[block.size() - 4], height(i)); }
+            if (lvf == 1)
+                for (uint32_t i = 0; i < n; ++i) {
+                    uint16_t uv[2] = {uint16_t((x + i % (w + 1)) * 255 / 4), uint16_t((y + i / (w + 1)) * 255 / 4)};
+                    if (hasUvs) std::memcpy(uv, v + 4 * n + i * 4, 4);
+                    block.insert(block.end(), reinterpret_cast<uint8_t*>(uv), reinterpret_cast<uint8_t*>(uv) + 4);
+                }
+            else
+                for (uint32_t i = 0; i < n; ++i) block.push_back(depths ? depths[i] : 0xFF);
+            Put(&out[table + l * kInstance + 20], uint32_t(out.size()));
+            out.insert(out.end(), block.begin(), block.end());
+        }
+    }
+    return true;
+}
+
 }
 
 bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::vector<WdtTile>& tiles, std::string& error) {
@@ -278,7 +374,10 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
     place(5, Tag("MWID"), mwid);
     place(6, Tag("MDDF"), mddf);
     place(7, Tag("MODF"), modf);
-    // shortcut: MH2O is left out (retail liquid types and vertex formats differ); port wotlkconv's mh2o.py for water.
+    std::vector<uint8_t> mh2o;
+    if (root.Find(Tag("MH2O")) && !ConvertLiquid(root.Bytes(Tag("MH2O")), mh2o))
+        return Fail(error, "Retail ADT MH2O cannot be read");
+    if (!mh2o.empty()) place(9, Tag("MH2O"), mh2o);
     for (size_t i = 0; i < kMcnk; ++i) {
         Put(&out[mcinData + i * 16], uint32_t(out.size()));
         Put(&out[mcinData + i * 16 + 4], uint32_t(mcnks[i].size() + 8));
