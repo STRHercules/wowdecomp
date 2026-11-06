@@ -1,6 +1,8 @@
 #include "Engine/Source/Retail/RetailTerrain.h"
 #include "Engine/Source/Retail/IffChunks.h"
 
+#include <algorithm>
+#include <cmath>
 #include <cstring>
 
 namespace Retail {
@@ -159,6 +161,39 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         Put(d + 0x3E, uint16_t(0)); // retail scale: Wrath reads padding there and cannot scale world objects
     }
 
+    // 3.3.5 draws a placement only while a chunk whose MCRF lists it is visible. Retail lists objects in fewer chunks
+    // than they cover (a 31 x 50 yd WMO in two), so they popped in and out with the camera. Every chunk an object's
+    // bounds overlap lists it: MODF's extents; doodads have none, so a radius grown with their scale.
+    // Placement x/z are tile-space; chunk 0's header holds the tile's world corner (x = 17066.66 - z0, y = 17066.66 - x0).
+    constexpr float kMapHalf = 17066.666f, kChunkSize = 100.0f / 3.0f, kDoodadRadius = 12.0f;
+    const float originX = kMapHalf - Get<float>(rootChunks[0]->data + 0x6C), originZ = kMapHalf - Get<float>(rootChunks[0]->data + 0x68);
+    std::vector<std::vector<uint32_t>> extraDoodads(kMcnk), extraObjects(kMcnk);
+    const auto cover = [&](float minX, float minZ, float maxX, float maxZ, uint32_t index, std::vector<std::vector<uint32_t>>& refs) {
+        const auto cell = [&](float v, float origin) { return int(std::floor((v - origin) / kChunkSize)); };
+        for (int cy = std::max(0, cell(minZ, originZ)); cy <= std::min(15, cell(maxZ, originZ)); ++cy)
+            for (int cx = std::max(0, cell(minX, originX)); cx <= std::min(15, cell(maxX, originX)); ++cx)
+                refs[size_t(cy) * 16 + size_t(cx)].push_back(index);
+    };
+    for (uint32_t i = 0; i < mddf.size() / kDoodad; ++i) {
+        const uint8_t* d = &mddf[i * kDoodad];
+        const float r = kDoodadRadius * std::max(1.0f, Get<uint16_t>(d + 0x20) / 1024.0f);
+        cover(Get<float>(d + 8) - r, Get<float>(d + 16) - r, Get<float>(d + 8) + r, Get<float>(d + 16) + r, i, extraDoodads);
+    }
+    for (uint32_t i = 0; i < modf.size() / kMapObj; ++i) {
+        const uint8_t* d = &modf[i * kMapObj];
+        cover(Get<float>(d + 0x20), Get<float>(d + 0x28), Get<float>(d + 0x2C), Get<float>(d + 0x34), i, extraObjects);
+    }
+    const auto merge = [](std::vector<uint8_t> refs, const std::vector<uint32_t>& extra) {
+        std::vector<uint32_t> all(refs.size() / 4);
+        if (!all.empty()) std::memcpy(all.data(), refs.data(), refs.size());
+        all.insert(all.end(), extra.begin(), extra.end());
+        std::sort(all.begin(), all.end());
+        all.erase(std::unique(all.begin(), all.end()), all.end());
+        std::vector<uint8_t> out(all.size() * 4);
+        if (!all.empty()) std::memcpy(out.data(), all.data(), out.size());
+        return out;
+    };
+
     std::vector<std::vector<uint8_t>> mcnks;
     for (size_t i = 0; i < kMcnk; ++i) {
         const Chunk& r = *rootChunks[i];
@@ -179,8 +214,8 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         auto mcly = ts.Bytes(Tag("MCLY"));
         // shortcut: more than four layers is cut to the first four; port wotlkconv's limit_layers when a tile needs it.
         if (mcly.size() > 4 * kLayer) mcly.resize(4 * kLayer);
-        auto mcrf = os.Bytes(Tag("MCRD"));
-        const auto mcrw = os.Bytes(Tag("MCRW"));
+        auto mcrf = merge(os.Bytes(Tag("MCRD")), extraDoodads[i]);
+        const auto mcrw = merge(os.Bytes(Tag("MCRW")), extraObjects[i]);
         const uint32_t doodadRefs = uint32_t(mcrf.size() / 4), objectRefs = uint32_t(mcrw.size() / 4);
         mcrf.insert(mcrf.end(), mcrw.begin(), mcrw.end());
 

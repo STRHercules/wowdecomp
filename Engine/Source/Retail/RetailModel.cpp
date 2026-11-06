@@ -416,7 +416,13 @@ bool Validate(const std::vector<uint8_t>& b, const ModelFiles& files, std::strin
     for (const auto& f : lookups) {
         for (uint32_t i = 0; i < U32(b, f.offset); ++i) {
             uint16_t v = U16(b, U32(b, f.offset + 4) + size_t(i) * 2);
-            if (v != 0xffff && v >= U32(b, f.stride)) return Fail(error, "M2 lookup index is out of range");
+            if (v != 0xffff && v >= U32(b, f.stride)) {
+                char message[96];
+                std::snprintf(message, sizeof(message), "M2 lookup index is out of range (lookup 0x%x[%u] = %u, count %u)",
+                    unsigned(f.offset), unsigned(i), unsigned(v), unsigned(U32(b, f.stride)));
+                error = message;
+                return false;
+            }
         }
     }
     for (uint32_t i = 0; i < U32(b, 0x2c); ++i) {
@@ -930,6 +936,13 @@ bool PrepareModel(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& prepa
             b[p + 175] = 0;
         }
     }
+    // Retail writes 0 in the texture-transform lookup of models with no transforms (6390443, 915383); legacy files
+    // say "none" with 0xffff, which is what the renderer checks for.
+    if (Array(b, 0x98, 2))
+        for (uint32_t i = 0; i < U32(b, 0x98); ++i) {
+            const size_t at = U32(b, 0x9c) + size_t(i) * 2;
+            if (U16(b, at) != 0xffff && U16(b, at) >= U32(b, 0x60)) { b[at] = 0xff; b[at + 1] = 0xff; }
+        }
     if (!Validate(b, files, error)) return false;
     if (U32(b, 0x50) > 256 || U32(b, 0x60) > 255) return Fail(error, "Retail texture/transform count exceeds legacy renderer limits");
     // Retail split the old 32-bit blend duration into two 16-bit durations.

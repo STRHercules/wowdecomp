@@ -43,6 +43,22 @@ void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
     for (uint32_t i = 0; i < doodads; ++i) Check(U32(a, table(6) + 8 + i * 36) < mmidCount, name + ": MDDF names an MMID slot");
     for (uint32_t i = 0; i < objects; ++i) Check(U32(a, table(7) + 8 + i * 64) < mwidCount, name + ": MODF names an MWID slot");
     const size_t mcin = table(0) + 8;
+    // Each doodad must be listed by the chunk its position falls in (chunk 0's header gives the tile corner).
+    const auto f32 = [&](size_t at) { float v; std::memcpy(&v, &a[at], 4); return v; };
+    const size_t chunk0 = U32(a, mcin) + 8;
+    const float originX = 17066.666f - f32(chunk0 + 0x6C), originZ = 17066.666f - f32(chunk0 + 0x68);
+    size_t listed = 0, refsTotal = 0;
+    for (uint32_t d = 0; d < doodads; ++d) {
+        const int cx = int((f32(table(6) + 8 + d * 36 + 8) - originX) / (100.0f / 3)), cy = int((f32(table(6) + 8 + d * 36 + 16) - originZ) / (100.0f / 3));
+        if (cx < 0 || cx > 15 || cy < 0 || cy > 15) { ++listed; continue; } // placed outside its own tile
+        const size_t hdr = U32(a, mcin + (cy * 16 + cx) * 16) + 8, end = hdr + U32(a, hdr - 4);
+        for (size_t p = hdr + 128; p < end; p += 8 + U32(a, p + 4))
+            if (U32(a, p) == Tag("MCRF"))
+                for (uint32_t r = 0; r < U32(a, hdr + 0x10); ++r) listed += U32(a, p + 8 + r * 4) == d;
+    }
+    for (int i = 0; i < 256; ++i) refsTotal += U32(a, U32(a, mcin + i * 16) + 8 + 0x10);
+    Check(listed == doodads, name + ": every doodad listed by its own chunk (" + std::to_string(listed) + "/" + std::to_string(doodads) + ")");
+    std::printf("%s: %u doodads, %zu doodad refs, %u WMOs\n", name.c_str(), doodads, refsTotal, objects);
     for (int i = 0; i < 256; ++i) {
         const size_t at = U32(a, mcin + i * 16), size = U32(a, mcin + i * 16 + 4);
         if (U32(a, at) != Tag("MCNK") || U32(a, at + 4) + 8 != size) { Check(false, name + ": MCIN entry " + std::to_string(i)); continue; }
