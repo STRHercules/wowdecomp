@@ -59,8 +59,10 @@ bool PrepareWmoRoot(const std::vector<uint8_t>& in, std::vector<uint8_t>& out,
             Put(m + field, id ? textures.Add(Path(id, ".blp")) : empty);
         }
         if (newerShader) {
-            // Newer shaders may keep the diffuse in texture 2; the diffuse fallback reads texture 1.
-            if (Get<uint32_t>(m + 12) == empty && Get<uint32_t>(m + 24) != empty) Put(m + 12, Get<uint32_t>(m + 24));
+            // Newer shaders may keep the diffuse in texture 2; the diffuse fallback reads texture 1. Shader 23 (the
+            // four-layer blend) always does, with an environment map such as dr_shine.blp in texture 1 (12hu_human_house02).
+            if ((shader == 23 || Get<uint32_t>(m + 12) == empty) && Get<uint32_t>(m + 24) != empty)
+                Put(m + 12, Get<uint32_t>(m + 24));
             std::memset(m + 40, 0, kMaterial - 40);
         }
     }
@@ -119,7 +121,11 @@ bool PrepareWmoRoot(const std::vector<uint8_t>& in, std::vector<uint8_t>& out,
     Add(out, Tag("MOTX"), motx);
     Add(out, Tag("MOMT"), momt);
     Add(out, Tag("MOGN"), mogn);
-    Add(out, Tag("MOGI"), c.Bytes(Tag("MOGI")));
+    // Group info flags get the same mask as each group's MOGP header (PrepareWmoGroup).
+    auto mogi = c.Bytes(Tag("MOGI"));
+    for (size_t i = 0; i < mogi.size() / kGroupInfo; ++i)
+        Put(&mogi[i * kGroupInfo], Get<uint32_t>(&mogi[i * kGroupInfo]) & 0x07FFFFFFu & ~(0x400u | 0x20000u));
+    Add(out, Tag("MOGI"), mogi);
     Add(out, Tag("MOSB"), mosb);
     for (const uint32_t tag : {Tag("MOPV"), Tag("MOPT"), Tag("MOPR"), Tag("MOVV"), Tag("MOVB"), Tag("MOLT"), Tag("MODS")})
         Add(out, tag, c.Bytes(tag));
@@ -214,6 +220,15 @@ bool PrepareWmoGroup(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, 
     auto colours = c.All(Tag("MOCV"));
     if (uvs.size() > 2) uvs.resize(2);
     if (colours.size() > 2) colours.resize(2);
+    // 3.3.5 adds MOCV to the lit colour as baked light (CMapObjGroup::FillVertexVB uses 0 when there is none).
+    // Retail groups whose MOCV is white on every vertex use only its alpha, as shader-23 layer weights: as light it
+    // turns walls pure white (12hu_human_house02), so it goes.
+    const auto white = [](const std::vector<uint8_t>& mocv) {
+        for (size_t i = 0; i + 4 <= mocv.size(); i += 4)
+            if (mocv[i] != 0xFF || mocv[i + 1] != 0xFF || mocv[i + 2] != 0xFF) return false;
+        return true;
+    };
+    if (!colours.empty() && white(colours[0])) colours.clear();
     const auto mobn = c.Bytes(Tag("MOBN")), mobr = c.Bytes(Tag("MOBR"));
     const auto molr = c.Bytes(Tag("MOLR")), modr = c.Bytes(Tag("MODR")), mliq = c.Bytes(Tag("MLIQ"));
 

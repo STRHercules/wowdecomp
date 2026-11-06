@@ -98,7 +98,8 @@ std::vector<uint8_t> SyntheticRoot() {
     return out;
 }
 
-std::vector<uint8_t> SyntheticGroup() {
+std::vector<uint8_t> SyntheticGroup(uint8_t mocvRgb = 0) { // mocvRgb: 0 no MOCV, else every vertex this grey
+
     std::vector<uint8_t> header(68), mpy2, movi, movt, monr, motv, moba(24);
     const uint32_t flags = 0x80000009 | 0x400;
     std::memcpy(&header[8], &flags, 4);
@@ -123,6 +124,7 @@ std::vector<uint8_t> SyntheticGroup() {
     Add(inner, "MOBS", std::vector<uint8_t>(24));
     Add(inner, "MOBN", std::vector<uint8_t>(16));
     Add(inner, "MOBR", {0, 0});
+    if (mocvRgb) Add(inner, "MOCV", {mocvRgb, mocvRgb, mocvRgb, 0xFF, mocvRgb, mocvRgb, mocvRgb, 0x80, mocvRgb, mocvRgb, mocvRgb, 0xFF});
     Add(inner, "MOC2", std::vector<uint8_t>(12));
     header.insert(header.end(), inner.begin(), inner.end());
     std::vector<uint8_t> out;
@@ -156,6 +158,15 @@ int main(int argc, char** argv) {
         Check(Get<uint32_t>(m + 4) == 0, "newer shader falls back to diffuse");
         Check(motx.compare(Get<uint32_t>(m + 12), 18, "retail\\7225255.blp") == 0, "diffuse promoted to texture 1");
     }
+    // Shader 23 with an environment map in texture 1 (dr_shine.blp on 12hu_human_house02) still draws texture 2.
+    auto shine = root;
+    const uint32_t envMap = 1111;
+    std::memcpy(&shine[92 + 12], &envMap, 4); // MVER 12 + MOHD 72 + MOMT header 8, texture 1 at +12
+    Check(Retail::PrepareWmoRoot(shine, out, groups, error) && LegacyRoot(out, motx), "shader-23 root prepares");
+    if (out.size() > 20 + 64) {
+        const uint8_t* m = &out[20 + 64 + 8 + Get<uint32_t>(&out[20 + 64 + 4]) + 8];
+        Check(motx.compare(Get<uint32_t>(m + 12), 18, "retail\\7225255.blp") == 0, "shader 23 draws texture 2 over an environment map");
+    }
     std::vector<uint8_t> broken(root.begin(), root.end() - 3);
     Check(!Retail::PrepareWmoRoot(broken, out, groups, error), "truncated root is refused");
 
@@ -170,6 +181,11 @@ int main(int argc, char** argv) {
         Check(out[20 + 68 + 8] == 0x20 && out[20 + 68 + 9] == 0xFF, "MPY2 to MOPY, wide material marked collision-only");
     }
     Check(!Retail::PrepareWmoGroup(std::vector<uint8_t>(group.begin(), group.begin() + 30), out, error), "truncated group is refused");
+    // An all-white MOCV is shader-23 weights, not light: dropped. A real one stays.
+    Check(Retail::PrepareWmoGroup(SyntheticGroup(0xFF), out, error) && LegacyGroup(out) && !(Get<uint32_t>(&out[28]) & 0x4),
+        "white MOCV is dropped");
+    Check(Retail::PrepareWmoGroup(SyntheticGroup(0x40), out, error) && LegacyGroup(out) && (Get<uint32_t>(&out[28]) & 0x4),
+        "lit MOCV is kept");
 
     for (int i = 1; i < argc; ++i) {
         const auto bytes = Load(argv[i]);
