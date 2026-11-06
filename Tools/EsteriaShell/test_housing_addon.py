@@ -61,6 +61,12 @@ function EsteriaHousing_StyleRoom(...) return log("styleroom", ...) end
 function EsteriaHousing_SetCeilingHidden(...) return log("ceiling", ...) end
 function EsteriaHousing_StairsUp(...) return log("stairsup", ...) end
 function EasyMenu(items) lastMenu = items end
+function EsteriaHousing_BuyDecor(...) return log("buydecor", ...) end
+function ClearOverrideBindings() end
+function SetOverrideBindingClick() end
+function ReloadUI() end
+function W:SetFontString(fs) self._fs = fs end
+function W:GetFontString() return self._fs end
 function CloseDropDownMenus() end
 CANCEL = "Cancel"
 function event(name, ...)
@@ -74,7 +80,7 @@ end
 L = LuaRuntime()
 L.execute(HARNESS + "\nHarnessWidget = W\n")
 L.execute(GAME)
-for name in ("Editor.lua", "Layout.lua", "Plot.lua"):
+for name in ("Atlas.lua", "Editor.lua", "Layout.lua", "Plot.lua"):
     L.execute((ADDON / name).read_text(encoding="utf-8"))
 g = L.globals()
 
@@ -106,15 +112,19 @@ g.event("ESTERIA_HOUSING_PLOT")
 click("Enter House")
 assert last() == ["enter"] and not g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHousingPlotFrame)
 
-# The owner inside: the editor bar shows; Decor opens the catalog.
-L.execute('''catalog = { { decorId = 498, name = "Folk Rug", available = 5, placed = 0, category = 2, fileDataId = 111 },
-                         { decorId = 496, name = "Folk Table", available = 0, placed = 5, category = 1, fileDataId = 222 } }
+# The owner inside: the controls bar shows; Decorate opens the decor chest (Storage) and the ability bar.
+L.execute('''catalog = { { decorId = 498, name = "Folk Rug", available = 5, placed = 0, category = 2, fileDataId = 111, price = 20000 },
+                         { decorId = 496, name = "Folk Table", available = 0, placed = 5, category = 1, fileDataId = 222, price = 50000 },
+                         { decorId = 497, name = "Folk Long Table", available = 0, placed = 0, category = 1, fileDataId = 333, price = 50000 } }
 state = { inHouse = true, isOwner = true, houseId = 1, revision = 0, placed = 0, maxDecor = 50, pending = 0, decor = {} }''')
 g.event("ESTERIA_HOUSING_CATALOG")
 g.event("ESTERIA_HOUSING_STATE")
-assert g.EsteriaHousingBar.IsShown(g.EsteriaHousingBar)
-click("Decor")
-assert g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor)
+assert g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls) and g.EsteriaHousingBudget.IsShown(g.EsteriaHousingBudget)
+g.EsteriaHousingDecorate.Click(g.EsteriaHousingDecorate)
+assert g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor) and g.EsteriaHousingAbilities.IsShown(g.EsteriaHousingAbilities)
+def tile_ids():
+    return sorted(o.entry.decorId for o in g.created.values() if o.entry and o._shown)
+assert tile_ids() == [496, 498], "storage lists what you own (placed or not), not the whole catalog"
 
 # A tile with none left is refused; one in storage is picked up and placed where the cursor meets the floor, facing the
 # player. A ray that misses the room floor (z far off) is kept at the player's floor.
@@ -132,31 +142,44 @@ op, decor, x, y, z, yaw = last()
 assert (op, decor, x, y, z, yaw) == ("place", 498, 12, 21, 5, 285), (op, decor, x, y, z, yaw)
 assert not catcher.IsShown(catcher) and g.ghost is None, "a plain click places one and drops the ghost"
 
-# The ack selects the new decor; the selection bar turns, raises, moves and stores it.
+# Expert (2): the ack's decor is selected; its tools turn, raise, move and store it.
 L.execute('state.decor = { { placedId = 7, decorId = 498, x = 12, y = 21, z = 5, yaw = 285 } }; state.placed = 1')
 g.event("ESTERIA_HOUSING_RESULT", 0, 1, 7)
-assert g.EsteriaHousingSelected.IsShown(g.EsteriaHousingSelected)
-click("Turn L")
+g.EsteriaHousingAbility2.Click(g.EsteriaHousingAbility2)
+assert g.EsteriaHousingExpert.IsShown(g.EsteriaHousingExpert) and catcher.IsShown(catcher)
+g.EsteriaHousingExpertTurn.Click(g.EsteriaHousingExpertTurn)
 assert last()[:2] == ["move", 7] and last()[5] == 300
-click("Up")
-assert abs(last()[4] - 5.1) < 1e-6
-click("Move")
+g.EsteriaHousingExpertRaise.Click(g.EsteriaHousingExpertRaise, "RightButton")
+assert abs(last()[4] - 4.9) < 1e-6
+g.EsteriaHousingExpertMove.Click(g.EsteriaHousingExpertMove)
 L.execute('cursor = { 14, 22, 5.2 }')
 catcher.Click(catcher)
 assert last()[:5] == ["move", 7, 14, 22, 5.2]
-click("Store")
+g.EsteriaHousingExpertStore.Click(g.EsteriaHousingExpertStore)
 assert last() == ["remove", 7]
-
-# Select mode picks the decor nearest the click; right-click ends it.
-click("Select Placed Decor")
+# Selecting picks the decor nearest the click.
 L.execute('cursor = { 30, 30, 5 }')
 catcher.Click(catcher)
 assert toast() == "No decor there."
 L.execute('cursor = { 12.5, 21.5, 5 }')
 catcher.Click(catcher)
-assert g.EsteriaHousingSelected.IsShown(g.EsteriaHousingSelected)
+assert g.EsteriaHousingExpert.IsShown(g.EsteriaHousingExpert)
+
+# Cleanup (4): a click stores the decor under it; right-click goes back to Basic.
+g.EsteriaHousingAbility4.Click(g.EsteriaHousingAbility4)
+catcher.Click(catcher)
+assert last() == ["remove", 7]
 catcher.Click(catcher, "RightButton")
 assert not catcher.IsShown(catcher)
+
+# Catalog: every decor with its price; a click adds it to the cart, and Buy pays for it all.
+L.execute('for _, o in ipairs(created) do if o.key == "catalog" then o._scripts.OnClick(o) end end')
+assert tile_ids() == [496, 497, 498]
+L.execute('for _, o in ipairs(created) do if o.entry and o.entry.decorId == 497 then o._scripts.OnClick(o); o._scripts.OnClick(o) end end')
+assert g.EsteriaHousingCart.IsShown(g.EsteriaHousingCart)
+click("Buy  100000c")
+assert last() == ["buydecor", 497, 2], last()
+assert not g.EsteriaHousingCart.IsShown(g.EsteriaHousingCart)
 
 # Server refusals become toasts.
 g.event("ESTERIA_HOUSING_RESULT", 9, 2, 0)
@@ -169,7 +192,7 @@ L.execute('''layout = { maxRooms = 8, originX = 100, originY = 200,
   rooms = { { kind = 1, x = 0, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, ceilingHidden = false, level = 0 } },
   sockets = { { room = 0, piece = 4, level = 0, x = 12, y = 0, nx = 1, ny = 0, fits = { 1, 2 } } },
   themes = { { id = 1, name = "Folk" }, { id = 3, name = "Generic" } } }''')
-click("Layout")
+g.EsteriaHousingAbility5.Click(g.EsteriaHousingAbility5)
 assert g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and not g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor)
 L.execute('for _, o in ipairs(created) do if o.socket then o._scripts.OnClick(o) end end')
 items = list(g.lastMenu.values())
@@ -184,6 +207,11 @@ walls[0].func()
 assert last() == ["styleroom", 0, 1, 1], last()
 items[4].func()
 assert last() == ["ceiling", 0, True], last()
+
+# Customize (3) opens the style menu of the room the player stands in (5, 5 is inside room 1 at the origin).
+L.execute('layout.originX, layout.originY = 0, 0; lastMenu = nil; px, py = 5, 5')
+g.EsteriaHousingAbility3.Click(g.EsteriaHousingAbility3)
+assert g.lastMenu is not None and list(g.lastMenu.values())[0].text == "Square Room (Small)"
 
 # Floors: with a stairwell, Floor tabs appear and each floor shows only its own "+" markers.
 L.execute('''layout.kinds[10] = { id = 10, name = "Stairwell (Left)", sizeX = 23, sizeY = 23, price = 250000 }
@@ -207,13 +235,13 @@ L.execute('layout.rooms[4] = { kind = 10, x = 0, y = 24, quarter = 0, wallTheme 
 g.event("ESTERIA_HOUSING_LAYOUT")
 assert g.buttonNamed("Basement")._shown
 
-# A visitor sees only Leave; leaving the house hides everything.
+# A visitor sees only Exit; leaving the house hides everything.
 L.execute('state.isOwner = false')
 g.event("ESTERIA_HOUSING_STATE")
-assert not g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout)
-click("Leave House")
+assert not g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and not g.EsteriaHousingDecorate._shown
+g.EsteriaHousingControlexit.Click(g.EsteriaHousingControlexit)
 assert last() == ["leave"]
 L.execute('state = { inHouse = false, isOwner = false, houseId = 0, revision = 0, placed = 0, maxDecor = 0, pending = 0, decor = {} }')
 g.event("ESTERIA_HOUSING_STATE")
-assert not g.EsteriaHousingBar.IsShown(g.EsteriaHousingBar)
+assert not g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls)
 print("housing addon test passed")

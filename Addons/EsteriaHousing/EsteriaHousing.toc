@@ -1,8 +1,9 @@
 ## Interface: 30300
 ## Title: Esteria Housing
-## Notes: Plot purchase window and House Editor (decor, room layout). Needs the wowdecomp client with housingEnabled 1 and an Esteria realm with EsteriaHousing.Enable.
-## Version: 0.2
+## Notes: Plot purchase window and House Editor (decor chest, catalog and cart, room layout) in retail's housing UI art. Needs the wowdecomp client with housingEnabled 1 and an Esteria realm with EsteriaHousing.Enable.
+## Version: 0.3
 
+Atlas.lua
 Editor.lua
 Layout.lua
 Plot.lua

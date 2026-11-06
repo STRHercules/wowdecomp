@@ -12,23 +12,43 @@ local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, 
 local layout
 local floor = 0 -- the floor shown: 0 the ground, -1 the basement
 local LEVEL, MIN_LEVEL, MAX_LEVEL, STAIRWELL_TOP = 12, -1, 3, 48
+-- retail's room icon (housingroomicons) for each room kind; stairs down share their stairwell's
+local ROOM_ICONS = { [1] = "layout_square_s_icon", [2] = "layout_hallway_s_icon", [3] = "layout_closet_xs_icon",
+  [6] = "layout_t-shape_s_icon", [7] = "layout_square_xs_icon", [8] = "layout_l-shape_s_icon", [9] = "layout_octogon_m_icon",
+  [10] = "layout_staircase_s_icon", [11] = "layout_square_m_icon", [12] = "layout_square_l_icon", [13] = "layout_cross_s_icon",
+  [14] = "layout_octogon_s_icon", [15] = "layout_octogon_l_icon", [48] = "layout_tallroom_s_icon",
+  [50] = "layout_staircase_mirrored_s_icon" }
 
-local f = H.Panel("EsteriaHousingLayout", CANVAS + 24, CANVAS + 80)
-f:SetPoint("CENTER", -120, 40)
+-- EasyMenu fields that draw a retail atlas element as the item's icon
+local function MenuIcon(item, name)
+  local a = H.ATLAS and H.ATLAS[name]
+  if a then
+    item.icon = "retail/" .. a[1] .. ".blp"
+    item.tCoordLeft, item.tCoordRight, item.tCoordTop, item.tCoordBottom = a[4], a[5], a[6], a[7]
+  end
+  return item
+end
+
+local f = H.Panel("EsteriaHousingLayout", CANVAS + 24 + 110, CANVAS + 80)
+f:SetPoint("CENTER", -80, 40)
+local roomLimit = H.Atlas(f:CreateTexture(nil, "OVERLAY"), "house-room-limit-icon", 20, 20)
 local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 title:SetPoint("TOP", 0, -12); title:SetText("Layout")
 local count = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 count:SetPoint("TOP", title, "BOTTOM", 0, -2)
+roomLimit:SetPoint("RIGHT", count, "LEFT", -4, 0)
 local canvas = CreateFrame("Frame", nil, f)
-canvas:SetSize(CANVAS, CANVAS); canvas:SetPoint("TOP", 0, -44)
-local grid = canvas:CreateTexture(nil, "BACKGROUND"); grid:SetAllPoints(); grid:SetTexture(0.05, 0.08, 0.12, 0.9)
+canvas:SetSize(CANVAS, CANVAS); canvas:SetPoint("TOPLEFT", 12, -44)
+local grid = canvas:CreateTexture(nil, "BACKGROUND"); grid:SetAllPoints(); grid:SetTexture(0.06, 0.045, 0.03, 0.92)
+local inner = H.Atlas(canvas:CreateTexture(nil, "BORDER"), "housing-basic-panel-innerblackbox")
+inner:SetAllPoints(); inner:SetAlpha(0.5)
 local north = canvas:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 north:SetPoint("TOPRIGHT", -6, -4); north:SetText("North")
 local hint = canvas:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 hint:SetPoint("BOTTOM", 0, 4); hint:SetText("+ builds a room    Click a room to style it")
 
 local remove = H.Button(f, "Remove Newest Room", 170, 22)
-remove:SetPoint("BOTTOM", 0, 10)
+remove:SetPoint("BOTTOM", -55, 10)
 StaticPopupDialogs["ESTERIA_HOUSING_REMOVE_ROOM"] = {
   text = "Remove the newest room? Its decor must be stored first, and its price is not refunded.",
   button1 = YES, button2 = NO, timeout = 0, hideOnEscape = true,
@@ -38,15 +58,39 @@ remove:SetScript("OnClick", function() StaticPopup_Show("ESTERIA_HOUSING_REMOVE_
 
 local menu = CreateFrame("Frame", "EsteriaHousingLayoutMenu", UIParent, "UIDropDownMenuTemplate")
 
--- floor tabs along the top of the canvas
+-- the floor list to the right of the blueprint, highest floor on top, as retail's layout editor stacks them
+local floors = CreateFrame("Frame", nil, f)
+floors:SetSize(100, CANVAS); floors:SetPoint("TOPLEFT", canvas, "TOPRIGHT", 6, 0)
+local floorsBg = H.Atlas(floors:CreateTexture(nil, "BACKGROUND"), "housing-floor-container-bg"); floorsBg:SetAllPoints()
+local floorsTitle = floors:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+floorsTitle:SetPoint("TOP", 0, -8); floorsTitle:SetText("Floors")
 local floorTabs = {}
-for level = MIN_LEVEL, MAX_LEVEL do
-  local b = H.Button(f, level < 0 and "Basement" or ("Floor " .. (level + 1)), 64, 18)
+for level = MAX_LEVEL, MIN_LEVEL, -1 do
+  local b = CreateFrame("Button", nil, floors)
+  b:SetSize(92, 26)
   b.level = level
-  b:SetFrameLevel(canvas:GetFrameLevel() + 10)
+  b.bg = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "housing-floor-list-bg-active"); b.bg:SetAllPoints()
+  b.door = H.Atlas(b:CreateTexture(nil, "ARTWORK"), "housing-floor-door", 16, 16); b.door:SetPoint("LEFT", 4, 0)
+  b.line = H.Atlas(b:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-default"); b.line:SetPoint("BOTTOMLEFT")
+  b.line:SetPoint("BOTTOMRIGHT"); b.line:SetHeight(1)
+  b:SetFontString(b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"))
+  b:GetFontString():SetPoint("LEFT", 24, 0)
+  b:SetText(level < 0 and "Basement" or ("Floor " .. (level + 1)))
+  local hl = H.ButtonTexture(b, "Highlight", "housing-floor-list-bg-active")
+  if hl then hl:SetBlendMode("ADD"); hl:SetAlpha(0.4) end
   b:SetScript("OnClick", function() floor = level; H.RedrawLayout() end)
   floorTabs[#floorTabs + 1] = b
 end
+local function Arrow(dir, y)
+  local b = CreateFrame("Button", nil, floors)
+  b:SetSize(16, 16); b:SetPoint("BOTTOM", 0, y)
+  for state, look in pairs({ Normal = "default", Pushed = "pressed", Disabled = "disabled" }) do
+    H.ButtonTexture(b, state, "housing-floor-arrow-" .. dir .. "-" .. look)
+  end
+  b:SetScript("OnClick", function() floor = floor + (dir == "up" and 1 or -1); H.RedrawLayout() end)
+  return b
+end
+local floorUp, floorDown = Arrow("up", 30), Arrow("down", 10)
 
 local function LowestLevel()
   local lowest = 0
@@ -114,11 +158,11 @@ local function BuildMenu(socket)
     local kind = layout.kinds[id]
     if kind then
       local afford = GetMoney() >= kind.price
-      items[#items + 1] = { notCheckable = true, disabled = not afford,
+      items[#items + 1] = MenuIcon({ notCheckable = true, disabled = not afford,
         text = string.format("%s  |cffa0a0a0%dx%d|r  %s", kind.name, kind.sizeX, kind.sizeY, GetCoinTextureString(kind.price)),
         func = function()
           if not EsteriaHousing_AddRoom(socket.room, socket.piece, id) then H.Toast("You can only edit your own house.") end
-        end }
+        end }, ROOM_ICONS[id % 1000])
     end
   end
   items[#items + 1] = { text = CANCEL, notCheckable = true, func = function() CloseDropDownMenus() end }
@@ -129,7 +173,7 @@ local function Rect(i)
   local r = rects[i]
   if not r then
     r = CreateFrame("Button", nil, canvas)
-    r.border = r:CreateTexture(nil, "BORDER"); r.border:SetAllPoints(); r.border:SetTexture(0.85, 0.7, 0.35, 1)
+    r.border = r:CreateTexture(nil, "BORDER"); r.border:SetAllPoints(); r.border:SetTexture(0.78, 0.6, 0.3, 1)
     r.fill = r:CreateTexture(nil, "ARTWORK"); r.fill:SetPoint("TOPLEFT", 2, -2); r.fill:SetPoint("BOTTOMRIGHT", -2, 2)
     r:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
     r.label = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
@@ -192,16 +236,19 @@ function H.RedrawLayout()
   local lowest, highest = 0, 0
   for _, room in ipairs(layout.rooms) do lowest, highest = math.min(lowest, room.level), math.max(highest, room.level) end
   floor = math.max(lowest, math.min(floor, highest))
-  local x = 4
+  local y = -30
   for _, b in ipairs(floorTabs) do
-    if b.level >= lowest and b.level <= highest and highest > lowest then
-      b:ClearAllPoints(); b:SetPoint("TOPLEFT", canvas, "TOPLEFT", x, -4); x = x + 66
+    if b.level >= lowest and b.level <= highest then
+      b:ClearAllPoints(); b:SetPoint("TOP", floors, "TOP", 0, y); y = y - 28
+      b.bg:SetAlpha(b.level == floor and 1 or 0)
+      H.Atlas(b.door, b.level == floor and "housing-floor-door" or "housing-floor-door-inactive")
       b:Show()
     else
       b:Hide()
     end
-    if b.level == floor then b:LockHighlight() else b:UnlockHighlight() end
   end
+  if floor < highest then floorUp:Enable() else floorUp:Disable() end
+  if floor > lowest then floorDown:Enable() else floorDown:Disable() end
 
   local n = 0
   for i, room in ipairs(layout.rooms) do
@@ -221,7 +268,7 @@ function H.RedrawLayout()
       r:EnableMouse(here) -- the floor below is a faint guide only
       r:SetAlpha(here and 1 or 0.25)
       local newest = i == #layout.rooms and i > 1
-      if newest then r.fill:SetTexture(0.25, 0.32, 0.45, 0.95) else r.fill:SetTexture(0.16, 0.2, 0.28, 0.95) end
+      if newest then r.fill:SetTexture(0.36, 0.26, 0.15, 0.95) else r.fill:SetTexture(0.22, 0.16, 0.1, 0.95) end
       -- names only where they fit; the tooltip always has them
       local name = room.kind == STAIRWELL_TOP and "Stairs down" or (kind and kind.name or "Room")
       if kind and kind.name:find("^Stairwell %(") then name = "Stairs up" end
@@ -272,6 +319,21 @@ f:SetScript("OnEvent", function(self, event)
   if event == "ESTERIA_HOUSING_LAYOUT" then CloseDropDownMenus() end -- a new layout makes an open menu stale
   H.RedrawLayout()
 end)
+
+-- Customize (ability 3): the style menu of the room the player stands in.
+function H.CustomizeHere()
+  layout = EsteriaHousing_GetLayout()
+  local x, y = EsteriaHousing_GetPlayerPosition()
+  if not (layout and x) then return end
+  local level, dx, dy = PlayerFloor(), x - layout.originX, y - layout.originY
+  for i, room in ipairs(layout.rooms) do
+    local sx, sy = Size(layout.kinds[room.kind], room.quarter)
+    if room.level == level and math.abs(dx - room.x) <= sx / 2 and math.abs(dy - room.y) <= sy / 2 then
+      return EasyMenu(RoomMenu(i), menu, "cursor", 0, 0, "MENU")
+    end
+  end
+  H.Toast("Stand in a room to customize it.")
+end
 
 function H.ShowLayout(show)
   if show then f:Show() else f:Hide() end

@@ -1,14 +1,16 @@
--- Esteria housing: the House Editor. Inside a house a bar sits above the action bars: Decor and Layout for the owner,
--- Leave for everyone. Decor mode is a catalog of 3D previews; pick one and click the floor to place it, or Select and
--- click placed decor to move, turn, raise or store it. Everything goes through the Housing extension and the server
--- validates every edit; the UI only redraws from the server's answers.
+-- Esteria housing: the House Editor, drawn with retail's housing UI art (Atlas.lua, textures as retail/<FDID>.blp).
+-- Inside a house: the controls bar at the top (inspect, house info, decorate mode, settings, exit) and the decor budget
+-- at the top right. Decorate mode opens the decor chest on the left (Storage: what you own; Catalog: what you can buy,
+-- into the cart at the bottom right) and the ability bar at the bottom: 1 Basic (place from storage), 2 Expert (select
+-- and move, turn, raise), 3 Customize (style the room you stand in), 4 Cleanup (click decor to store it), 5 Layout.
+-- Everything goes through the Housing extension and the server validates every edit; the UI redraws from its answers.
 
 if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
 local TURN, ZSTEP, PICK = 15, 0.1, 2.5
-local COLS, ROWS, TILE = 4, 5, 64 -- 20 tiles a page
+local COLS, ROWS, TILE, GAP = 3, 5, 78, 6
 local RESULT = {
   [1] = "Housing is disabled on this realm.", [2] = "You are not in a house.", [3] = "Only the owner can edit this house.",
   [4] = "Duplicate request ignored.", [5] = "The house changed; resynced. Try again.", [6] = "Unknown decor.",
@@ -16,30 +18,70 @@ local RESULT = {
   [10] = "Invalid position or rotation.", [11] = "The house is full.", [12] = "Too fast; slow down.",
   [13] = "The server did not answer.", [14] = "Unknown edit.",
 }
-local CATEGORIES = { { nil, "All" }, { 1, "Furniture" }, { 2, "Accents" }, { 3, "Lighting" }, { 4, "Nature" },
-  { 5, "Structure" }, { 0, "Misc" } }
+-- our categories and the retail category icon for each
+local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, { 2, "Accents", "accents" },
+  { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" } }
 
 local catalog, state, names, fdids = {}, nil, {}, {}
-local mode            -- nil, "decor" or "layout"
-local tool            -- nil, "place" (holding a catalog decor), "move" (holding a placed one) or "select"
+local editing         -- decorate mode on
+local ability = 1     -- 1 basic, 2 expert, 3 customize, 4 cleanup, 5 layout
+local tool            -- nil, "place" (holding storage decor), "move" (holding a placed one), "select" or "cleanup"
 local holding         -- { decorId, placedId, yaw }
 local selected        -- placedId
-local category, search, page = nil, "", 0
+local tab, category, search, page = "storage", nil, "", 0
+local cart = {}       -- { { decorId, count } }
 
 function H.Toast(text) UIErrorsFrame:AddMessage(text, 1, 0.2, 0.2, 1) end
 local Toast = H.Toast
 
+-- A retail atlas element on a texture; sized to the element when w is true, or to w x h.
+function H.Atlas(tex, name, w, h)
+  local a = H.ATLAS and H.ATLAS[name]
+  if not a then return tex end
+  tex:SetTexture("retail/" .. a[1] .. ".blp")
+  tex:SetTexCoord(a[4], a[5], a[6], a[7])
+  if w == true then tex:SetSize(a[2], a[3]) elseif w then tex:SetSize(w, h or w) end
+  return tex
+end
+
+-- A button state texture (Normal, Pushed, Highlight, Disabled) from a retail atlas element: the button takes a file
+-- path, then its own texture gets the element's coordinates.
+function H.ButtonTexture(b, state, name)
+  local a = H.ATLAS and H.ATLAS[name]
+  if not a then return end
+  b["Set" .. state .. "Texture"](b, "retail/" .. a[1] .. ".blp")
+  local t = b["Get" .. state .. "Texture"](b)
+  if t then t:SetTexCoord(a[4], a[5], a[6], a[7]); t:SetAllPoints() end
+  return t
+end
+
+-- "|T...|t" for an atlas element inside text
+function H.Icon(name, size)
+  local a = H.ATLAS and H.ATLAS[name]
+  if not a then return "" end
+  return string.format("|Tretail/%d.blp:%d:%d:0:0:1024:1024:%d:%d:%d:%d|t", a[1], size, size, a[4] * 1024, a[5] * 1024,
+    a[6] * 1024, a[7] * 1024)
+end
+
+local function Drag(f)
+  -- every housing panel drags; the client keeps a named, user-placed frame where it was left (layout-local.txt)
+  f:SetMovable(true); f:SetClampedToScreen(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
+  f:SetScript("OnDragStart", function(self) self:StartMoving() end)
+  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); self:SetUserPlaced(true) end)
+end
+
+-- A panel in retail's housing style: the basic panel's dark background and its gradient header.
 function H.Panel(name, w, h)
   local f = CreateFrame("Frame", name, UIParent)
   f:SetSize(w, h)
-  f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background-Dark", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-    tile = true, tileSize = 16, edgeSize = 16, insets = { left = 4, right = 4, top = 4, bottom = 4 } })
-  f:SetBackdropBorderColor(0.8, 0.65, 0.3)
-  f:EnableMouse(true)
-  -- every housing panel drags; the client keeps a named, user-placed frame where it was left (layout-local.txt)
-  f:SetMovable(true); f:SetClampedToScreen(true); f:RegisterForDrag("LeftButton")
-  f:SetScript("OnDragStart", function(self) self:StartMoving() end)
-  f:SetScript("OnDragStop", function(self) self:StopMovingOrSizing(); self:SetUserPlaced(true) end)
+  f:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
+    insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+  f:SetBackdropBorderColor(0.55, 0.42, 0.25)
+  local bg = H.Atlas(f:CreateTexture(nil, "BACKGROUND"), "housing-basic-panel-background")
+  bg:SetPoint("TOPLEFT", 3, -3); bg:SetPoint("BOTTOMRIGHT", -3, 3)
+  local header = H.Atlas(f:CreateTexture(nil, "BORDER"), "housing-basic-panel-gradient-header-bg")
+  header:SetPoint("TOPLEFT", 3, -3); header:SetPoint("TOPRIGHT", -3, -3); header:SetHeight(40)
+  Drag(f)
   f:Hide()
   return f
 end
@@ -50,52 +92,114 @@ function H.Button(parent, text, w, h)
   return b
 end
 
+-- A button drawn from retail atlas states: its default, active (SetOn) and pressed elements.
+local function AtlasButton(parent, name, w, h, default, active, pressed)
+  local b = CreateFrame("Button", name, parent)
+  b:SetSize(w, h)
+  b.normal = H.Atlas(b:CreateTexture(nil, "ARTWORK"), default); b.normal:SetAllPoints()
+  b.on = active
+  b.off = default
+  H.ButtonTexture(b, "Pushed", pressed or default)
+  local glow = b:CreateTexture(nil, "HIGHLIGHT"); glow:SetAllPoints()
+  H.Atlas(glow, active or default); glow:SetBlendMode("ADD"); glow:SetAlpha(0.35)
+  function b:SetOn(on) H.Atlas(self.normal, on and self.on or self.off) end
+  return b
+end
+
 local function Placed(id)
   if state then for _, d in ipairs(state.decor) do if d.placedId == id then return d end end end
 end
 
 local function Owner() return state and state.inHouse and state.isOwner end
 
--- ------------------------------------------------------------------------------------------------ bar
-
-local bar = H.Panel("EsteriaHousingBar", 330, 44)
-bar:SetPoint("BOTTOM", 0, 150)
-local barTitle = bar:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-barTitle:SetPoint("BOTTOM", bar, "TOP", 0, 2)
-local decorButton = H.Button(bar, "Decor", 90, 26)
-decorButton:SetPoint("LEFT", 10, 0)
-local layoutButton = H.Button(bar, "Layout", 90, 26)
-layoutButton:SetPoint("LEFT", decorButton, "RIGHT", 6, 0)
-local leaveButton = H.Button(bar, "Leave House", 110, 26)
-leaveButton:SetPoint("LEFT", layoutButton, "RIGHT", 6, 0)
-leaveButton:SetScript("OnClick", function() EsteriaHousing_Leave() end)
-
--- ------------------------------------------------------------------------------------------------ decor catalog
-
-local decor = H.Panel("EsteriaHousingDecor", 300, 530)
-decor:SetPoint("RIGHT", -30, 20)
-local decorTitle = decor:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-decorTitle:SetPoint("TOP", 0, -12); decorTitle:SetText("Decor")
-local budget = decor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-budget:SetPoint("TOP", decorTitle, "BOTTOM", 0, -2)
-
-local tabs = {}
-for i, c in ipairs(CATEGORIES) do
-  local b = CreateFrame("Button", nil, decor)
-  b:SetSize(i <= 4 and 68 or 90, 18)
-  if i == 1 then b:SetPoint("TOPLEFT", 14, -46)
-  elseif i == 5 then b:SetPoint("TOPLEFT", tabs[1], "BOTTOMLEFT", 0, -2)
-  else b:SetPoint("LEFT", tabs[i - 1], "RIGHT", 2, 0) end
-  b.bg = b:CreateTexture(nil, "BACKGROUND"); b.bg:SetAllPoints(); b.bg:SetTexture(1, 1, 1, 0.08)
-  b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); b.text:SetAllPoints(); b.text:SetText(c[2])
-  b:SetScript("OnClick", function() category = c[1]; page = 0; H.RedrawDecor() end)
-  b.category = c[1]
-  tabs[i] = b
+local function Entry(decorId)
+  for _, e in ipairs(catalog) do if e.decorId == decorId then return e end end
 end
 
-local searchBox = CreateFrame("EditBox", "EsteriaHousingDecorSearch", decor, "InputBoxTemplate")
-searchBox:SetSize(260, 20); searchBox:SetPoint("TOPLEFT", 22, -90); searchBox:SetAutoFocus(false)
+-- ------------------------------------------------------------------------------------------------ top controls
+
+local controls = CreateFrame("Frame", "EsteriaHousingControls", UIParent)
+controls:SetSize(310, 39)
+controls:SetPoint("TOP", 0, -10)
+Drag(controls)
+controls:Hide()
+local controlsBg = H.Atlas(controls:CreateTexture(nil, "BACKGROUND"), "controls-frame"); controlsBg:SetAllPoints()
+
+local function Control(key, x, size, onClick, tip)
+  local b = AtlasButton(controls, "EsteriaHousingControl" .. key, size, size, "decor-controls-" .. key .. "-default",
+    "decor-controls-" .. key .. "-active", "decor-controls-" .. key .. "-pressed")
+  b:SetPoint("CENTER", controls, "CENTER", x, 0)
+  b:SetScript("OnClick", onClick)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:AddLine(tip); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return b
+end
+
+local decorate = AtlasButton(controls, "EsteriaHousingDecorate", 68, 68, "decor-controls-decoratemode-inactive",
+  "decor-controls-decoratemode-active", "decor-controls-decoratemode-pressed")
+decorate:SetPoint("CENTER", controls, "CENTER", 0, -4)
+decorate:SetFrameLevel(controls:GetFrameLevel() + 2)
+decorate:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_BOTTOM"); GameTooltip:AddLine(editing and "Stop Decorating" or "Decorate"); GameTooltip:Show()
+end)
+decorate:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local inspect = Control("inspect", -100, 30, function() H.SetEditing(true); H.SetAbility(2) end, "Select decor (Expert)")
+local houseinfo = Control("houseinfo", -64, 30, function() end, "House")
+houseinfo:SetScript("OnEnter", function(self)
+  local layout = EsteriaHousing_GetLayout and EsteriaHousing_GetLayout()
+  GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
+  GameTooltip:AddLine("Your House")
+  if state then GameTooltip:AddDoubleLine("Decor placed", state.placed .. " / " .. state.maxDecor, 1, 1, 1, 1, 0.82, 0) end
+  if layout then GameTooltip:AddDoubleLine("Rooms", #layout.rooms .. " / " .. layout.maxRooms, 1, 1, 1, 1, 0.82, 0) end
+  GameTooltip:Show()
+end)
+local settingsMenu = CreateFrame("Frame", "EsteriaHousingSettingsMenu", UIParent, "UIDropDownMenuTemplate")
+local settings = Control("settings", 64, 30, function()
+  EasyMenu({ { text = "Housing", isTitle = true, notCheckable = true },
+    { text = "Reset panel positions", notCheckable = true, func = function() H.ResetPositions() end } },
+    settingsMenu, "cursor", 0, 0, "MENU")
+end, "Settings")
+Control("exit", 100, 30, function() EsteriaHousing_Leave() end, "Leave House")
+
+-- the decor budget, top right
+local budget = CreateFrame("Frame", "EsteriaHousingBudget", UIParent)
+budget:SetSize(120, 30)
+budget:SetPoint("TOPRIGHT", -200, -12)
+Drag(budget)
+budget:Hide()
+local budgetIcon = H.Atlas(budget:CreateTexture(nil, "ARTWORK"), "house-decor-budget-icon", 26, 26)
+budgetIcon:SetPoint("LEFT")
+local budgetText = budget:CreateFontString(nil, "OVERLAY", "GameFontHighlightLarge")
+budgetText:SetPoint("LEFT", budgetIcon, "RIGHT", 6, 0)
+budget:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_BOTTOMLEFT"); GameTooltip:AddLine("Decor Budget")
+  GameTooltip:AddLine("Decor placed in this house and how much it can hold.", 1, 1, 1, true); GameTooltip:Show()
+end)
+budget:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- ------------------------------------------------------------------------------------------------ decor chest
+
+local chest = CreateFrame("Frame", "EsteriaHousingDecor", UIParent)
+chest:SetSize(318, 560)
+chest:SetPoint("LEFT", 20, 30)
+Drag(chest)
+chest:Hide()
+local chestBg = chest:CreateTexture(nil, "BACKGROUND"); chestBg:SetPoint("TOPLEFT", 0, -36); chestBg:SetPoint("BOTTOMRIGHT", 0, 30)
+chestBg:SetTexture(0.05, 0.035, 0.025, 0.92)
+local chestHeader = H.Atlas(chest:CreateTexture(nil, "BORDER"), "house-chest-header-bg")
+chestHeader:SetPoint("TOPLEFT"); chestHeader:SetPoint("TOPRIGHT"); chestHeader:SetHeight(44)
+local corbel = H.Atlas(chest:CreateTexture(nil, "OVERLAY"), "house-chest-corbel-topright", 58, 38)
+corbel:SetPoint("TOPRIGHT", 6, 4)
+local nav = H.Atlas(chest:CreateTexture(nil, "BORDER"), "house-chest-nav-bg_primary")
+nav:SetPoint("TOPLEFT", 0, -40); nav:SetPoint("BOTTOMLEFT", 0, 30); nav:SetWidth(54)
+local navTop = H.Atlas(chest:CreateTexture(nil, "ARTWORK"), "house-chest-nav-top-corbels", 54, 22)
+navTop:SetPoint("TOPLEFT", 0, -38)
+
+local searchBox = CreateFrame("EditBox", "EsteriaHousingDecorSearch", chest, "InputBoxTemplate")
+searchBox:SetSize(170, 20); searchBox:SetPoint("TOPLEFT", 20, -12); searchBox:SetAutoFocus(false)
 searchBox:SetScript("OnTextChanged", function(self) search = self:GetText():lower(); page = 0; H.RedrawDecor() end)
 searchBox:SetScript("OnEscapePressed", searchBox.ClearFocus)
 searchBox:SetScript("OnEnterPressed", searchBox.ClearFocus)
@@ -103,6 +207,23 @@ local searchHint = searchBox:CreateFontString(nil, "OVERLAY", "GameFontDisableSm
 searchHint:SetPoint("LEFT", 4, 0); searchHint:SetText("Search")
 searchBox:SetScript("OnEditFocusGained", function() searchHint:Hide() end)
 searchBox:SetScript("OnEditFocusLost", function(self) if self:GetText() == "" then searchHint:Show() end end)
+local countText = chest:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+countText:SetPoint("LEFT", searchBox, "RIGHT", 10, 0)
+
+-- the category column
+local tabs = {}
+for i, c in ipairs(CATEGORIES) do
+  local icon = "category-icons_" .. c[3]
+  local b = AtlasButton(chest, nil, 44, 44, icon .. "_inactive", icon .. "_active", icon .. "_pressed")
+  b:SetPoint("TOP", chest, "TOPLEFT", 27, -50 - (i - 1) * 50)
+  b.category = c[1]
+  b:SetScript("OnClick", function() category = c[1]; page = 0; H.RedrawDecor() end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine(c[2]); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  tabs[i] = b
+end
 
 local function FitModel(model)
   model:SetScript("OnUpdate", function(self)
@@ -111,69 +232,98 @@ local function FitModel(model)
   end)
 end
 
+local function Coins(copper) return GetCoinTextureString(copper) end
+
 local tiles = {}
 for i = 1, COLS * ROWS do
-  local t = CreateFrame("Button", nil, decor)
+  local t = CreateFrame("Button", nil, chest)
   t:SetSize(TILE, TILE)
-  t:SetPoint("TOPLEFT", 13 + ((i - 1) % COLS) * (TILE + 5), -116 - math.floor((i - 1) / COLS) * (TILE + 5))
-  t.bg = t:CreateTexture(nil, "BACKGROUND"); t.bg:SetAllPoints(); t.bg:SetTexture(0, 0, 0, 0.45)
-  t:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+  t:SetPoint("TOPLEFT", 64 + ((i - 1) % COLS) * (TILE + GAP), -50 - math.floor((i - 1) / COLS) * (TILE + GAP))
+  t.frame = H.Atlas(t:CreateTexture(nil, "BORDER"), "house-chest-list-item-default"); t.frame:SetAllPoints()
+  local hl = H.ButtonTexture(t, "Highlight", "house-chest-list-item-active")
+  if hl then hl:SetBlendMode("ADD") end
   t.model = CreateFrame("Model", nil, t)
-  t.model:SetPoint("TOPLEFT", 2, -2); t.model:SetPoint("BOTTOMRIGHT", -2, 13)
-  t.name = t:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  t.name:SetFont(STANDARD_TEXT_FONT, 9)
-  t.name:SetPoint("BOTTOMLEFT", 2, 2); t.name:SetPoint("BOTTOMRIGHT", -2, 2); t.name:SetHeight(11)
-  t.count = t:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall")
-  t.count:SetPoint("TOPRIGHT", -3, -3)
+  t.model:SetPoint("TOPLEFT", 6, -6); t.model:SetPoint("BOTTOMRIGHT", -6, 14)
+  t.count = t:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
+  t.count:SetPoint("BOTTOMRIGHT", -6, 5)
   t:SetScript("OnClick", function(self)
-    if not self.entry then return end
-    if self.entry.available < 1 then return Toast("You have none of that left to place.") end
-    H.Hold({ decorId = self.entry.decorId })
+    local e = self.entry
+    if not e then return end
+    if tab == "catalog" then return H.AddToCart(e.decorId) end
+    if e.available < 1 then return Toast("You have none of that left to place.") end
+    H.SetAbility(1)
+    H.Hold({ decorId = e.decorId })
   end)
   t:SetScript("OnEnter", function(self)
-    if not self.entry then return end
-    GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-    GameTooltip:AddLine(self.entry.name)
-    GameTooltip:AddLine(string.format("In storage: %d    Placed: %d", self.entry.available, self.entry.placed), 1, 1, 1)
-    GameTooltip:AddLine("Click, then click the floor to place it.", 0.5, 0.8, 1)
+    local e = self.entry
+    if not e then return end
+    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+    GameTooltip:AddLine(e.name)
+    GameTooltip:AddLine(string.format("In storage: %d    Placed: %d", e.available, e.placed), 1, 1, 1)
+    if tab == "catalog" then
+      GameTooltip:AddLine("Price: " .. Coins(e.price or 0), 1, 1, 1)
+      GameTooltip:AddLine("Click to add it to your cart.", 0.5, 0.8, 1)
+    else
+      GameTooltip:AddLine(H.Icon("housing-hotkey-icon-leftclick", 14) .. " Pick it up, then click the floor to place it.", 0.5, 0.8, 1)
+    end
     GameTooltip:Show()
   end)
   t:SetScript("OnLeave", function() GameTooltip:Hide() end)
   tiles[i] = t
 end
+chest:EnableMouseWheel(true)
+chest:SetScript("OnMouseWheel", function(self, delta)
+  page = math.max(0, page - delta)
+  H.RedrawDecor()
+end)
 
-local prev = H.Button(decor, "<", 28, 20); prev:SetPoint("BOTTOMLEFT", 14, 42)
-local nextButton = H.Button(decor, ">", 28, 20); nextButton:SetPoint("BOTTOMRIGHT", -14, 42)
-local pageText = decor:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-pageText:SetPoint("BOTTOM", 0, 46)
-local selectButton = H.Button(decor, "Select Placed Decor", 180, 22); selectButton:SetPoint("BOTTOM", 0, 12)
-selectButton:SetScript("OnClick", function() if tool == "select" then H.Drop() else H.Hold(nil, "select") end end)
+local pageText = chest:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+pageText:SetPoint("BOTTOM", 30, 40)
+local prev = H.Button(chest, "<", 24, 18); prev:SetPoint("RIGHT", pageText, "LEFT", -8, 0)
+local nextButton = H.Button(chest, ">", 24, 18); nextButton:SetPoint("LEFT", pageText, "RIGHT", 8, 0)
+prev:SetScript("OnClick", function() page = math.max(0, page - 1); H.RedrawDecor() end)
+nextButton:SetScript("OnClick", function() page = page + 1; H.RedrawDecor() end)
+
+-- Storage | Catalog along the bottom
+local function TabButton(text, key, x)
+  local b = CreateFrame("Button", nil, chest)
+  b:SetSize(92, 28); b:SetPoint("BOTTOMLEFT", x, 0)
+  b.bg = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "house-chest-parent-category-bg"); b.bg:SetAllPoints()
+  b.text = b:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall"); b.text:SetPoint("CENTER", 0, 1); b.text:SetText(text)
+  local hl = H.ButtonTexture(b, "Highlight", "house-chest-active-nav_selected-bg-glow")
+  if hl then hl:SetBlendMode("ADD") end
+  b:SetScript("OnClick", function() tab = key; page = 0; H.RedrawDecor() end)
+  b.key = key
+  return b
+end
+local storageTab = TabButton("Storage", "storage", 60)
+local catalogTab = TabButton("Catalog", "catalog", 156)
 
 local function Filtered()
   local list = {}
   for _, e in ipairs(catalog) do
-    if (category == nil or e.category == category) and (search == "" or e.name:lower():find(search, 1, true)) then
+    if (tab == "catalog" or e.available > 0 or e.placed > 0) and (category == nil or e.category == category)
+      and (search == "" or e.name:lower():find(search, 1, true)) then
       list[#list + 1] = e
     end
   end
   return list
 end
 
-prev:SetScript("OnClick", function() page = math.max(0, page - 1); H.RedrawDecor() end)
-nextButton:SetScript("OnClick", function() if (page + 1) * COLS * ROWS < #Filtered() then page = page + 1 end; H.RedrawDecor() end)
-
 function H.RedrawDecor()
-  if not decor:IsShown() then return end
+  if not chest:IsShown() then return end
   local list = Filtered()
   local per = COLS * ROWS
-  page = math.min(page, math.max(0, math.ceil(#list / per) - 1))
+  page = math.max(0, math.min(page, math.ceil(#list / per) - 1))
   for i, t in ipairs(tiles) do
     local e = list[page * per + i]
     t.entry = e
     if e then
-      t.name:SetText(e.name)
-      t.count:SetText(e.available)
-      t:SetAlpha(e.available > 0 and 1 or 0.45)
+      if tab == "catalog" then
+        t.count:SetText(Coins(e.price or 0)); t:SetAlpha(1)
+      else
+        t.count:SetText(e.available); t:SetAlpha(e.available > 0 and 1 or 0.45)
+      end
       if t.fdid ~= e.fileDataId then
         t.fdid = e.fileDataId
         t.model:ClearModel()
@@ -185,49 +335,174 @@ function H.RedrawDecor()
       t:Hide()
     end
   end
-  for _, b in ipairs(tabs) do
-    if b.category == category then b.bg:SetTexture(1, 0.82, 0, 0.35) else b.bg:SetTexture(1, 1, 1, 0.08) end
+  for _, b in ipairs(tabs) do b:SetOn(b.category == category) end
+  for _, b in ipairs({ storageTab, catalogTab }) do
+    if b.key == tab then b.text:SetFontObject("GameFontHighlightSmall"); b:SetAlpha(1)
+    else b.text:SetFontObject("GameFontNormalSmall"); b:SetAlpha(0.7) end
   end
-  pageText:SetText(#list > 0 and string.format("Page %d of %d", page + 1, math.ceil(#list / per)) or "No decor matches.")
-  if state then budget:SetText(string.format("Placed %d / %d", state.placed, state.maxDecor)) end
-  if tool == "select" then selectButton:LockHighlight() else selectButton:UnlockHighlight() end
+  pageText:SetText(#list > 0 and string.format("%d / %d", page + 1, math.ceil(#list / per))
+    or (tab == "storage" and "Nothing in storage. Try the Catalog." or "No decor matches."))
+  countText:SetText(#list .. " items")
 end
-decor:SetScript("OnShow", H.RedrawDecor)
+chest:SetScript("OnShow", H.RedrawDecor)
 
--- ------------------------------------------------------------------------------------------------ selected decor
+-- ------------------------------------------------------------------------------------------------ cart
 
-local sel = H.Panel("EsteriaHousingSelected", 330, 70)
-sel:SetPoint("BOTTOM", bar, "TOP", 0, 18)
-local selName = sel:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-selName:SetPoint("TOP", 0, -10)
-local function SelButton(text, x, onClick)
-  local b = H.Button(sel, text, 50, 22); b:SetPoint("BOTTOMLEFT", 10 + x, 10); b:SetScript("OnClick", onClick)
-  return b
+local cartFrame = H.Panel("EsteriaHousingCart", 260, 120)
+cartFrame:SetPoint("BOTTOMRIGHT", -40, 160)
+local cartTitle = cartFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+cartTitle:SetPoint("TOPLEFT", 14, -12)
+local cartRows = {}
+local trash = H.Button(cartFrame, "X", 34, 26)
+trash:SetPoint("BOTTOMLEFT", 12, 10)
+trash:SetScript("OnClick", function() cart = {}; H.RedrawCart() end)
+trash:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine("Empty the cart"); GameTooltip:Show() end)
+trash:SetScript("OnLeave", function() GameTooltip:Hide() end)
+local purchase = H.Button(cartFrame, "", 190, 26)
+purchase:SetPoint("BOTTOMRIGHT", -12, 10)
+
+local function CartTotal()
+  local total = 0
+  for _, c in ipairs(cart) do
+    local e = Entry(c.decorId)
+    total = total + (e and e.price or 0) * c.count
+  end
+  return total
 end
+
+function H.AddToCart(decorId)
+  for _, c in ipairs(cart) do
+    if c.decorId == decorId then c.count = c.count + 1; return H.RedrawCart() end
+  end
+  cart[#cart + 1] = { decorId = decorId, count = 1 }
+  H.RedrawCart()
+end
+
+function H.RedrawCart()
+  for _, r in ipairs(cartRows) do r:Hide() end
+  if #cart == 0 or not editing then return cartFrame:Hide() end
+  local items = 0
+  for i, c in ipairs(cart) do
+    items = items + c.count
+    local r = cartRows[i]
+    if not r then
+      r = CreateFrame("Button", nil, cartFrame)
+      r:SetSize(236, 18)
+      r.name = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.name:SetPoint("LEFT"); r.name:SetWidth(150)
+      r.name:SetJustifyH("LEFT")
+      r.price = r:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall"); r.price:SetPoint("RIGHT")
+      r:SetScript("OnClick", function(self) -- a click takes one off
+        local item = cart[self.index]
+        item.count = item.count - 1
+        if item.count < 1 then table.remove(cart, self.index) end
+        H.RedrawCart()
+      end)
+      cartRows[i] = r
+    end
+    local e = Entry(c.decorId)
+    r.index = i
+    r:SetPoint("TOPLEFT", 12, -38 - (i - 1) * 20)
+    r.name:SetText((e and e.name or "Decor") .. (c.count > 1 and (" x" .. c.count) or ""))
+    r.price:SetText(Coins((e and e.price or 0) * c.count))
+    r:Show()
+  end
+  cartTitle:SetText(string.format("Cart Preview (%d)", items))
+  cartFrame:SetHeight(86 + #cart * 20)
+  local total = CartTotal()
+  purchase:SetText((GetMoney() < total and "|cffff4040" or "") .. "Buy  " .. Coins(total))
+  if GetMoney() < total then purchase:Disable() else purchase:Enable() end
+  cartFrame:Show()
+end
+
+purchase:SetScript("OnClick", function()
+  for _, c in ipairs(cart) do EsteriaHousing_BuyDecor(c.decorId, c.count) end
+  cart = {}
+  tab = "storage"
+  H.RedrawCart()
+  H.RedrawDecor()
+end)
+
+-- ------------------------------------------------------------------------------------------------ ability bar
+
+local abilityBar = CreateFrame("Frame", "EsteriaHousingAbilities", UIParent)
+abilityBar:SetSize(5 * 52 + 70, 60)
+abilityBar:SetPoint("BOTTOM", 0, 120)
+Drag(abilityBar)
+abilityBar:Hide()
+local barLeft = H.Atlas(abilityBar:CreateTexture(nil, "BACKGROUND"), "decor-abilitybar-bookend-left", 59, 59)
+barLeft:SetPoint("LEFT", -24, 0)
+local barRight = H.Atlas(abilityBar:CreateTexture(nil, "BACKGROUND"), "decor-abilitybar-bookend-right", 59, 59)
+barRight:SetPoint("RIGHT", 24, 0)
+local barMid = H.Atlas(abilityBar:CreateTexture(nil, "BACKGROUND"), "decor-abilitybar-bg-horz")
+barMid:SetPoint("LEFT", barLeft, "RIGHT", -1, 0); barMid:SetPoint("RIGHT", barRight, "LEFT", 1, 0); barMid:SetHeight(59)
+
+local ABILITIES = { { "move", "Basic", "Place decor from your storage." },
+  { "expertmode", "Expert", "Select placed decor to move, turn or raise it." },
+  { "alterations", "Customize", "Style the room you are standing in." },
+  { "cleanup", "Cleanup", "Click decor to put it back in storage." },
+  { "layoutmode", "Layout", "Build and remove rooms." } }
+local abilityButtons = {}
+for i, a in ipairs(ABILITIES) do
+  local b = AtlasButton(abilityBar, "EsteriaHousingAbility" .. i, 46, 46, "decor-ability-" .. a[1] .. "-default",
+    "decor-ability-" .. a[1] .. "-active", "decor-ability-" .. a[1] .. "-pressed")
+  b:SetPoint("LEFT", 35 + (i - 1) * 52 + (i == 5 and 8 or 0), 0)
+  local key = b:CreateFontString(nil, "OVERLAY", "NumberFontNormalSmall"); key:SetPoint("TOPLEFT", 2, -2); key:SetText(i)
+  b:SetScript("OnClick", function() H.SetAbility(i) end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(a[2] .. "  |cffa0a0a0(" .. i .. ")|r")
+    GameTooltip:AddLine(a[3], 1, 1, 1, true); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  abilityButtons[i] = b
+end
+local divider = H.Atlas(abilityBar:CreateTexture(nil, "ARTWORK"), "decor-abilitybar-divider", 10, 46)
+divider:SetPoint("LEFT", abilityButtons[5], "LEFT", -11, 0)
+
+-- Expert: the selected decor's tools above the bar
+local expert = CreateFrame("Frame", "EsteriaHousingExpert", UIParent)
+expert:SetSize(4 * 44 + 20, 72)
+expert:SetPoint("BOTTOM", abilityBar, "TOP", 0, 6)
+expert:Hide()
+local expertBg = expert:CreateTexture(nil, "BACKGROUND"); expertBg:SetAllPoints(); expertBg:SetTexture(0, 0, 0, 0.55)
+local expertName = expert:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+expertName:SetPoint("TOP", 0, -4)
 
 local function Edit(d, x, y, z, yaw)
   if not EsteriaHousing_Move(d.placedId, x, y, z, yaw) then Toast("You can only edit your own house.") end
 end
-SelButton("Move", 0, function() local d = Placed(selected); if d then H.Hold({ placedId = d.placedId, decorId = d.decorId, yaw = d.yaw }, "move") end end)
-SelButton("Turn L", 52, function() local d = Placed(selected); if d then Edit(d, d.x, d.y, d.z, d.yaw + TURN) end end)
-SelButton("Turn R", 104, function() local d = Placed(selected); if d then Edit(d, d.x, d.y, d.z, d.yaw - TURN) end end)
-SelButton("Up", 156, function() local d = Placed(selected); if d then Edit(d, d.x, d.y, d.z + ZSTEP, d.yaw) end end)
-SelButton("Down", 208, function() local d = Placed(selected); if d then Edit(d, d.x, d.y, d.z - ZSTEP, d.yaw) end end)
-SelButton("Store", 260, function()
-  local d = Placed(selected)
-  if d and not EsteriaHousing_Remove(d.placedId) then Toast("You can only edit your own house.") end
-end)
+local EXPERT = {
+  { "expert-horzmove", "Move", "Pick it up and click a new spot.",
+    function(d) H.Hold({ placedId = d.placedId, decorId = d.decorId, yaw = d.yaw }, "move") end },
+  { "expert-rotate", "Turn", "Left-click turns left, right-click right. The wheel turns it too.",
+    function(d, button) Edit(d, d.x, d.y, d.z, d.yaw + (button == "RightButton" and -TURN or TURN)) end },
+  { "expert-height", "Raise", "Left-click raises it, right-click lowers it.",
+    function(d, button) Edit(d, d.x, d.y, d.z + (button == "RightButton" and -ZSTEP or ZSTEP), d.yaw) end },
+  { "cleanup", "Store", "Put it back in storage.", function(d)
+    if not EsteriaHousing_Remove(d.placedId) then Toast("You can only edit your own house.") end end },
+}
+for i, x in ipairs(EXPERT) do
+  local b = AtlasButton(expert, "EsteriaHousingExpert" .. x[2], 40, 40, "decor-ability-" .. x[1] .. "-default",
+    "decor-ability-" .. x[1] .. "-active", "decor-ability-" .. x[1] .. "-pressed")
+  b:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 44, 6)
+  b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
+  b:SetScript("OnClick", function(self, button) local d = Placed(selected); if d then x[4](d, button) end end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(x[2]); GameTooltip:AddLine(x[3], 1, 1, 1, true); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+end
 
-local function RedrawSelected()
-  local d = Owner() and mode == "decor" and Placed(selected)
-  if not d then return sel:Hide() end
-  selName:SetText(string.format("%s  |cffa0a0a0%d\194\176|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360))
-  sel:Show()
+local function RedrawExpert()
+  local d = Owner() and editing and ability == 2 and Placed(selected)
+  if not d then return expert:Hide() end
+  expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360))
+  expert:Show()
 end
 
 -- ------------------------------------------------------------------------------------------------ world clicks
 
--- While holding or selecting, a click-catcher covers the world (under every panel) so clicks place instead of target.
+-- While holding, selecting or cleaning up, a click-catcher covers the world (under every panel) so clicks act on
+-- decor instead of targeting.
 local catcher = CreateFrame("Button", "EsteriaHousingCatcher", UIParent)
 catcher:SetAllPoints(UIParent)
 catcher:SetFrameStrata("BACKGROUND")
@@ -246,6 +521,19 @@ local function CursorFloor()
   return x, y, z
 end
 
+local function Nearest(x, y, z)
+  local best, bestDistance = nil, PICK * PICK
+  for _, d in ipairs(state and state.decor or {}) do
+    local distance = (d.x - x) ^ 2 + (d.y - y) ^ 2
+    if distance < bestDistance and math.abs(d.z - z) < 3 then best, bestDistance = d, distance end
+  end
+  return best
+end
+
+local function AbilityTool()
+  return editing and (ability == 2 and "select" or ability == 4 and "cleanup") or nil
+end
+
 function H.Hold(what, which)
   holding = what
   tool = which or (what and "place")
@@ -259,10 +547,14 @@ function H.Hold(what, which)
   H.RedrawDecor()
 end
 
-function H.Drop() H.Hold(nil) end
+-- back to the ability's own tool: Expert selects, Cleanup stores
+function H.Drop() H.Hold(nil, AbilityTool()) end
 
 catcher:SetScript("OnClick", function(self, button)
-  if button == "RightButton" then return H.Drop() end
+  if button == "RightButton" then
+    if holding then return H.Drop() end
+    return H.SetAbility(1) -- right-click leaves Expert / Cleanup
+  end
   local x, y, z
   if holding and EsteriaHousing_GetGhost then x, y, z = EsteriaHousing_GetGhost() end -- exactly where the ghost stands
   if not x then x, y, z = CursorFloor() end
@@ -275,14 +567,14 @@ catcher:SetScript("OnClick", function(self, button)
     if d then Edit(d, x, y, z, holding.yaw) end
     H.Drop()
   elseif tool == "select" then
-    local best, bestDistance = nil, PICK * PICK
-    for _, d in ipairs(state and state.decor or {}) do
-      local distance = (d.x - x) ^ 2 + (d.y - y) ^ 2
-      if distance < bestDistance and math.abs(d.z - z) < 3 then best, bestDistance = d, distance end
-    end
+    local best = Nearest(x, y, z)
     selected = best and best.placedId
     if not best then Toast("No decor there.") end
-    RedrawSelected()
+    RedrawExpert()
+  elseif tool == "cleanup" then
+    local best = Nearest(x, y, z)
+    if not best then return Toast("No decor there.") end
+    if not EsteriaHousing_Remove(best.placedId) then Toast("You can only edit your own house.") end
   end
 end)
 
@@ -296,62 +588,91 @@ catcher:SetScript("OnMouseWheel", function(self, delta)
   end
 end)
 
+local LEFT, RIGHT, WHEEL = "housing-hotkey-icon-leftclick", "housing-hotkey-icon-rightclick", "housing-hotkey-icon-mousewheel"
 catcher:SetScript("OnUpdate", function(self)
   local scale = UIParent:GetEffectiveScale()
   local cx, cy = GetCursorPosition()
   hint:ClearAllPoints()
   hint:SetPoint("BOTTOMLEFT", UIParent, "BOTTOMLEFT", cx / scale + 24, cy / scale - 8)
+  local l, r, w = H.Icon(LEFT, 16), H.Icon(RIGHT, 16), H.Icon(WHEEL, 16)
   if tool == "select" then
-    hint:SetText("Click decor to select it\n|cffa0a0a0Wheel: turn the selection    Right-click: done|r")
+    hint:SetText("Select Decor\n" .. l .. " select   " .. w .. " turn   " .. r .. " done")
+  elseif tool == "cleanup" then
+    hint:SetText("Cleanup\n" .. l .. " store decor   " .. r .. " done")
   elseif holding then
-    hint:SetText(string.format("%s  %d\194\176\n|cffa0a0a0Click: %s    Wheel: turn    %sRight-click: cancel|r",
-      names[holding.decorId] or "Decor", holding.yaw % 360, tool == "move" and "move here" or "place",
-      tool == "place" and "Shift-click: place more    " or ""))
+    hint:SetText(string.format("%s  %d\194\176\n%s %s   %s turn   %s%s cancel", names[holding.decorId] or "Decor",
+      holding.yaw % 360, l, tool == "move" and "move here" or "place", w, tool == "place" and "shift: more   " or "", r))
   end
 end)
 
 -- ------------------------------------------------------------------------------------------------ modes
 
-function H.SetMode(m)
-  if m == mode then m = nil end
-  mode = m
-  H.Drop()
-  if mode == "decor" then decor:Show() else decor:Hide() end
-  if H.ShowLayout then H.ShowLayout(mode == "layout") end
-  if mode == "decor" then decorButton:LockHighlight() else decorButton:UnlockHighlight() end
-  if mode == "layout" then layoutButton:LockHighlight() else layoutButton:UnlockHighlight() end
-  RedrawSelected()
+function H.SetAbility(i)
+  if i == 3 then -- Customize is a menu for the room you stand in, not a mode of its own
+    if H.CustomizeHere then H.CustomizeHere() end
+    i = ability == 3 and 1 or ability
+  end
+  ability = i
+  for n, b in ipairs(abilityButtons) do b:SetOn(n == i) end
+  if H.ShowLayout then H.ShowLayout(editing and ability == 5) end
+  if editing and ability ~= 5 then chest:Show() else chest:Hide() end
+  H.Hold(nil, AbilityTool())
+  RedrawExpert()
 end
-decorButton:SetScript("OnClick", function() H.SetMode("decor") end)
-layoutButton:SetScript("OnClick", function() H.SetMode("layout") end)
 
-local function RedrawBar()
+local function Bind(on)
+  ClearOverrideBindings(abilityBar)
+  if on then
+    for i = 1, 5 do SetOverrideBindingClick(abilityBar, true, tostring(i), "EsteriaHousingAbility" .. i) end
+  end
+end
+
+function H.SetEditing(on)
+  editing = on and Owner() or nil
+  decorate:SetOn(editing)
+  if editing then abilityBar:Show() else abilityBar:Hide() end
+  Bind(editing)
+  H.SetAbility(editing and ability or 1)
+  H.RedrawCart()
+end
+decorate:SetScript("OnClick", function() H.SetEditing(not editing) end)
+
+function H.ResetPositions()
+  for _, f in ipairs({ controls, budget, chest, abilityBar, cartFrame, EsteriaHousingLayout }) do
+    if f then f:SetUserPlaced(false) end
+  end
+  ReloadUI()
+end
+
+-- /housing and older callers: "decor" toggles decorating, "layout" opens the blueprint
+function H.SetMode(m)
+  if m == "layout" then H.SetEditing(true); H.SetAbility(5)
+  elseif m == "decor" then H.SetEditing(not editing)
+  else H.SetEditing(false) end
+end
+
+local function RedrawControls()
   if not (state and state.inHouse) then
-    if mode then H.SetMode(mode) end -- closes it
-    bar:Hide(); return
+    if editing then H.SetEditing(false) end
+    controls:Hide(); budget:Hide(); return
   end
-  bar:Show()
-  if state.isOwner then
-    barTitle:SetText("House Editor")
-    decorButton:Show(); layoutButton:Show()
-    leaveButton:ClearAllPoints(); leaveButton:SetPoint("LEFT", layoutButton, "RIGHT", 6, 0)
-    bar:SetWidth(320)
-  else
-    barTitle:SetText("Visiting")
-    if mode then H.SetMode(mode) end
-    decorButton:Hide(); layoutButton:Hide()
-    leaveButton:ClearAllPoints(); leaveButton:SetPoint("CENTER")
-    bar:SetWidth(130)
-  end
+  controls:Show()
+  local owner = state.isOwner
+  for _, b in ipairs({ decorate, inspect, houseinfo, settings }) do if owner then b:Show() else b:Hide() end end
+  H.Atlas(controlsBg, owner and "controls-frame" or "controls-frame-guest")
+  if not owner and editing then H.SetEditing(false) end
+  budgetText:SetText(string.format("%d/%d", state.placed, state.maxDecor))
+  if owner then budget:Show() else budget:Hide() end
 end
 
 -- ------------------------------------------------------------------------------------------------ events
 
-bar:RegisterEvent("ESTERIA_HOUSING_AVAILABLE")
-bar:RegisterEvent("ESTERIA_HOUSING_CATALOG")
-bar:RegisterEvent("ESTERIA_HOUSING_STATE")
-bar:RegisterEvent("ESTERIA_HOUSING_RESULT")
-bar:SetScript("OnEvent", function(self, event, result, op, placedId)
+controls:RegisterEvent("ESTERIA_HOUSING_AVAILABLE")
+controls:RegisterEvent("ESTERIA_HOUSING_CATALOG")
+controls:RegisterEvent("ESTERIA_HOUSING_STATE")
+controls:RegisterEvent("ESTERIA_HOUSING_RESULT")
+controls:RegisterEvent("PLAYER_MONEY")
+controls:SetScript("OnEvent", function(self, event, result, op, placedId)
   if event == "ESTERIA_HOUSING_CATALOG" then
     catalog = EsteriaHousing_GetCatalog()
     table.sort(catalog, function(a, b) return a.name < b.name end)
@@ -360,19 +681,21 @@ bar:SetScript("OnEvent", function(self, event, result, op, placedId)
     state = EsteriaHousing_GetState()
     if not Placed(selected) then selected = nil end
     if holding and holding.placedId and not Placed(holding.placedId) then H.Drop() end
-    RedrawBar()
+    RedrawControls()
   elseif event == "ESTERIA_HOUSING_RESULT" then
     if result ~= 0 then Toast(RESULT[result] or ("Housing error " .. result))
     elseif op == 1 then selected = placedId end
     state = EsteriaHousing_GetState()
+    RedrawControls()
   end
   H.RedrawDecor()
-  RedrawSelected()
+  H.RedrawCart()
+  RedrawExpert()
 end)
 
 SLASH_ESTERIAHOUSING1 = "/housing"
 SlashCmdList.ESTERIAHOUSING = function()
   if not EsteriaHousing_IsAvailable() then return Toast("Housing is off (set housingEnabled 1, and the realm must enable it).") end
   if not Owner() then return Toast("Open the editor inside your own house.") end
-  H.SetMode(mode or "decor")
+  H.SetEditing(not editing)
 end

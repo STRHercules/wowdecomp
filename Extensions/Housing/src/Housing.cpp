@@ -33,6 +33,7 @@ struct CatalogEntry {
     uint32_t decorId = 0, goEntry = 0, fdid = 0;
     uint16_t available = 0, placed = 0;
     uint8_t category = 0, surface = 0;
+    uint32_t price = 0; // copper, at the house catalog
     std::string name;
 };
 
@@ -240,7 +241,7 @@ int32_t ReceiveCatalog(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     for (uint16_t i = 0; i < n; ++i) {
         CatalogEntry e;
         if (!r.Get(e.decorId) || !r.Get(e.goEntry) || !r.Get(e.fdid) || !r.Get(e.available) || !r.Get(e.placed)
-            || !r.Get(e.category) || !r.Get(e.surface) || !r.Get(e.name)) return 0;
+            || !r.Get(e.category) || !r.Get(e.surface) || !r.Get(e.price) || !r.Get(e.name)) return 0;
         s_catalogNext.push_back(std::move(e));
     }
     if (!r.Done()) return 0;
@@ -394,7 +395,7 @@ int32_t GetState(lua_State* L) {
     return 1;
 }
 
-// { { decorId, name, available, placed, category, surface, fileDataId } }
+// { { decorId, name, available, placed, category, surface, fileDataId, price } }
 int32_t GetCatalog(lua_State* L) {
     lua_createtable(L, int(s_catalog.size()), 0);
     int i = 0;
@@ -402,6 +403,7 @@ int32_t GetCatalog(lua_State* L) {
         lua_createtable(L, 0, 7);
         NumberField(L, "decorId", e.decorId); NumberField(L, "available", e.available); NumberField(L, "placed", e.placed);
         NumberField(L, "category", e.category); NumberField(L, "surface", e.surface); NumberField(L, "fileDataId", e.fdid);
+        NumberField(L, "price", e.price);
         lua_pushstring(L, e.name.c_str()); lua_setfield(L, -2, "name");
         lua_rawseti(L, -2, ++i);
     }
@@ -581,6 +583,14 @@ int32_t StairsUp(lua_State* L) {
     return 1;
 }
 
+// EsteriaHousing_BuyDecor(decorId, count): buys decor into storage at the catalog price.
+int32_t BuyDecor(lua_State* L) {
+    if (!lua_isnumber(L, 1) || !lua_isnumber(L, 2)) return luaL_error(L, "Usage: EsteriaHousing_BuyDecor(decorId, count)");
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionBuyDecor).Put<uint32_t>(uint32_t(lua_tonumber(L, 1)))
+        .Put<uint16_t>(uint16_t(lua_tonumber(L, 2))).Send(CMSG_ACTION));
+    return 1;
+}
+
 // EsteriaHousing_SetCeilingHidden(room, hidden): room 0-based.
 int32_t SetCeilingHidden(lua_State* L) {
     if (!lua_isnumber(L, 1)) return luaL_error(L, "Usage: EsteriaHousing_SetCeilingHidden(room, hidden)");
@@ -726,6 +736,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StyleRoom", StyleRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetCeilingHidden", SetCeilingHidden, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StairsUp", StairsUp, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_BuyDecor", BuyDecor, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);
