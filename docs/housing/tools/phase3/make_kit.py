@@ -1,6 +1,6 @@
 """Build the room-kit table mod-esteria-housing spawns rooms from, using the retail housing DB2s.
 
-    python -I make_kit.py <tables.json> <community-listfile.csv> <raw dir> <out.tsv> [<themes.tsv>]
+    python -I make_kit.py <tables.json> <community-listfile.csv> <raw dir> <out.tsv> [<themes.tsv> [<stairs.tsv>]]
 
 tables.json comes from ../phase2/dump.py (HouseRoom, RoomWmoData, RoomComponent, RoomComponentOption).
 <raw dir> holds original WMO roots as <fdid>.bin (RetailAssetProbe --extract); each solid wall's MOHD bounding
@@ -45,7 +45,7 @@ def options_for(options, theme):
     return option
 
 
-def main(tables, listfile, raw, out, themes_out=None):
+def main(tables, listfile, raw, out, themes_out=None, stairs_out=None):
     t = json.load(open(tables))
     rooms, wmo, comps, options = t["HouseRoom"], t["RoomWmoData"], t["RoomComponent"], t["RoomComponentOption"]
     names = {}
@@ -101,7 +101,27 @@ def main(tables, listfile, raw, out, themes_out=None):
         w.writerows(themed)
     names_of = {int(k): v["Name_lang"] for k, v in t["HouseTheme"].items()}
     print(f"{len(themed)} themed pieces in {', '.join(names_of[x] for x in THEMES)}")
+    if not stairs_out:
+        return
+    # Every staircase variant (Type 4 SubType 1-4) in every theme. Measured from the generic models: 1 and 4 close the
+    # floor over the bottom flight (another stairwell above), 2 and 3 leave it open with a railing (the empty stairwell
+    # room above); 3 and 4 reach 6 yd below the floor (a stairwell below).
+    stairs = []
+    for theme in [THEME] + THEMES:
+        styles_of = options_for(options, theme)
+        for r in rows:
+            c = by_id[r[8]]
+            if c["Type"] != 4:
+                continue
+            for variant in (1, 2, 3, 4):
+                if (fdid := styles_of[c["MeshStyleFilterID"]].get((0, variant), 0)):
+                    stairs.append([r[0], r[8], theme, variant, fdid])
+    with open(stairs_out, "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter="\t", lineterminator="\n")
+        w.writerow(["kind", "piece", "theme", "variant", "fdid"])
+        w.writerows(stairs)
+    print(f"{len(stairs)} staircase variants")
 
 
 if __name__ == "__main__":
-    main(*sys.argv[1:6])
+    main(*sys.argv[1:7])

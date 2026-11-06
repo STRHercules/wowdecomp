@@ -60,9 +60,9 @@ struct PlotInfo {
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
-struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; uint32_t theme[3] = { 0, 0, 0 }; uint8_t ceilingHidden = 0, level = 0; };
+struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; uint32_t theme[3] = { 0, 0, 0 }; uint8_t ceilingHidden = 0; int8_t level = 0; };
 struct LayoutTheme { uint32_t id = 0; std::string name; };
-struct LayoutSocket { uint8_t room = 0, piece = 0, level = 0; float x = 0, y = 0, nx = 0, ny = 0; std::vector<uint32_t> fits; };
+struct LayoutSocket { uint8_t room = 0, piece = 0; int8_t level = 0; float x = 0, y = 0, nx = 0, ny = 0; std::vector<uint32_t> fits; };
 struct Layout {
     bool valid = false;
     uint8_t maxRooms = 0;
@@ -508,7 +508,8 @@ int32_t AddRoom(lua_State* L) {
 // { maxRooms, originX, originY, kinds = { [id] = { id, name, sizeX, sizeY, price } },
 //   rooms = { { kind, x, y, quarter, wallTheme, floorTheme, ceilingTheme, ceilingHidden, level } },
 //   sockets = { { room, piece, level, x, y, nx, ny, fits = { kind... } } }, themes = { { id, name } } }
-// level is the floor, 0 the ground; floors are 12 yd apart.
+// level is the floor, 0 the ground and -1 the basement; floors are 12 yd apart. A fits kind above 1000 builds that
+// stairwell down from the socket ("Stairs Down" in kinds).
 // Room offsets and socket positions are relative to the origin (world = origin + offset).
 int32_t GetLayout(lua_State* L) {
     if (!s_available || !s_layout.valid) { lua_pushnil(L); return 1; }
@@ -569,6 +570,14 @@ int32_t StyleRoom(lua_State* L) {
     lua_pushboolean(L, s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionRoomStyle)
         .Put<uint8_t>(uint8_t(lua_tonumber(L, 1))).Put<uint8_t>(uint8_t(lua_tonumber(L, 2)))
         .Put<uint32_t>(uint32_t(lua_tonumber(L, 3))).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_StairsUp(room): a stairwell's top (room 0-based) becomes another stairwell with a new top above.
+int32_t StairsUp(lua_State* L) {
+    if (!lua_isnumber(L, 1)) return luaL_error(L, "Usage: EsteriaHousing_StairsUp(room)");
+    lua_pushboolean(L, s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionStairsUp)
+        .Put<uint8_t>(uint8_t(lua_tonumber(L, 1))).Send(CMSG_ACTION));
     return 1;
 }
 
@@ -716,6 +725,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RemoveRoom", RemoveRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StyleRoom", StyleRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetCeilingHidden", SetCeilingHidden, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StairsUp", StairsUp, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);

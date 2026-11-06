@@ -10,8 +10,8 @@ local H = EsteriaHousingUI
 local CANVAS, PLUS, PLUS_GAP = 380, 16, 1 -- the "+" sits PLUS_GAP px outside its wall
 local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, "Ceiling", "ceilingTheme" } }
 local layout
-local floor = 0 -- the floor shown, 0 the ground
-local LEVEL, MAX_FLOORS, STAIRWELL_TOP = 12, 4, 48
+local floor = 0 -- the floor shown: 0 the ground, -1 the basement
+local LEVEL, MIN_LEVEL, MAX_LEVEL, STAIRWELL_TOP = 12, -1, 3, 48
 
 local f = H.Panel("EsteriaHousingLayout", CANVAS + 24, CANVAS + 80)
 f:SetPoint("CENTER", -120, 40)
@@ -40,20 +40,27 @@ local menu = CreateFrame("Frame", "EsteriaHousingLayoutMenu", UIParent, "UIDropD
 
 -- floor tabs along the top of the canvas
 local floorTabs = {}
-for i = 1, MAX_FLOORS do
-  local b = H.Button(f, "Floor " .. i, 64, 18)
-  b:SetPoint("TOPLEFT", canvas, "TOPLEFT", 4 + (i - 1) * 66, -4)
+for level = MIN_LEVEL, MAX_LEVEL do
+  local b = H.Button(f, level < 0 and "Basement" or ("Floor " .. (level + 1)), 64, 18)
+  b.level = level
   b:SetFrameLevel(canvas:GetFrameLevel() + 10)
-  b:SetScript("OnClick", function() floor = i - 1; H.RedrawLayout() end)
-  floorTabs[i] = b
+  b:SetScript("OnClick", function() floor = level; H.RedrawLayout() end)
+  floorTabs[#floorTabs + 1] = b
 end
 
--- the floor the player stands on, from the house's lowest point (the state's bounds)
+local function LowestLevel()
+  local lowest = 0
+  for _, room in ipairs(layout and layout.rooms or {}) do lowest = math.min(lowest, room.level) end
+  return lowest
+end
+
+-- the floor the player stands on, from the house's lowest point (the state's bounds start 0.5 yd under that floor)
 local function PlayerFloor()
   local state = EsteriaHousing_GetState()
   local _, _, z = EsteriaHousing_GetPlayerPosition()
   if not (state and state.minZ and z) then return 0 end
-  return math.max(0, math.min(MAX_FLOORS - 1, math.floor((z - state.minZ - 0.5 + 2) / LEVEL)))
+  local ground = state.minZ + 0.5 - LowestLevel() * LEVEL
+  return math.max(MIN_LEVEL, math.min(MAX_LEVEL, math.floor((z - ground + 2) / LEVEL)))
 end
 
 local rects, plusses = {}, {}
@@ -91,6 +98,12 @@ local function RoomMenu(index)
   end
   items[#items + 1] = { text = room.ceilingHidden and "Show Ceiling" or "Hide Ceiling", notCheckable = true,
     func = function() EsteriaHousing_SetCeilingHidden(index - 1, not room.ceilingHidden) end }
+  if room.kind == STAIRWELL_TOP and room.level < MAX_LEVEL then
+    local stairs = layout.kinds[10]
+    local price = stairs and stairs.price or 0
+    items[#items + 1] = { notCheckable = true, disabled = GetMoney() < price,
+      text = "Extend Stairs Up  " .. GetCoinTextureString(price), func = function() EsteriaHousing_StairsUp(index - 1) end }
+  end
   return items
 end
 
@@ -175,13 +188,19 @@ function H.RedrawLayout()
   scale = math.min(10, (CANVAS - edge) / (maxX - minX), (CANVAS - edge) / (maxY - minY))
   cx, cy = (minX + maxX) / 2, (minY + maxY) / 2
 
-  -- floors: as many as there are, plus the one a stairwell leads to
-  local floors = 1
-  for _, room in ipairs(layout.rooms) do floors = math.max(floors, room.level + 1) end
-  floor = math.min(floor, floors - 1)
-  for i, b in ipairs(floorTabs) do
-    if i <= floors and floors > 1 then b:Show() else b:Hide() end
-    if i - 1 == floor then b:LockHighlight() else b:UnlockHighlight() end
+  -- one tab per floor the house has, lowest first
+  local lowest, highest = 0, 0
+  for _, room in ipairs(layout.rooms) do lowest, highest = math.min(lowest, room.level), math.max(highest, room.level) end
+  floor = math.max(lowest, math.min(floor, highest))
+  local x = 4
+  for _, b in ipairs(floorTabs) do
+    if b.level >= lowest and b.level <= highest and highest > lowest then
+      b:ClearAllPoints(); b:SetPoint("TOPLEFT", canvas, "TOPLEFT", x, -4); x = x + 66
+      b:Show()
+    else
+      b:Hide()
+    end
+    if b.level == floor then b:LockHighlight() else b:UnlockHighlight() end
   end
 
   local n = 0

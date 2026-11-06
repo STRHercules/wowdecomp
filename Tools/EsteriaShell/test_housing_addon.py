@@ -54,6 +54,7 @@ function EsteriaHousing_AddRoom(...) return log("addroom", ...) end
 function EsteriaHousing_RemoveRoom() return log("removeroom") end
 function EsteriaHousing_StyleRoom(...) return log("styleroom", ...) end
 function EsteriaHousing_SetCeilingHidden(...) return log("ceiling", ...) end
+function EsteriaHousing_StairsUp(...) return log("stairsup", ...) end
 function EasyMenu(items) lastMenu = items end
 function CloseDropDownMenus() end
 CANCEL = "Cancel"
@@ -190,6 +191,15 @@ def shown_sockets():
 assert shown_sockets() == [0], shown_sockets()
 click("Floor 2")
 assert shown_sockets() == [1], shown_sockets()
+# The stairwell's top offers Extend Stairs Up; a basement adds a Basement tab.
+L.execute('for _, o in ipairs(created) do if o.index == 3 and o.border then o._scripts.OnClick(o) end end')
+items = list(g.lastMenu.values())
+assert "Extend Stairs Up" in items[-1].text
+items[-1].func()
+assert last() == ["stairsup", 2], last()
+L.execute('layout.rooms[4] = { kind = 10, x = 0, y = 24, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, level = -1 }')
+g.event("ESTERIA_HOUSING_LAYOUT")
+assert g.buttonNamed("Basement")._shown
 
 # A visitor sees only Leave; leaving the house hides everything.
 L.execute('state.isOwner = false')
