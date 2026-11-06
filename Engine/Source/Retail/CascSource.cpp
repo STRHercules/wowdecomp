@@ -4,6 +4,8 @@
 #include "Engine/Source/Retail/PackedArchives.h"
 #include "Engine/Source/Retail/RetailModel.h"
 #include "Engine/Source/Retail/RetailWmo.h"
+#include "Engine/Source/Retail/RetailTerrain.h"
+#include <array>
 #include "Engine/Source/Retail/ClientTables.h"
 #include "Engine/Source/Retail/SlimeGiant.h"
 #include "Engine/Source/Retail/Centaur.h"
@@ -117,6 +119,7 @@ struct CascSource::Impl {
     std::string configurationError = "RetailCasc.ini has not been configured";
     std::map<std::string, uint32_t> names;
     std::map<std::string, Reference> dependencies;
+    std::map<std::string, std::array<uint32_t, 2>> terrainTiles; // <map>_<x>_<y>.adt -> obj0, tex0 (root is the dependency)
     std::map<std::string, std::pair<std::shared_ptr<Model>, size_t>> models;
     std::map<std::string, uint32_t> cachedSizes;
     std::set<uint32_t> characterModels;
@@ -671,8 +674,27 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
             }
         }
         if (success) bytes = std::move(prepared);
+    } else if (ext == ".wdt") {
+        // CMap::LoadArea opens <map>_<x>_<y>.adt beside the WDT; MAID says which three split files make each tile.
+        std::vector<uint8_t> prepared;
+        std::vector<WdtTile> tiles;
+        success = PrepareWdt(bytes, prepared, tiles, error);
+        const auto base = key.substr(0, key.find_last_of('.'));
+        for (size_t i = 0; success && i < tiles.size(); ++i) {
+            const auto name = base + "_" + std::to_string(tiles[i].x) + "_" + std::to_string(tiles[i].y) + ".adt";
+            s.dependencies[name] = Reference{tiles[i].root};
+            s.terrainTiles[name] = {tiles[i].obj0, tiles[i].tex0};
+        }
+        if (success) bytes = std::move(prepared);
+    } else if (ext == ".adt") {
+        const auto tile = s.terrainTiles.find(key);
+        std::vector<uint8_t> obj0, tex0, prepared;
+        success = tile != s.terrainTiles.end() ? true : Failure(error, "Open the Retail WDT before its tiles");
+        success = success && s.Fetch(Reference{tile->second[0]}, "", obj0, error)
+            && s.Fetch(Reference{tile->second[1]}, "", tex0, error) && PrepareAdt(bytes, obj0, tex0, prepared, error);
+        if (success) bytes = std::move(prepared);
     } else {
-        success = Failure(error, "Retail runtime supports M2, SKIN, ANIM, BLP and WMO references only");
+        success = Failure(error, "Retail runtime supports M2, SKIN, ANIM, BLP, WMO, WDT and ADT references only");
     }
     if (!success) bytes.clear();
     else s.cachedSizes[key] = static_cast<uint32_t>(bytes.size());

@@ -42,6 +42,7 @@ add_library(RetailAssets STATIC
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/PackedArchives.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/RetailModel.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/RetailWmo.cpp"
+    "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/RetailTerrain.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/RetailShader.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/ClientTables.cpp"
     "${CMAKE_SOURCE_DIR}/Engine/Source/Retail/Db2.cpp"
@@ -78,6 +79,8 @@ if (WIN32)
 endif ()
 add_executable(RetailWmoTests "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/wmo_tests.cpp")
 target_link_libraries(RetailWmoTests PRIVATE RetailAssets)
+add_executable(RetailTerrainTests "${CMAKE_SOURCE_DIR}/Tools/RetailAssets/terrain_tests.cpp")
+target_link_libraries(RetailTerrainTests PRIVATE RetailAssets)
 enable_testing()
 add_test(NAME retail-assets COMMAND RetailAssetTests)
 add_test(NAME retail-wmo COMMAND RetailWmoTests)

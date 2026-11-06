@@ -1,81 +1,20 @@
 #include "Engine/Source/Retail/RetailWmo.h"
+#include "Engine/Source/Retail/IffChunks.h"
 
 #include <algorithm>
 #include <climits>
 #include <cstring>
-#include <map>
 
 namespace Retail {
 namespace {
 
-constexpr uint32_t Tag(const char (&s)[5]) {
-    return uint32_t(uint8_t(s[0])) << 24 | uint32_t(uint8_t(s[1])) << 16 | uint32_t(uint8_t(s[2])) << 8 | uint8_t(s[3]);
-}
+using namespace Iff;
 
 constexpr uint32_t kVersion = 17;
 constexpr size_t kHeader = 64, kMaterial = 64, kGroupInfo = 32, kDoodad = 40, kLight = 48, kAmbient = 48;
 constexpr size_t kGroupHeader = 68, kBatch = 24;
 
-template <class T> T Get(const uint8_t* p) { T v; std::memcpy(&v, p, sizeof v); return v; }
-template <class T> void Put(uint8_t* p, T v) { std::memcpy(p, &v, sizeof v); }
-bool Fail(std::string& error, const char* message) { error = message; return false; }
-
-struct Chunk { uint32_t tag; const uint8_t* data; uint32_t size; };
-
-struct Chunks {
-    std::vector<Chunk> list;
-    bool Parse(const uint8_t* p, size_t size) {
-        for (size_t o = 0; o < size;) {
-            if (size - o < 8) return false;
-            const uint32_t tag = Get<uint32_t>(p + o), length = Get<uint32_t>(p + o + 4);
-            if (length > size - o - 8) return false;
-            list.push_back({tag, p + o + 8, length});
-            o += 8 + size_t(length);
-        }
-        return true;
-    }
-    const Chunk* Find(uint32_t tag) const {
-        for (const auto& c : list) if (c.tag == tag) return &c;
-        return nullptr;
-    }
-    std::vector<uint8_t> Bytes(uint32_t tag) const {
-        const auto* c = Find(tag);
-        return c ? std::vector<uint8_t>(c->data, c->data + c->size) : std::vector<uint8_t>();
-    }
-    std::vector<std::vector<uint8_t>> All(uint32_t tag) const {
-        std::vector<std::vector<uint8_t>> all;
-        for (const auto& c : list) if (c.tag == tag) all.emplace_back(c.data, c.data + c.size);
-        return all;
-    }
-};
-
-void Add(std::vector<uint8_t>& out, uint32_t tag, const std::vector<uint8_t>& data) {
-    const size_t at = out.size();
-    out.resize(at + 8 + data.size());
-    Put(&out[at], tag);
-    Put(&out[at + 4], uint32_t(data.size()));
-    if (!data.empty()) std::memcpy(&out[at + 8], data.data(), data.size());
-}
-
-std::vector<uint8_t> Word(uint32_t value) { std::vector<uint8_t> v(4); Put(v.data(), value); return v; }
-
-// MOTX/MODN string table: zero-terminated names padded to 4 bytes, addressed by byte offset.
-struct Names {
-    std::vector<uint8_t> blob;
-    std::map<std::string, uint32_t> offsets;
-    uint32_t Add(const std::string& name) {
-        const auto found = offsets.find(name);
-        if (found != offsets.end()) return found->second;
-        const auto offset = uint32_t(blob.size());
-        blob.insert(blob.end(), name.begin(), name.end());
-        do blob.push_back(0); while (blob.size() % 4);
-        offsets.emplace(name, offset);
-        return offset;
-    }
-    std::vector<uint8_t> Value() const { return blob.empty() ? std::vector<uint8_t>(4) : blob; }
-};
-
-std::string Path(uint32_t id, const char* extension) { return "retail\\" + std::to_string(id) + extension; }
+std::string Path(uint32_t id, const char* extension) { return RetailPath(id, extension); }
 
 }
 
@@ -140,7 +79,7 @@ bool PrepareWmoRoot(const std::vector<uint8_t>& in, std::vector<uint8_t>& out,
             Put(&modd[i * kDoodad], (names.Add(id ? Path(id, ".m2") : "") & 0xFFFFFF) | (word & 0xFF000000));
         }
         modn = names.Value();
-        Put(&mohd[16], uint32_t(names.offsets.size()));
+        Put(&mohd[16], uint32_t(names.entries.size()));
     }
 
     std::vector<uint8_t> mosb = c.Bytes(Tag("MOSB"));

@@ -240,6 +240,21 @@ int main(int argc, char** argv) {
         return 0;
     }
     std::printf("%s: %zu decoded bytes (%s)\n", argv[2], bytes.size(), inspect ? "original CDN data" : "client-ready memory");
+    // A prepared WDT: open its first tile the way CMap::LoadArea names it (MAIN at 60, 8 bytes per tile, row-major).
+    if (!inspect && requestedName.size() > 4 && requestedName.compare(requestedName.size() - 4, 4, ".wdt") == 0
+        && bytes.size() >= 60 + 4096 * 8) {
+        for (uint32_t i = 0; i < 4096; ++i) {
+            uint32_t present;
+            std::memcpy(&present, bytes.data() + 60 + i * 8, 4);
+            if (!(present & 1)) continue;
+            const auto name = requestedName.substr(0, requestedName.size() - 4) + "_" + std::to_string(i % 64) + "_"
+                + std::to_string(i / 64) + ".adt";
+            std::vector<uint8_t> tile;
+            if (!source.Read(name.c_str(), tile, error)) { std::fprintf(stderr, "%s: %s\n", name.c_str(), error.c_str()); return 1; }
+            std::printf("%s: %zu decoded bytes (client-ready memory)\n", name.c_str(), tile.size());
+            break;
+        }
+    }
     // A prepared WMO root: open every group the way CMapObj::ReadGroup names them (MOHD group count at 20+4).
     if (!inspect && requestedName.size() > 4 && requestedName.compare(requestedName.size() - 4, 4, ".wmo") == 0
         && bytes.size() >= 28 && std::memcmp(bytes.data() + 12, "DHOM", 4) == 0) {
