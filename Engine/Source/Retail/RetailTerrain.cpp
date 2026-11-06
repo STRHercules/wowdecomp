@@ -107,7 +107,9 @@ bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::
         if (t.root) tiles.push_back(t);
     }
     std::vector<uint8_t> header(32);
-    Put(header.data(), flags & 0xEu); // vertex colours, big alpha, sorted doodads; height texturing and MAID are retail-only
+    // Keep vertex colours and sorted doodads. Split tiles always carry 8-bit (or compressed) MCAL, so 3.3.5's big-alpha
+    // flag 0x4 must be set whatever retail says: without it the 4-bit unpacker reads past each layer (crash).
+    Put(header.data(), (flags & 0xAu) | 0x4u);
     Add(out, Tag("MVER"), Word(kVersion));
     Add(out, Tag("MPHD"), header);
     Add(out, Tag("MAIN"), c.Bytes(Tag("MAIN")));

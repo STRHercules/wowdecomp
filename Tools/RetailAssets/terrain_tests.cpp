@@ -23,6 +23,7 @@ void CheckWdt(const std::vector<uint8_t>& w) {
     Check(U32(w, 0) == Tag("MVER") && U32(w, 12) == Tag("MPHD") && U32(w, 16) == 32, "WDT: MVER then 32-byte MPHD");
     Check(U32(w, 52) == Tag("MAIN") && U32(w, 56) == 32768 && w.size() == 60 + 32768, "WDT: MAIN and nothing after");
     Check(!(U32(w, 20) & ~0xEu), "WDT: only 3.3.5 MPHD flags");
+    Check(U32(w, 20) & 0x4u, "WDT: big alpha set, split tiles carry 8-bit MCAL");
 }
 
 void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
@@ -48,9 +49,13 @@ void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
         const size_t hdr = at + 8, end = hdr + U32(a, at + 4);
         const uint32_t layers = U32(a, hdr + 0x0C), refs = U32(a, hdr + 0x10) + U32(a, hdr + 0x38), alpha = U32(a, hdr + 0x28);
         bool ok = !(U32(a, hdr) & 0x10000);
+        size_t mcly = 0;
         for (size_t p = hdr + 128; ok && p < end;) {
             const uint32_t tag = U32(a, p), n = U32(a, p + 4);
-            if (tag == Tag("MCLY")) ok = n == layers * 16 && layers <= 4;
+            if (tag == Tag("MCLY")) { ok = n == layers * 16 && layers <= 4; mcly = p + 8; }
+            if (tag == Tag("MCAL") && mcly) // every layer with an alpha map (0x100) starts inside MCAL
+                for (uint32_t l = 1; ok && l < layers; ++l)
+                    ok = !(U32(a, mcly + l * 16 + 4) & 0x100) || U32(a, mcly + l * 16 + 8) < n;
             if (tag == Tag("MCRF")) ok = n == refs * 4;
             if (tag == Tag("MCAL")) ok = n + 8 == alpha;
             if (tag == Tag("MCNR")) ok = n == 448;
