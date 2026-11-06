@@ -1205,6 +1205,11 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
             // Draw them with their first texture and the plain opaque combiner instead of failing the model.
             b[p] = b[p + 1] = 0;
             b[p + 12] = 1; b[p + 13] = 0;
+        } else if ((shader & 0x8000) && U16(b, p + 12) == 1) {
+            // Other single-texture explicit shaders (0x8013, 0x8022 on Founder's Point doodads): draw the texture with
+            // the plain combiner, as the character-layer fallback above does. shortcut: loses the retail combiner's
+            // extra term; map the shader exactly if one of these looks wrong.
+            b[p] = b[p + 1] = 0;
         } else if ((shader & 0x8000) && U16(b, p + 12) == 2) {
             // Other two-texture explicit shaders (the skyriding speed aura's 0x8021): draw with Diffuse_T1_T2 /
             // Combiners_Mod_Mod. shortcut: approximate combiner, map the shader exactly if an effect looks wrong.
