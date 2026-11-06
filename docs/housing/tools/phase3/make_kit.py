@@ -20,7 +20,11 @@ import os
 import struct
 import sys
 
-KINDS = [1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 14, 15]  # generic single-floor rooms: no stairwells, prefabs or plot
+KINDS = [1, 2, 3, 6, 7, 8, 9, 11, 12, 13, 14, 15]  # generic single-floor rooms (no prefabs or plot)
+# Stairwell (Left), Stairwell (Right), and the empty room retail stacks on top of one. A stairwell's Type 4 piece is the
+# staircase: SubType 2 is the full flight from the floor to the 12 yd landing (3 and 4 also reach a floor below).
+KINDS += [10, 50, 48]
+STAIRS = (0, 2)
 THEME = 3
 THEMES = [1, 2, 4, 5]  # Folk, Rugged, Bel'ameth, Silvermoon
 
@@ -59,7 +63,7 @@ def main(tables, listfile, raw, out, themes_out=None):
         box = wmo[str(room["RoomWmoDataID"])]["BoundingBox"]
         for c in sorted((c for c in comps.values() if c["RoomWmoDataID"] == room["RoomWmoDataID"]), key=lambda c: c["ID"]):
             styles = option[c["MeshStyleFilterID"]]
-            solid = c["ModelFileDataID"] or styles.get((0, 0), 0)
+            solid = c["ModelFileDataID"] or styles.get(STAIRS if c["Type"] == 4 else (0, 0), 0)
             if not solid:
                 skipped.append((kind, c["ID"], c["MeshStyleFilterID"]))
                 continue
@@ -85,7 +89,7 @@ def main(tables, listfile, raw, out, themes_out=None):
         for r in rows:
             c = by_id[r[8]]
             styles = styles_of[c["MeshStyleFilterID"]]
-            solid = styles.get((0, 0), 0)
+            solid = styles.get(STAIRS if c["Type"] == 4 else (0, 0), 0)
             if not solid or solid == r[14]:
                 continue
             socket = bool(r[15])

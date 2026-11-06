@@ -159,8 +159,8 @@ assert toast() == "That spot is outside your rooms."
 L.execute('''layout = { maxRooms = 8, originX = 100, originY = 200,
   kinds = { [1] = { id = 1, name = "Square Room (Small)", sizeX = 23, sizeY = 23, price = 250000 },
             [2] = { id = 2, name = "Hallway", sizeX = 23, sizeY = 11, price = 3000000 } },
-  rooms = { { kind = 1, x = 0, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, ceilingHidden = false } },
-  sockets = { { room = 0, piece = 4, x = 12, y = 0, nx = 1, ny = 0, fits = { 1, 2 } } },
+  rooms = { { kind = 1, x = 0, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, ceilingHidden = false, level = 0 } },
+  sockets = { { room = 0, piece = 4, level = 0, x = 12, y = 0, nx = 1, ny = 0, fits = { 1, 2 } } },
   themes = { { id = 1, name = "Folk" }, { id = 3, name = "Generic" } } }''')
 click("Layout")
 assert g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and not g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor)
@@ -177,6 +177,19 @@ walls[0].func()
 assert last() == ["styleroom", 0, 1, 1], last()
 items[4].func()
 assert last() == ["ceiling", 0, True], last()
+
+# Floors: with a stairwell, Floor tabs appear and each floor shows only its own "+" markers.
+L.execute('''layout.kinds[10] = { id = 10, name = "Stairwell (Left)", sizeX = 23, sizeY = 23, price = 250000 }
+layout.kinds[48] = { id = 48, name = "Stairwell Room (Empty)", sizeX = 23, sizeY = 23, price = 250000 }
+layout.rooms[2] = { kind = 10, x = 24, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, level = 0 }
+layout.rooms[3] = { kind = 48, x = 24, y = 0, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, level = 1 }
+layout.sockets[2] = { room = 2, piece = 2, level = 1, x = 36, y = 0, nx = 1, ny = 0, fits = { 1 } }''')
+g.event("ESTERIA_HOUSING_LAYOUT")
+def shown_sockets():
+    return sorted(o.socket.level for o in g.created.values() if o.socket and o._shown)
+assert shown_sockets() == [0], shown_sockets()
+click("Floor 2")
+assert shown_sockets() == [1], shown_sockets()
 
 # A visitor sees only Leave; leaving the house hides everything.
 L.execute('state.isOwner = false')

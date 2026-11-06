@@ -60,9 +60,9 @@ struct PlotInfo {
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
-struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; uint32_t theme[3] = { 0, 0, 0 }; uint8_t ceilingHidden = 0; };
+struct LayoutRoom { uint32_t kind = 0; float x = 0, y = 0; uint8_t quarter = 0; uint32_t theme[3] = { 0, 0, 0 }; uint8_t ceilingHidden = 0, level = 0; };
 struct LayoutTheme { uint32_t id = 0; std::string name; };
-struct LayoutSocket { uint8_t room = 0, piece = 0; float x = 0, y = 0, nx = 0, ny = 0; std::vector<uint32_t> fits; };
+struct LayoutSocket { uint8_t room = 0, piece = 0, level = 0; float x = 0, y = 0, nx = 0, ny = 0; std::vector<uint32_t> fits; };
 struct Layout {
     bool valid = false;
     uint8_t maxRooms = 0;
@@ -333,14 +333,14 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     for (uint8_t i = 0; i < rooms; ++i) {
         LayoutRoom room;
         if (!r.Get(room.kind) || !r.Get(room.x) || !r.Get(room.y) || !r.Get(room.quarter) || !r.Get(room.theme[0])
-            || !r.Get(room.theme[1]) || !r.Get(room.theme[2]) || !r.Get(room.ceilingHidden)) return 0;
+            || !r.Get(room.theme[1]) || !r.Get(room.theme[2]) || !r.Get(room.ceilingHidden) || !r.Get(room.level)) return 0;
         next.rooms.push_back(room);
     }
     if (!r.Get(sockets)) return 0;
     for (uint16_t i = 0; i < sockets; ++i) {
         LayoutSocket socket;
         uint8_t fits;
-        if (!r.Get(socket.room) || !r.Get(socket.piece) || !r.Get(socket.x) || !r.Get(socket.y) || !r.Get(socket.nx)
+        if (!r.Get(socket.room) || !r.Get(socket.piece) || !r.Get(socket.level) || !r.Get(socket.x) || !r.Get(socket.y) || !r.Get(socket.nx)
             || !r.Get(socket.ny) || !r.Get(fits)) return 0;
         for (uint8_t f = 0; f < fits; ++f) {
             uint32_t kind;
@@ -506,8 +506,9 @@ int32_t AddRoom(lua_State* L) {
 }
 
 // { maxRooms, originX, originY, kinds = { [id] = { id, name, sizeX, sizeY, price } },
-//   rooms = { { kind, x, y, quarter, wallTheme, floorTheme, ceilingTheme, ceilingHidden } },
-//   sockets = { { room, piece, x, y, nx, ny, fits = { kind... } } }, themes = { { id, name } } }
+//   rooms = { { kind, x, y, quarter, wallTheme, floorTheme, ceilingTheme, ceilingHidden, level } },
+//   sockets = { { room, piece, level, x, y, nx, ny, fits = { kind... } } }, themes = { { id, name } } }
+// level is the floor, 0 the ground; floors are 12 yd apart.
 // Room offsets and socket positions are relative to the origin (world = origin + offset).
 int32_t GetLayout(lua_State* L) {
     if (!s_available || !s_layout.valid) { lua_pushnil(L); return 1; }
@@ -532,6 +533,7 @@ int32_t GetLayout(lua_State* L) {
         NumberField(L, "wallTheme", room.theme[0]); NumberField(L, "floorTheme", room.theme[1]);
         NumberField(L, "ceilingTheme", room.theme[2]);
         lua_pushboolean(L, room.ceilingHidden); lua_setfield(L, -2, "ceilingHidden");
+        NumberField(L, "level", room.level);
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "rooms");
@@ -539,7 +541,7 @@ int32_t GetLayout(lua_State* L) {
     i = 0;
     for (LayoutSocket const& socket : s_layout.sockets) {
         lua_createtable(L, 0, 7);
-        NumberField(L, "room", socket.room); NumberField(L, "piece", socket.piece);
+        NumberField(L, "room", socket.room); NumberField(L, "piece", socket.piece); NumberField(L, "level", socket.level);
         NumberField(L, "x", socket.x); NumberField(L, "y", socket.y); NumberField(L, "nx", socket.nx); NumberField(L, "ny", socket.ny);
         lua_createtable(L, int(socket.fits.size()), 0);
         int f = 0;

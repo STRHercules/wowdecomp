@@ -1,6 +1,7 @@
--- Esteria housing: Layout mode, a top-down blueprint of the house (north up). Each free wall a room can be built
--- through gets a "+"; it opens a menu of the room kinds that fit there and what they cost. Clicking a room opens its
--- menu: wall, floor and ceiling style, and the ceiling on or off.
+-- Esteria housing: Layout mode, a top-down blueprint of the house (north up), one floor at a time. Each free wall a room
+-- can be built through gets a "+"; it opens a menu of the room kinds that fit there and what they cost. Clicking a room
+-- opens its menu: wall, floor and ceiling style, and the ceiling on or off. A stairwell leads up to the next floor; the
+-- floor below shows faintly under the one shown.
 
 if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
@@ -9,6 +10,8 @@ local H = EsteriaHousingUI
 local CANVAS, PLUS, PLUS_GAP = 380, 16, 1 -- the "+" sits PLUS_GAP px outside its wall
 local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, "Ceiling", "ceilingTheme" } }
 local layout
+local floor = 0 -- the floor shown, 0 the ground
+local LEVEL, MAX_FLOORS, STAIRWELL_TOP = 12, 4, 48
 
 local f = H.Panel("EsteriaHousingLayout", CANVAS + 24, CANVAS + 80)
 f:SetPoint("CENTER", -120, 40)
@@ -34,6 +37,24 @@ StaticPopupDialogs["ESTERIA_HOUSING_REMOVE_ROOM"] = {
 remove:SetScript("OnClick", function() StaticPopup_Show("ESTERIA_HOUSING_REMOVE_ROOM") end)
 
 local menu = CreateFrame("Frame", "EsteriaHousingLayoutMenu", UIParent, "UIDropDownMenuTemplate")
+
+-- floor tabs along the top of the canvas
+local floorTabs = {}
+for i = 1, MAX_FLOORS do
+  local b = H.Button(f, "Floor " .. i, 64, 18)
+  b:SetPoint("TOPLEFT", canvas, "TOPLEFT", 4 + (i - 1) * 66, -4)
+  b:SetFrameLevel(canvas:GetFrameLevel() + 10)
+  b:SetScript("OnClick", function() floor = i - 1; H.RedrawLayout() end)
+  floorTabs[i] = b
+end
+
+-- the floor the player stands on, from the house's lowest point (the state's bounds)
+local function PlayerFloor()
+  local state = EsteriaHousing_GetState()
+  local _, _, z = EsteriaHousing_GetPlayerPosition()
+  if not (state and state.minZ and z) then return 0 end
+  return math.max(0, math.min(MAX_FLOORS - 1, math.floor((z - state.minZ - 0.5 + 2) / LEVEL)))
+end
 
 local rects, plusses = {}, {}
 local player = canvas:CreateTexture(nil, "OVERLAY")
@@ -154,33 +175,56 @@ function H.RedrawLayout()
   scale = math.min(10, (CANVAS - edge) / (maxX - minX), (CANVAS - edge) / (maxY - minY))
   cx, cy = (minX + maxX) / 2, (minY + maxY) / 2
 
-  for i, room in ipairs(layout.rooms) do
-    local kind = layout.kinds[room.kind]
-    local sx, sy = Size(kind, room.quarter)
-    local x, y = ToCanvas(room.x, room.y)
-    local w, h = math.max(8, sy * scale), math.max(8, sx * scale)
-    local r = Rect(i)
-    r.index = i
-    r:ClearAllPoints()
-    r:SetPoint("CENTER", canvas, "BOTTOMLEFT", x, y)
-    r:SetSize(w, h)
-    local newest = i == #layout.rooms and i > 1
-    if newest then r.fill:SetTexture(0.25, 0.32, 0.45, 0.95) else r.fill:SetTexture(0.16, 0.2, 0.28, 0.95) end
-    -- names only where they fit; the tooltip always has them
-    local name = kind and kind.name or "Room"
-    r.label:SetWidth(w - 6)
-    r.label:SetText(w >= 44 and h >= 22 and name or "")
-    r:Show()
+  -- floors: as many as there are, plus the one a stairwell leads to
+  local floors = 1
+  for _, room in ipairs(layout.rooms) do floors = math.max(floors, room.level + 1) end
+  floor = math.min(floor, floors - 1)
+  for i, b in ipairs(floorTabs) do
+    if i <= floors and floors > 1 then b:Show() else b:Hide() end
+    if i - 1 == floor then b:LockHighlight() else b:UnlockHighlight() end
   end
 
-  for i, socket in ipairs(layout.sockets) do
-    local b = Plus(i)
+  local n = 0
+  for i, room in ipairs(layout.rooms) do
+    local here, below = room.level == floor, room.level == floor - 1
+    if here or below then
+      n = n + 1
+      local kind = layout.kinds[room.kind]
+      local sx, sy = Size(kind, room.quarter)
+      local x, y = ToCanvas(room.x, room.y)
+      local w, h = math.max(8, sy * scale), math.max(8, sx * scale)
+      local r = Rect(n)
+      r.index = i
+      r:ClearAllPoints()
+      r:SetPoint("CENTER", canvas, "BOTTOMLEFT", x, y)
+      r:SetSize(w, h)
+      r:SetFrameLevel(canvas:GetFrameLevel() + (here and 3 or 1))
+      r:EnableMouse(here) -- the floor below is a faint guide only
+      r:SetAlpha(here and 1 or 0.25)
+      local newest = i == #layout.rooms and i > 1
+      if newest then r.fill:SetTexture(0.25, 0.32, 0.45, 0.95) else r.fill:SetTexture(0.16, 0.2, 0.28, 0.95) end
+      -- names only where they fit; the tooltip always has them
+      local name = room.kind == STAIRWELL_TOP and "Stairs down" or (kind and kind.name or "Room")
+      if kind and kind.name:find("^Stairwell %(") then name = "Stairs up" end
+      r.label:SetWidth(w - 6)
+      r.label:SetText(here and w >= 44 and h >= 22 and name or "")
+      r:Show()
+    end
+  end
+
+  local m = 0
+  for _, socket in ipairs(layout.sockets) do
+    if socket.level == floor then
+    m = m + 1
+    local b = Plus(m)
     local x, y = ToCanvas(socket.x, socket.y)
     -- outward in screen space: world +x (north) is up, +y (west) is left
     local gap = PLUS_GAP + PLUS / 2
     b.socket = socket
     b:ClearAllPoints(); b:SetPoint("CENTER", canvas, "BOTTOMLEFT", x - socket.ny * gap, y + socket.nx * gap)
+    b:SetFrameLevel(canvas:GetFrameLevel() + 5)
     b:Show()
+    end
   end
 
   local full = #layout.rooms >= layout.maxRooms
@@ -194,14 +238,14 @@ f:SetScript("OnUpdate", function(self, elapsed)
   if self.wait < 0.1 or not layout then return end
   self.wait = 0
   local x, y, _, facing = EsteriaHousing_GetPlayerPosition()
-  if not x then return player:Hide() end
+  if not x or PlayerFloor() ~= floor then return player:Hide() end
   local px, py = ToCanvas(x - layout.originX, y - layout.originY)
   player:ClearAllPoints(); player:SetPoint("CENTER", canvas, "BOTTOMLEFT", px, py)
   if player.SetRotation then player:SetRotation(math.rad(facing)) end
   player:Show()
 end)
 
-f:SetScript("OnShow", H.RedrawLayout)
+f:SetScript("OnShow", function() floor = PlayerFloor(); H.RedrawLayout() end)
 f:SetScript("OnHide", function() CloseDropDownMenus(); StaticPopup_Hide("ESTERIA_HOUSING_REMOVE_ROOM") end)
 f:RegisterEvent("ESTERIA_HOUSING_LAYOUT")
 f:RegisterEvent("PLAYER_MONEY")
