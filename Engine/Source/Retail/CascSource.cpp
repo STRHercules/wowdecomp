@@ -1,7 +1,9 @@
 #include "Engine/Source/Retail/CascSource.h"
 #include "Engine/Source/Retail/BusyNotice.h"
 #include "Engine/Source/Retail/DecodedCache.h"
+#include "Engine/Source/Retail/PackedArchives.h"
 #include "Engine/Source/Retail/RetailModel.h"
+#include "Engine/Source/Retail/RetailWmo.h"
 #include "Engine/Source/Retail/ClientTables.h"
 #include "Engine/Source/Retail/SlimeGiant.h"
 #include "Engine/Source/Retail/Centaur.h"
@@ -104,6 +106,11 @@ struct CascSource::Impl {
     std::string path, product = "wow", region = "us", build, keys, tables, cache, tablePolicy = "tables";
     SourceKind kind = SourceKind::Retail;
     Statistics stats;
+    PackedArchives packed;
+    int ReadPacked(const char* name, std::vector<uint8_t>& bytes, std::string& error, uint32_t* size) {
+        if (auto reader = packedAssetReader.load()) return reader(name, bytes, error, size);
+        return packed.Read(name, bytes, error, size);
+    }
     std::string Prefix() const { return kind == SourceKind::Forever ? "forever/" : "retail/"; }
     uint32_t locale = CASC_LOCALE_ENUS;
     bool online = true, configured = false, files = false;
@@ -174,18 +181,15 @@ struct CascSource::Impl {
     bool Fetch(const Reference& ref, const std::string& internal, std::vector<uint8_t>& bytes, std::string& error, bool lenient = false) {
         if (configured && ref.id && !build.empty() && !lenient)
         {
-            if (auto reader = packedAssetReader.load())
+            const auto name = "EsteriaRetail\\" + product + "-" + build + "\\" + std::to_string(locale)
+                + "\\" + std::to_string(ref.id) + ".bin";
+            const int packed = ReadPacked(name.c_str(), bytes, error, nullptr);
+            if (packed < 0)
+                return false;
+            if (packed > 0)
             {
-                const auto name = "EsteriaRetail\\" + product + "-" + build + "\\" + std::to_string(locale)
-                    + "\\" + std::to_string(ref.id) + ".bin";
-                const int packed = reader(name.c_str(), bytes, error, nullptr);
-                if (packed < 0)
-                    return false;
-                if (packed > 0)
-                {
-                    ++stats.reused;
-                    return true;
-                }
+                ++stats.reused;
+                return true;
             }
         }
         if (files) {
@@ -431,6 +435,7 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
     }
     s.names = std::move(names);
     s.handItems = std::move(handItems);
+    if (!packedAssetReader.load() && !s.packed.Open(base, path, error)) return false;
     s.configured = true;
     return true;
     } catch (const std::filesystem::filesystem_error& exception) {
@@ -517,13 +522,13 @@ bool CascSource::Exists(const char* name, std::string& error) {
     std::string internal;
     File file;
     if (!m_impl->Resolve(Normalize(name ? name : ""), ref, internal, error)) return false;
-    if (auto reader = packedAssetReader.load(); reader && ref.id && !m_impl->build.empty())
+    if (ref.id && !m_impl->build.empty())
     {
         const auto path = "EsteriaRetail\\" + m_impl->product + "-" + m_impl->build + "\\"
             + std::to_string(m_impl->locale) + "\\" + std::to_string(ref.id) + ".bin";
         std::vector<uint8_t> original;
         uint32_t size = 0;
-        const int found = reader(path.c_str(), original, error, &size);
+        const int found = m_impl->ReadPacked(path.c_str(), original, error, &size);
         if (found)
             return found > 0;
     }
@@ -648,8 +653,26 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
         // BLP2 format version 1 is the existing client's native texture format.
         success = bytes.size() >= 148 && std::memcmp(bytes.data(), "BLP2\1\0\0\0", 8) == 0;
         if (!success) error = "Retail texture is not a supported BLP2 file";
+    } else if (ext == ".wmo") {
+        std::vector<uint8_t> prepared;
+        if (IsWmoGroup(bytes)) {
+            success = PrepareWmoGroup(bytes, prepared, error);
+        } else {
+            std::vector<uint32_t> groups;
+            success = PrepareWmoRoot(bytes, prepared, groups, error);
+            // CMapObj::ReadGroup opens <root>_NNN.wmo; GFID says which file each one is. Kept for the
+            // source's lifetime like any alias: a few bytes per group, and the name never changes meaning.
+            const auto base = key.substr(0, key.find_last_of('.'));
+            for (size_t i = 0; success && i < groups.size(); ++i) {
+                if (!groups[i]) continue;
+                char suffix[16];
+                std::snprintf(suffix, sizeof(suffix), "_%03u.wmo", static_cast<unsigned>(i));
+                s.dependencies[base + suffix] = Reference{groups[i]};
+            }
+        }
+        if (success) bytes = std::move(prepared);
     } else {
-        success = Failure(error, "Retail runtime supports M2, SKIN, ANIM and BLP references only");
+        success = Failure(error, "Retail runtime supports M2, SKIN, ANIM, BLP and WMO references only");
     }
     if (!success) bytes.clear();
     else s.cachedSizes[key] = static_cast<uint32_t>(bytes.size());
@@ -673,12 +696,12 @@ bool CascSource::CachedOriginalSize(const char* name, uint32_t& size) {
     Reference ref;
     std::string internal, error;
     if (!m_impl->Resolve(key, ref, internal, error)) return false;
-    if (auto reader = packedAssetReader.load(); reader && ref.id && !m_impl->build.empty())
+    if (ref.id && !m_impl->build.empty())
     {
         const auto packed = "EsteriaRetail\\" + m_impl->product + "-" + m_impl->build + "\\"
             + std::to_string(m_impl->locale) + "\\" + std::to_string(ref.id) + ".bin";
         std::vector<uint8_t> original;
-        const int found = reader(packed.c_str(), original, error, &size);
+        const int found = m_impl->ReadPacked(packed.c_str(), original, error, &size);
         if (found)
             return found > 0;
     }

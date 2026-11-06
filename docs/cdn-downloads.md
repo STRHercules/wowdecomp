@@ -105,6 +105,37 @@ as downloading from the network. It does not falsely report all reads as downloa
 
 ## Durable originals
 
+### Packed distribution
+
+`Tools/RetailAssets/pack_cache.py` stages the strict decoded cache as compressed,
+size-capped `patch-Retail-*.MPQ` and `patch-Forever-*.MPQ` files. It runs the native
+cache integrity checker first, strips only the 16-byte WDC1 cache envelope, and
+uses the existing `EsteriaRetail/<product>-<build>/<locale>/<FileDataID>.bin`
+contract. Every packed original is read back and SHA-256 checked. It never edits
+the client; install verified archives and move source caches outside Data only
+after checking the current source inventory again.
+
+The native client uses its existing SFile packed reader. Standalone tools,
+including `CdnAssetDownload`, now discover root `Data/patch-*.MPQ` files when their
+config or storage path is beneath that Data directory. They read higher lexical
+patch names first and use the same packed namespace before loose originals or
+CASC. Ship the matching x64 `StormLib.dll` and its MIT license beside the client
+(or the standalone tools). Missing libraries, unreadable archives and failed
+packed reads are errors, never an excuse to redownload an existing packed entry.
+Loose-cache and bounded CDN acquisition remain available for genuinely missing
+entries. The native client does not depend on StormLib.dll for its own MPQ reads.
+
+Keep source INIs, aliases/equipment/registry files, custom support assets and the
+32 lenient DB2 table-cache entries in the bootstrap distribution. Encoded CASC
+files and archive indexes are working data, not CDN payloads; retain the pinned
+versions/config manifests when retiring those working directories. A future new
+asset may require reacquiring CASC metadata/indexes, but never whole asset
+archives. Packed originals are immutable; newly acquired files remain writable
+loose cache entries until the next pack export.
+This base exporter refuses to run over installed base Retail/Forever MPQs. Future
+incremental exports must use distinct, higher-priority archive names so they cannot
+accidentally replace a base chunk with only the newly acquired files.
+
 Archived online assets are acquired with an HTTP byte-range request and saved as
 individual encoded files under their own EKey. The client and `CdnAssetDownload`
 share this path. A server must return HTTP 206 with the exact Content-Range and

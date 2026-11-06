@@ -208,7 +208,8 @@ the creation UI, and server-side storage of choices.
 | Shared SKEL, chunked ANIM | Not implemented; rejected |
 | Cameras, ribbons, particles | Modern layouts not implemented; rejected |
 | Modern shaders with more stages | Not implemented; rejected |
-| Retail DB2/appearance/customization pipeline, WMO/ADT | Not implemented |
+| WMO | Root and groups (v17, Legion+ chunk set) rewritten in memory to the 3.3.5 positional layout (`RetailWmo.cpp`): MOMT texture FDIDs and MODI doodads become `retail\<id>` names, GFID groups are served as `<root>_NNN.wmo`, MPY2/MOVX narrowed, post-Wrath chunks and LODs dropped, collision BSP kept. No group splitting (groups past 16-bit indices are refused) and no BSP rebuild |
+| Retail DB2/appearance/customization pipeline, WDT/ADT | Not implemented |
 
 The adapter changes only decoded memory: it unwraps MD21, builds virtual texture
 paths, provides a real constant-opacity channel where Retail uses a sentinel, and

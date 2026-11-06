@@ -240,6 +240,20 @@ int main(int argc, char** argv) {
         return 0;
     }
     std::printf("%s: %zu decoded bytes (%s)\n", argv[2], bytes.size(), inspect ? "original CDN data" : "client-ready memory");
+    // A prepared WMO root: open every group the way CMapObj::ReadGroup names them (MOHD group count at 20+4).
+    if (!inspect && requestedName.size() > 4 && requestedName.compare(requestedName.size() - 4, 4, ".wmo") == 0
+        && bytes.size() >= 28 && std::memcmp(bytes.data() + 12, "DHOM", 4) == 0) {
+        uint32_t groups;
+        std::memcpy(&groups, bytes.data() + 24, 4);
+        for (uint32_t i = 0; i < groups; ++i) {
+            char suffix[16];
+            std::snprintf(suffix, sizeof(suffix), "_%03u.wmo", i);
+            const auto name = requestedName.substr(0, requestedName.size() - 4) + suffix;
+            std::vector<uint8_t> group;
+            if (!source.Read(name.c_str(), group, error)) { std::fprintf(stderr, "%s: %s\n", name.c_str(), error.c_str()); return 1; }
+            std::printf("%s: %zu decoded bytes (client-ready memory)\n", name.c_str(), group.size());
+        }
+    }
     if (bytes.size() >= 48 && std::memcmp(bytes.data(), "SKIN", 4) == 0) {
         uint32_t words[12];
         std::memcpy(words, bytes.data(), sizeof(words));
