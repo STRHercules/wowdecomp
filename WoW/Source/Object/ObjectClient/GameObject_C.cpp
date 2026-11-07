@@ -3233,6 +3233,17 @@ void CGGameObject_C_Type_WorldObj::CreateWorldObj() {
 
         default:
             this->m_worldObject = this->m_owner->CreateWorldObject(0, 0, 0, nullptr);
+            // Esteria: stock places a WMO game object by position and facing only, so OBJECT_FIELD_SCALE_X never reached
+            // it (housing sizes its house pieces). A sized one gets the full matrix, as transports do.
+            if (this->m_worldObject && World::ObjectIsWMO(this->m_worldObject)
+                && (this->m_owner->GetScale() < 0.999f || this->m_owner->GetScale() > 1.001f)) {
+                C44Matrix matrix;
+                matrix.Identity();
+                matrix.Translate(this->m_owner->GetPosition());
+                matrix.Rotate(this->m_owner->GetRotation());
+                matrix.Scale(this->m_owner->GetScale());
+                World::ObjectUpdate(this->m_worldObject, matrix);
+            }
             break;
     }
 }
