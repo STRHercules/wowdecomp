@@ -75,7 +75,7 @@ def main(tiles_csv, art_id, name, out, cache):
     art = Image.new("RGB", (cols * RETAIL_TILE, rows * RETAIL_TILE))
     for r in tiles:
         art.paste(fetch(int(r["FileDataID"]), cache), (int(r["ColIndex"]) * RETAIL_TILE, int(r["RowIndex"]) * RETAIL_TILE))
-    canvas = Image.new("RGB", CANVAS)
+    canvas = Image.new("RGBA", CANVAS, (0, 0, 0, 0))  # past the shown map: transparent (DragonUI's map frame shows it)
     canvas.paste(art.resize(SHOWN, Image.LANCZOS), (0, 0))
     for i in range(12):
         x, y = (i % 4) * TILE, (i // 4) * TILE
