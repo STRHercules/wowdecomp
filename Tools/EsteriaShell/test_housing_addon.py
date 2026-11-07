@@ -65,6 +65,7 @@ function EsteriaHousing_Leave() return log("leave") end
 function EsteriaHousing_GetNeighborhood() return neighborhood end
 function EsteriaHousing_RequestNeighborhood() return log("nrequest") end
 function EsteriaHousing_TravelNeighborhood() return log("ntravel") end
+function EsteriaHousing_SetHouseAccess(...) return log("access", ...) end
 function EsteriaHousing_TravelBack() return log("nback") end
 function EsteriaHousing_TravelPlot(...) return log("nplot", ...) end
 inCombat, dead, onTaxi, inInstance, instanceKind = false, false, false, nil, "none"
@@ -89,6 +90,7 @@ function EasyMenu(items) lastMenu = items end
 function EsteriaHousing_BuyDecor(...) return log("buydecor", ...) end
 function EsteriaHousing_Upgrade(...) return log("upgrade", ...) end
 function EsteriaHousing_SetPlotStyle(...) return log("plotstyle", ...) end
+function EsteriaHousing_SetPlotPart(...) return log("plotpart", ...) end
 function EsteriaHousing_PlacePlotHouse(...) return log("plotplace", ...) end
 function ClearOverrideBindings() end
 function SetOverrideBindingClick() end
@@ -144,6 +146,16 @@ g.event("ESTERIA_HOUSING_PLOT")
 g.EsteriaHousingPlotStyle.Click(g.EsteriaHousingPlotStyle)
 list(g.lastMenu.values())[2].func()
 assert last() == ["plotstyle", 552], last()
+# House parts: a shape picks itself; one with colours opens them, each its own component.
+L.execute('''plot.parts = { { type = 11, chosen = 1380, options = { { id = 1380, parent = 0, name = "Simple Entryway - Ocean" },
+  { id = 1381, parent = 1380, name = "Simple Entryway - Mustard" }, { id = 1419, parent = 0, name = "Square Entryway" } } } }''')
+g.event("ESTERIA_HOUSING_PLOT")
+assert g.EsteriaHousingPlotPart1._text == "Simple Entryway - Ocean", g.EsteriaHousingPlotPart1._text
+g.EsteriaHousingPlotPart1.Click(g.EsteriaHousingPlotPart1)
+L.execute('assert(lastMenu[2].text == "Simple Entryway" and lastMenu[2].checked and lastMenu[2].hasArrow); lastMenu[2].menuList[2].func()')
+assert last() == ["plotpart", 11, 1381], last()
+L.execute('lastMenu[3].func()')
+assert last() == ["plotpart", 11, 1419], last()
 g.EsteriaHousingPlotNorth.Click(g.EsteriaHousingPlotNorth)
 assert last() == ["plotplace", 8, 0, 0], last()  # 8.5 would be past the reach: held at 8
 g.EsteriaHousingPlotTurnLeft.Click(g.EsteriaHousingPlotTurnLeft)
@@ -374,8 +386,14 @@ g.EsteriaHousingNeighborhoodPrev.Click(g.EsteriaHousingNeighborhoodPrev)
 
 # Your home comes first, and inside the neighborhood the primary action leaves it.
 L.execute('''neighborhood.homePlot, neighborhood.rooms, neighborhood.placed, neighborhood.maxDecor, neighborhood.where = 2, 3, 12, 200, "neighborhood"
-neighborhood.plots[2].status = "yours"''')
+neighborhood.plots[2].status = "yours"
+neighborhood.access = { party = true, friends = false, guild = false, everyone = false }''')
 g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+assert any("Visitors: party and raid members" in str(o._text) for o in g.created.values() if o._kind == "FontString")
+# Visitors: the owner's checkboxes, saved as they are ticked.
+g.EsteriaHousingNeighborhoodVisitors.Click(g.EsteriaHousingNeighborhoodVisitors)
+L.execute('for _, i in ipairs(lastMenu) do if i.text == "Friends" then i.func() end end')
+assert last() == ["access", True, True, False, False], last()
 g.EsteriaHousingNeighborhoodGo1.Click(g.EsteriaHousingNeighborhoodGo1)
 assert last() == ["nplot", 2], last()
 travel.Click(travel)

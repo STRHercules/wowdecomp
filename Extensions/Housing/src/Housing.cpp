@@ -67,6 +67,9 @@ struct PlotInfo {
     uint32_t style = 0;                 // your plot: its house style, offset and turn, and the styles there are
     float dx = 0, dy = 0, turn = 0, reach = 0;
     std::vector<std::pair<uint32_t, std::string>> styles;
+    struct Option { uint32_t id = 0, parent = 0; std::string name; };
+    struct Part { uint8_t type = 0; uint32_t chosen = 0; std::vector<Option> options; };
+    std::vector<Part> parts;            // your plot: the house parts you may swap
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
@@ -98,7 +101,7 @@ struct Neighborhood {
     bool valid = false;
     std::string name, message;
     uint32_t price = 0;
-    uint8_t where = 0, rooms = 0;
+    uint8_t where = 0, rooms = 0, access = 0;
     uint16_t homePlot = 0, placed = 0, maxDecor = 0;
     std::vector<NeighborhoodPlot> plots;
 };
@@ -428,6 +431,19 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         if (!r.Get(style.first) || !r.Get(style.second)) return 0;
         next.styles.push_back(std::move(style));
     }
+    uint8_t parts;
+    if (!r.Get(parts)) return 0;
+    for (uint8_t i = 0; i < parts; ++i) {
+        PlotInfo::Part part;
+        uint16_t options;
+        if (!r.Get(part.type) || !r.Get(part.chosen) || !r.Get(options)) return 0;
+        for (uint16_t k = 0; k < options; ++k) {
+            PlotInfo::Option o;
+            if (!r.Get(o.id) || !r.Get(o.parent) || !r.Get(o.name)) return 0;
+            part.options.push_back(std::move(o));
+        }
+        next.parts.push_back(std::move(part));
+    }
     if (!r.Done()) return 0;
     next.valid = true;
     s_plot = std::move(next);
@@ -446,7 +462,7 @@ int32_t ReceiveNeighborhood(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         if (!r.Get(p.plot) || !r.Get(p.status) || !r.Get(p.name)) return 0;
         next.plots.push_back(std::move(p));
     }
-    if (!r.Done()) return 0;
+    if (!r.Get(next.access) || !r.Done()) return 0;
     next.valid = true;
     s_neighborhood = std::move(next);
     Signal("ESTERIA_HOUSING_NEIGHBORHOOD");
@@ -644,6 +660,31 @@ int32_t GetPlot(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "styles");
+    // parts = { { type, chosen, options = { { id, parent, name } } } }: type 9 walls 10 roof 11 door 12 window 16 chimney
+    lua_createtable(L, int(s_plot.parts.size()), 0);
+    i = 0;
+    for (PlotInfo::Part const& part : s_plot.parts) {
+        lua_createtable(L, 0, 3);
+        NumberField(L, "type", part.type); NumberField(L, "chosen", part.chosen);
+        lua_createtable(L, int(part.options.size()), 0);
+        int k = 0;
+        for (PlotInfo::Option const& o : part.options) {
+            lua_createtable(L, 0, 3);
+            NumberField(L, "id", o.id); NumberField(L, "parent", o.parent);
+            lua_pushstring(L, o.name.c_str()); lua_setfield(L, -2, "name");
+            lua_rawseti(L, -2, ++k);
+        }
+        lua_setfield(L, -2, "options");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "parts");
+    return 1;
+}
+
+// EsteriaHousing_SetPlotPart(type, component): swaps that part of your plot's house (plot window open); 0 is the default.
+int32_t SetPlotPart(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionPlotFixture).Put<uint8_t>(uint8_t(luaL_checknumber(L, 1)))
+        .Put<uint32_t>(uint32_t(luaL_checknumber(L, 2))).Send(CMSG_ACTION));
     return 1;
 }
 
@@ -679,6 +720,12 @@ int32_t GetNeighborhood(lua_State* L) {
     lua_pushstring(L, s_neighborhood.message.c_str()); lua_setfield(L, -2, "message");
     NumberField(L, "homePlot", s_neighborhood.homePlot); NumberField(L, "rooms", s_neighborhood.rooms);
     NumberField(L, "placed", s_neighborhood.placed); NumberField(L, "maxDecor", s_neighborhood.maxDecor);
+    lua_createtable(L, 0, 4); // who may visit your house
+    lua_pushboolean(L, s_neighborhood.access & AccessParty); lua_setfield(L, -2, "party");
+    lua_pushboolean(L, s_neighborhood.access & AccessFriends); lua_setfield(L, -2, "friends");
+    lua_pushboolean(L, s_neighborhood.access & AccessGuild); lua_setfield(L, -2, "guild");
+    lua_pushboolean(L, s_neighborhood.access & AccessEveryone); lua_setfield(L, -2, "everyone");
+    lua_setfield(L, -2, "access");
     lua_createtable(L, int(s_neighborhood.plots.size()), 0);
     int i = 0;
     for (NeighborhoodPlot const& p : s_neighborhood.plots) {
@@ -695,6 +742,15 @@ int32_t GetNeighborhood(lua_State* L) {
 int32_t RequestNeighborhood(lua_State* L) { return SendAction(L, ActionNeighborhood); }
 int32_t TravelNeighborhood(lua_State* L) { return SendAction(L, ActionTravelNeighborhood); }
 int32_t TravelBack(lua_State* L) { return SendAction(L, ActionTravelBack); }
+
+// EsteriaHousing_SetHouseAccess(party, friends, guild, everyone): who may visit your house. The answer is another
+// ESTERIA_HOUSING_NEIGHBORHOOD.
+int32_t SetHouseAccess(lua_State* L) {
+    uint8_t const access = (lua_toboolean(L, 1) ? AccessParty : 0) | (lua_toboolean(L, 2) ? AccessFriends : 0)
+        | (lua_toboolean(L, 3) ? AccessGuild : 0) | (lua_toboolean(L, 4) ? AccessEveryone : 0);
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionHouseAccess).Put<uint8_t>(access).Send(CMSG_ACTION));
+    return 1;
+}
 
 // EsteriaHousing_TravelPlot(plot): plot as GetNeighborhood gives it. The server refuses what isn't allowed.
 int32_t TravelPlot(lua_State* L) {
@@ -1107,7 +1163,8 @@ public:
 
 void AddHousingExtension() {
     s_enabled = sExtensionMgr->RegisterCVar("housingEnabled", "Esteria housing editor (needs an Esteria realm with housing on)",
-        0x1, "0", nullptr, CATEGORY_GAME); // 0x1: saved to Config.wtf, or the client forgets it on exit
+        0x1, "1", nullptr, CATEGORY_GAME); // 0x1: saved to Config.wtf, or the client forgets it on exit; on by default,
+                                            // since only a realm with housing answers the hello
     sExtensionMgr->RegisterMessageHandler(SMSG_HELLO, ReceiveHello, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_CATALOG, ReceiveCatalog, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_EDIT_ACK, ReceiveAck, nullptr);
@@ -1130,6 +1187,8 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetNeighborhood", GetNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RequestNeighborhood", RequestNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelNeighborhood", TravelNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetHouseAccess", SetHouseAccess, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetPlotPart", SetPlotPart, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelBack", TravelBack, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelPlot", TravelPlot, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetLayout", GetLayout, FRAMESCRIPT_CONTEXTS_GAME);

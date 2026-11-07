@@ -32,10 +32,22 @@ opcodes 0x537–0x53E, the field layouts and the result codes. Update the client
   `EsteriaHousing_Remove(placedId)` each return `false` when the edit can't be queued (not available, not in a house,
   not the owner, or 32 edits pending).
 - `EsteriaHousing_Sync()` and `EsteriaHousing_Leave()`.
+- `EsteriaHousing_RequestNeighborhood()` asks for the Neighborhood window's contents. `EsteriaHousing_GetNeighborhood()`
+  returns `nil` before the first answer, or `{ name, price, where, message, homePlot, rooms, placed, maxDecor,
+  plots = { { plot, status, name } } }`. `where` is `"away"`, `"neighborhood"` or `"house"`; `status` is `"sale"`,
+  `"yours"`, `"visit"` or `"private"`.
+- `EsteriaHousing_TravelNeighborhood()`, `EsteriaHousing_TravelBack()` and `EsteriaHousing_TravelPlot(plot)` ask to
+  travel. The server refuses restricted states and says why in `message`.
+- `GetNeighborhood()` also holds `access = { party, friends, guild, everyone }`; `EsteriaHousing_SetHouseAccess(party,
+  friends, guild, everyone)` changes who may visit your house.
+- `GetPlot()` on your own plot holds `parts = { { type, chosen, options = { { id, parent, name } } } }`;
+  `EsteriaHousing_SetPlotPart(type, component)` swaps one (0: the style's default).
+- `EsteriaHousing_ShowPlotBounds(on)` shows retail's plot boundary while you decorate outdoors.
 - Events:
   - `ESTERIA_HOUSING_AVAILABLE`
   - `ESTERIA_HOUSING_CATALOG`
   - `ESTERIA_HOUSING_STATE`
+  - `ESTERIA_HOUSING_NEIGHBORHOOD`
   - `ESTERIA_HOUSING_RESULT(result, op, placedId)`. `result` is a `HousingWire.h` `Result`. 13 also means the server
     didn't answer within 5 s.
 

@@ -1,13 +1,14 @@
 -- Esteria housing: the plot window, in retail's housing art. Clicking a plot's cornerstone opens it (the server sends
 -- SMSG_PLOT instead of a gossip menu). A plot for sale shows its price and a Buy button; a bought plot offers Enter or
--- Visit; your own plot also restyles your house and moves or turns it on the plot.
+-- Visit; your own plot also restyles your house, swaps its parts (walls, roof, door, windows, chimney: retail's shapes and
+-- their colours) and moves or turns it on the plot.
 
 if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
 local REACH = 15 -- yards from where the window opened; the server stops answering past this too
-local W, SALE_H, YOURS_H = 360, 260, 400
+local W, SALE_H, YOURS_H, PART_H = 360, 260, 400, 28
 
 local f = H.Panel("EsteriaHousingPlotFrame", W, SALE_H)
 f:SetPoint("LEFT", 60, 40)
@@ -55,19 +56,24 @@ sign:SetPoint("TOP", 0, -10)
 local houseTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 houseTitle:SetPoint("CENTER", sign, "CENTER", 0, 1); houseTitle:SetText("Your House")
 
--- the style: a dropdown in the client's own style
+-- a dropdown in the client's own style
 local styleMenu = CreateFrame("Frame", "EsteriaHousingStyleMenu", UIParent, "UIDropDownMenuTemplate")
-local styleButton = CreateFrame("Button", "EsteriaHousingPlotStyle", house)
-styleButton:SetSize(W - 72, 26); styleButton:SetPoint("TOP", -4, -44)
-styleButton:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
-  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
-styleButton:SetBackdropColor(0, 0, 0, 0.7); styleButton:SetBackdropBorderColor(0.55, 0.42, 0.25)
-styleButton:SetFontString(styleButton:CreateFontString(nil, "OVERLAY", "GameFontHighlight"))
-styleButton:GetFontString():SetPoint("LEFT", 10, 0)
-local styleArrow = styleButton:CreateTexture(nil, "OVERLAY")
-styleArrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"); styleArrow:SetSize(22, 22)
-styleArrow:SetPoint("RIGHT", 22, 0)
-styleButton:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+local function DropButton(name, width, height)
+  local b = CreateFrame("Button", name, house)
+  b:SetSize(width, height)
+  b:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+  b:SetBackdropColor(0, 0, 0, 0.7); b:SetBackdropBorderColor(0.55, 0.42, 0.25)
+  b:SetFontString(b:CreateFontString(nil, "OVERLAY", "GameFontHighlight"))
+  b:GetFontString():SetPoint("LEFT", 10, 0)
+  local arrow = b:CreateTexture(nil, "OVERLAY")
+  arrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"); arrow:SetSize(height - 4, height - 4)
+  arrow:SetPoint("RIGHT", height - 4, 0)
+  b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+  return b
+end
+local styleButton = DropButton("EsteriaHousingPlotStyle", W - 72, 26)
+styleButton:SetPoint("TOP", -4, -44)
 styleButton:SetScript("OnClick", function()
   local items = { { text = "House Style", isTitle = true, notCheckable = true } }
   for _, st in ipairs(plot and plot.styles or {}) do
@@ -134,6 +140,66 @@ local reset = CreateFrame("Button", "EsteriaHousingPlotReset", house, "UIPanelBu
 reset:SetSize(64, 22); reset:SetPoint("LEFT", turnRight, "RIGHT", 8, 0); reset:SetText("Reset")
 reset:SetScript("OnClick", function() EsteriaHousing_PlacePlotHouse(0, 0, 0) end)
 
+-- the parts: one dropdown each; a shape with colours opens them (retail names a variant "Shape - Colour")
+local PART_NAMES = { [9] = "Walls", [10] = "Roof", [11] = "Door", [12] = "Windows", [16] = "Chimney" }
+local partsTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+partsTitle:SetPoint("TOPLEFT", 6, -186); partsTitle:SetText("House Parts")
+local partRows = {}
+
+local function Shape(name) return (name:match("^(.-) %- ") or name) end
+local function Colour(name) return name:match(" %- (.+)$") or name end
+
+local function PartMenu(part)
+  local items = { { text = PART_NAMES[part.type] or "Part", isTitle = true, notCheckable = true } }
+  local variants = {}
+  for _, o in ipairs(part.options) do
+    if o.parent ~= 0 then variants[o.parent] = variants[o.parent] or {}; table.insert(variants[o.parent], o) end
+  end
+  local function Pick(o) return function() EsteriaHousing_SetPlotPart(part.type, o.id); CloseDropDownMenus() end end
+  for _, o in ipairs(part.options) do
+    if o.parent == 0 then
+      local colours = variants[o.id]
+      local item = { text = Shape(o.name), checked = o.id == part.chosen, func = Pick(o) }
+      if colours then
+        item.hasArrow = true
+        item.menuList = { { text = Colour(o.name), checked = o.id == part.chosen, func = Pick(o) } }
+        for _, v in ipairs(colours) do
+          item.checked = item.checked or v.id == part.chosen
+          table.insert(item.menuList, { text = Colour(v.name), checked = v.id == part.chosen, func = Pick(v) })
+        end
+      end
+      items[#items + 1] = item
+    end
+  end
+  return items
+end
+
+local function PartRow(i)
+  if partRows[i] then return partRows[i] end
+  local row = {}
+  row.label = house:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  row.label:SetPoint("TOPLEFT", 10, -204 - (i - 1) * PART_H - 6); row.label:SetWidth(70); row.label:SetJustifyH("LEFT")
+  row.button = DropButton("EsteriaHousingPlotPart" .. i, W - 136, 22)
+  row.button:SetPoint("TOPLEFT", 82, -204 - (i - 1) * PART_H)
+  row.button:SetScript("OnClick", function(self) if row.part then EasyMenu(PartMenu(row.part), styleMenu, self, 0, 0, "MENU") end end)
+  partRows[i] = row
+  return row
+end
+
+local function RedrawParts(parts)
+  for i, part in ipairs(parts) do
+    local row = PartRow(i)
+    row.part = part
+    row.label:SetText(PART_NAMES[part.type] or "Part")
+    local name = "Default"
+    for _, o in ipairs(part.options) do if o.id == part.chosen then name = o.name end end
+    row.button:SetText(name)
+    row.label:Show(); row.button:Show()
+  end
+  for i = #parts + 1, #partRows do partRows[i].part = nil; partRows[i].label:Hide(); partRows[i].button:Hide() end
+  if #parts > 0 then partsTitle:Show() else partsTitle:Hide() end
+end
+
 -- ------------------------------------------------------------------------------------------------ redraw
 
 StaticPopupDialogs["ESTERIA_HOUSING_BUY_PLOT"] = {
@@ -151,7 +217,10 @@ local function Redraw()
   priceLabel:Hide(); price:Hide(); action:Show(); action:Enable()
   local mine = plot.status == "yours" and plot.styles and #plot.styles > 0
   if mine then house:Show() else house:Hide() end
-  f:SetHeight(mine and YOURS_H or SALE_H)
+  local parts = mine and plot.parts or {}
+  f:SetHeight(mine and YOURS_H + (#parts > 0 and 24 + #parts * PART_H or 0) or SALE_H)
+  house:SetHeight(190 + (#parts > 0 and 24 + #parts * PART_H or 0))
+  RedrawParts(parts)
   if mine then
     local name = "Style"
     for _, st in ipairs(plot.styles) do if st.id == plot.style then name = st.name end end
@@ -177,12 +246,12 @@ local function Redraw()
   elseif plot.status == "visit" then
     status:SetText("|cff80c0ffA Neighbor's Home|r")
     H.Atlas(icon, "housefinder_friend-icon-circle")
-    body:SetText("You are grouped with the owner, so you may visit.")
+    body:SetText((plot.owner ~= "" and plot.owner .. "'s home. " or "") .. "The owner lets you visit.")
     action:SetText("Visit House")
   else
     status:SetText("|cffc0c0c0Occupied|r")
     H.Atlas(icon, "housefinder_main-icon")
-    body:SetText("Someone lives here. Group with them to visit.")
+    body:SetText((plot.owner ~= "" and plot.owner .. " lives here." or "Someone lives here.") .. " The owner has not opened it to you.")
     action:Hide()
   end
 end

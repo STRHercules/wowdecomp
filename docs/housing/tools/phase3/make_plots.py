@@ -15,6 +15,10 @@ so every candidate is written as a "door_hook" row.
 <door geometry dir> holds each door WMO's first group as g<fdid>.wmo (RetailAssetProbe --extract); its porch (see
 porch()) becomes the door rows' mat_x, mat_z, where the clickable Front Door mat lies. Without it, or for a door with no
 porch near its centre line, the mat lies 1.5 yd out on the ground.
+
+Also writes the owner's choices: <out dir>/fixtures.tsv, every base, roof, door, window and chimney of every style
+(colour variants name their shape as parent; a door's mat comes from its shape's geometry), and fixture_hooks.tsv,
+the door, window and chimney hooks of each base and roof shape.
 """
 import csv
 import json
@@ -114,6 +118,28 @@ def main(tables, out, doors=None):
         w.writerow(["style", "name", "role", "fdid", "x", "y", "z", "rot_deg", "mat_x", "mat_z"])
         w.writerows(rows)
     print(f"{len(plots)} plots; {len(made)} exterior styles: {', '.join(made)}")
+
+    comps = {c["ID"]: c for c in t["ExteriorComponent"].values()
+             if c["Type"] in (BASE, ROOF, DOOR, WINDOW, CHIMNEY) and c["ModelFileDataID"]}
+    with open(os.path.join(out, "fixtures.tsv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter="\t", lineterminator="\n")
+        w.writerow(["component", "theme", "type", "size", "parent", "is_default", "fdid", "name", "mat_x", "mat_z"])
+        for c in sorted(comps.values(), key=lambda c: c["ID"]):
+            mat = (0, 0)
+            if c["Type"] == DOOR:
+                shape = comps.get(c["ParentComponentID"], c)
+                g = os.path.join(doors, f"g{shape['ModelFileDataID']}.wmo") if doors else ""
+                mat = (porch(g) if g and os.path.exists(g) else None) or GROUND_MAT
+            w.writerow([c["ID"], c["HouseExteriorWmoDataID"], c["Type"], c["Size"], c["ParentComponentID"], c["Flags"] & 1,
+                        c["ModelFileDataID"], c["Name_lang"], round(mat[0], 3), round(mat[1], 3)])
+    hooks = sorted((h for h in t["ExteriorComponentHook"].values() if h["ExteriorComponentID"] in comps
+                    and h["ComponentType"] in (DOOR, WINDOW, CHIMNEY)), key=lambda h: h["ID"])
+    with open(os.path.join(out, "fixture_hooks.tsv"), "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f, delimiter="\t", lineterminator="\n")
+        w.writerow(["component", "type", "x", "y", "z", "rot_deg"])
+        w.writerows([h["ExteriorComponentID"], h["ComponentType"], *[round(v, 3) for v in h["OffsetPos"]],
+                     round(h["OffsetRot"][2], 3)] for h in hooks)
+    print(f"{len(comps)} fixtures, {len(hooks)} fixture hooks")
 
 
 if __name__ == "__main__":

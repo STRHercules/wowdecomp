@@ -161,6 +161,7 @@ end)
 local settingsMenu = CreateFrame("Frame", "EsteriaHousingSettingsMenu", UIParent, "UIDropDownMenuTemplate")
 local settings = Control("settings", 64, 30, function()
   EasyMenu({ { text = "Housing", isTitle = true, notCheckable = true },
+    { text = "Who can visit...", notCheckable = true, keepShownOnClick = true, func = function() H.ShowAccessMenu() end },
     { text = "Reset panel positions", notCheckable = true, func = function() H.ResetPositions() end } },
     settingsMenu, "cursor", 0, 0, "MENU")
 end, "Settings")

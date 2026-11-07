@@ -25,6 +25,19 @@
 > - `0x541 SMSG_LAYOUT`: the owner's blueprint (room kinds, rooms, free walls and the kinds that fit each). It goes with
 >   every `SMSG_STATE` to the owner.
 
+> **Neighborhood button (2026-11-06): protocol 11.** One more opcode, so `NUM_MSG_TYPES` is now 0x543. `HousingWire.h` has
+> the layouts.
+> - `0x542 SMSG_NEIGHBORHOOD`: the Neighborhood window's contents (your home, every plot's status).
+> - `CMSG_ACTION` gains `ActionNeighborhood` (ask for it) and `ActionTravelNeighborhood`, `ActionTravelBack` and
+>   `ActionTravelPlot`. The server decides travel (`TravelBlock`: combat, dead, flight path, battleground or arena,
+>   dungeon or raid) and answers every one with `SMSG_NEIGHBORHOOD`, whose `message` says why it refused.
+
+> **Visitors and house parts (2026-11-07): protocol 12.** No new opcode.
+> - `SMSG_NEIGHBORHOOD` ends with `access` (`Access` bits: party, friends, guild, everyone), and names the owner of every
+>   plot you may visit. `ActionHouseAccess` sets it; visitors who may no longer stay are sent out.
+> - `SMSG_PLOT` ends with your plot's swappable parts (walls, roof, door, windows, chimney) and their options.
+>   `ActionPlotFixture` picks one; 0 goes back to the style's default.
+
 ## Opcode range: 0x537–0x540
 
 Evidence that these are unused:
