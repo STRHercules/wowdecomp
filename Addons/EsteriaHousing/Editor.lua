@@ -528,12 +528,144 @@ for i, a in ipairs(ABILITIES) do
   abilityButtons[i] = b
 end
 local divider = H.Atlas(abilityBar:CreateTexture(nil, "ARTWORK"), "decor-abilitybar-divider", 10, 46)
+
+-- beside the bar: snapping onto surfaces (retail's Snap), undo and redo
+local snapOn = true
+local snap = AtlasButton(abilityBar, "EsteriaHousingSnap", 34, 34, "decor-ability-snap-default", "decor-ability-snap-active",
+  "decor-ability-snap-pressed")
+snap:SetPoint("LEFT", abilityBar, "RIGHT", 34, 8)
+snap:SetOn(snapOn)
+snap:SetScript("OnClick", function(self)
+  snapOn = not snapOn
+  self:SetOn(snapOn)
+  if EsteriaHousing_SetSurfaceSnap then EsteriaHousing_SetSurfaceSnap(snapOn) end
+end)
+snap:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine("Snap to Surfaces")
+  GameTooltip:AddLine(snapOn and "On: decor lands on tables, shelves and other decor." or "Off: decor lands on floors only.",
+    1, 1, 1, true)
+  GameTooltip:Show()
+end)
+snap:SetScript("OnLeave", function() GameTooltip:Hide() end)
+local function SmallButton(name, text, tip, onClick)
+  local b = CreateFrame("Button", name, abilityBar, "UIPanelButtonTemplate")
+  b:SetSize(46, 18); b:SetText(text)
+  b:SetScript("OnClick", onClick)
+  b:SetScript("OnEnter", function(self) GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(tip); GameTooltip:Show() end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return b
+end
+local undoButton = SmallButton("EsteriaHousingUndoButton", "Undo", "Undo (Ctrl+Z)", function() H.Undo() end)
+undoButton:SetPoint("LEFT", snap, "RIGHT", 6, 9)
+local redoButton = SmallButton("EsteriaHousingRedoButton", "Redo", "Redo (Ctrl+Y)", function() H.Redo() end)
+redoButton:SetPoint("TOP", undoButton, "BOTTOM", 0, -2)
 divider:SetPoint("LEFT", abilityButtons[5], "LEFT", -11, 0)
+
+-- ------------------------------------------------------------------------------------------------ undo, redo
+
+-- Each edit you make, as what it was and what it became; undo sends the reverse edit and redo sends it again. A piece
+-- put back from storage gets a new placedId, so the history is renumbered when its ack arrives.
+local undo, redo = {}, {}
+local placeWaiters = {} -- callbacks for the next successful place acks, oldest first
+local historyKey        -- the house (and indoors or out) the history belongs to
+local HISTORY_MAX = 50
+
+local function TransformOf(d)
+  local h = math.rad(d.yaw or 0)
+  return { d.x, d.y, d.z, d.qx or 0, d.qy or 0, d.qz or math.sin(h / 2), d.qw or math.cos(h / 2), d.scale or 1 }
+end
+
+local function Remap(old, new)
+  for _, stack in ipairs({ undo, redo }) do
+    for _, e in ipairs(stack) do if e.id == old then e.id = new end end
+  end
+  if selected == old then selected = new end
+end
+
+local function Push(stack, e)
+  stack[#stack + 1] = e
+  if #stack > HISTORY_MAX then table.remove(stack, 1) end
+end
+
+-- Places decor; when the server says where it went, then(placedId) runs (a restored piece's full transform, renumbering).
+local function RawPlace(decorId, t, after)
+  local yaw = math.deg(2 * math.atan2(t[6] or 0, t[7] or 1))
+  if not EsteriaHousing_Place(decorId, t[1], t[2], t[3], yaw) then return false end
+  placeWaiters[#placeWaiters + 1] = function(placedId)
+    local tilted = math.abs(t[4] or 0) > 1e-4 or math.abs(t[5] or 0) > 1e-4 or math.abs((t[8] or 1) - 1) > 1e-4
+    if tilted then EsteriaHousing_Move(placedId, unpack(t)) end
+    if after then after(placedId) end
+  end
+  return true
+end
+
+-- The editor's three edits, recorded for undo.
+function H.Move(placedId, ...)
+  local d = Placed(placedId)
+  local ok = EsteriaHousing_Move(placedId, ...)
+  if ok and d then
+    local args = { ... }
+    local after = #args >= 8 and args or { args[1], args[2], args[3], 0, 0, math.sin(math.rad(args[4]) / 2),
+      math.cos(math.rad(args[4]) / 2), 1 }
+    Push(undo, { kind = "move", id = placedId, before = TransformOf(d), after = after }); wipe(redo)
+  end
+  return ok
+end
+
+function H.Place(decorId, x, y, z, yaw, transform)
+  local t = transform or { x, y, z, 0, 0, math.sin(math.rad(yaw) / 2), math.cos(math.rad(yaw) / 2), 1 }
+  t[1], t[2], t[3] = x, y, z
+  local entry = { kind = "place", decorId = decorId, at = t }
+  return RawPlace(decorId, t, function(placedId)
+    entry.id = placedId
+    Push(undo, entry); wipe(redo)
+  end)
+end
+
+function H.Remove(placedId)
+  local d = Placed(placedId)
+  local ok = EsteriaHousing_Remove(placedId)
+  if ok and d then Push(undo, { kind = "remove", id = placedId, decorId = d.decorId, before = TransformOf(d) }); wipe(redo) end
+  return ok
+end
+
+local function Replay(from, to, backwards)
+  local e = table.remove(from)
+  if not e then return Toast(backwards and "Nothing to undo." or "Nothing to redo.") end
+  local function done() Push(to, e) end
+  if e.kind == "move" then
+    if EsteriaHousing_Move(e.id, unpack(backwards and e.before or e.after)) then done() end
+  elseif (e.kind == "place") == backwards then -- take it away: undo a place, redo a removal
+    if EsteriaHousing_Remove(e.id) then done() end
+  else -- bring it back: undo a removal, redo a place
+    local old = e.id
+    RawPlace(e.decorId, e.kind == "place" and e.at or e.before, function(placedId) Remap(old, placedId); e.id = placedId; done() end)
+  end
+end
+function H.Undo() if Owner() then Replay(undo, redo, true) end end
+function H.Redo() if Owner() then Replay(redo, undo, false) end end
+
+-- Duplicate: pick up a copy of the selected decor, turned and sized as it is.
+function H.Duplicate()
+  local d = Placed(selected)
+  if not d then return Toast("Select decor to copy.") end
+  H.Hold({ decorId = d.decorId, yaw = d.yaw, copyOf = TransformOf(d) }, "place")
+end
+
+local function KeyButton(name, onClick)
+  local b = CreateFrame("Button", name, UIParent)
+  b:Hide()
+  b:SetScript("OnClick", onClick)
+  return b
+end
+KeyButton("EsteriaHousingUndo", function() H.Undo() end)
+KeyButton("EsteriaHousingRedo", function() H.Redo() end)
+KeyButton("EsteriaHousingDuplicate", function() H.Duplicate() end)
 
 -- Expert: retail's submodes for the selected decor (Translate, Rotate, Scale; Gizmo.lua drags their handles), Reset
 -- and Store, above the bar.
 local expert = CreateFrame("Frame", "EsteriaHousingExpert", UIParent)
-expert:SetSize(5 * 44 + 20, 72)
+expert:SetSize(6 * 44 + 20, 72)
 expert:SetPoint("BOTTOM", abilityBar, "TOP", 0, 6)
 expert:Hide()
 local expertBg = expert:CreateTexture(nil, "BACKGROUND"); expertBg:SetAllPoints(); expertBg:SetTexture(0, 0, 0, 0.55)
@@ -541,15 +673,16 @@ local expertName = expert:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 expertName:SetPoint("TOP", 0, -4)
 
 local function Edit(d, x, y, z, yaw)
-  if not EsteriaHousing_Move(d.placedId, x, y, z, yaw) then Toast("You can only edit your own house.") end
+  if not H.Move(d.placedId, x, y, z, yaw) then Toast("You can only edit your own house.") end
 end
 local EXPERT = {
   { "expert-horzmove", "Translate", "Drag an arrow to slide the decor along that axis. Shift: no snapping.", 1 },
   { "expert-rotate", "Rotate", "Drag a ring to turn the decor about that axis. Shift: no snapping.", 2 },
   { "expert-scale", "Scale", "Drag the handle above the decor up or down to resize it. Shift: no snapping.", 3 },
   { "expert-height", "Reset", "Level it and set its size back; its heading stays.", function() H.Gizmo.Reset() end },
+  { "move", "Duplicate", "Pick up a copy of it, turned and sized the same (Ctrl+D).", function() H.Duplicate() end },
   { "cleanup", "Store", "Put it back in storage.", function(d)
-    if not EsteriaHousing_Remove(d.placedId) then Toast("You can only edit your own house.") end end },
+    if not H.Remove(d.placedId) then Toast("You can only edit your own house.") end end },
 }
 local submodeButtons = {}
 for i, x in ipairs(EXPERT) do
@@ -559,7 +692,7 @@ for i, x in ipairs(EXPERT) do
   b:SetScript("OnClick", function()
     local d = Placed(selected)
     if type(x[4]) == "number" then H.Gizmo.SetMode(x[4]); H.RedrawExpert()
-    elseif selected == "house" and x[2] == "Store" then Toast("Your house stays on your plot.")
+    elseif selected == "house" and (x[2] == "Store" or x[2] == "Duplicate") then Toast("Your house stays on your plot.")
     elseif selected == "house" then x[4]()
     elseif d then x[4](d) end
   end)
@@ -671,7 +804,9 @@ catcher:SetScript("OnClick", function(self, button)
   if not x then x, y, z = CursorFloor() end
   if not x then return Toast("Point at the floor.") end
   if tool == "place" then
-    if not EsteriaHousing_Place(holding.decorId, x, y, z, holding.yaw) then Toast("You can only edit your own house.") end
+    if not H.Place(holding.decorId, x, y, z, holding.yaw, holding.copyOf and { unpack(holding.copyOf) }) then
+      Toast("You can only edit your own house.")
+    end
     if not IsShiftKeyDown() then H.Drop() end -- shift-click keeps placing copies
   elseif tool == "move" then
     local d = Placed(holding.placedId)
@@ -687,7 +822,7 @@ catcher:SetScript("OnClick", function(self, button)
   elseif tool == "cleanup" then
     local best = Nearest(x, y, z)
     if not best then return Toast("No decor there.") end
-    if not EsteriaHousing_Remove(best.placedId) then Toast("You can only edit your own house.") end
+    if not H.Remove(best.placedId) then Toast("You can only edit your own house.") end
   end
 end)
 
@@ -742,6 +877,10 @@ local function Bind(on)
   ClearOverrideBindings(abilityBar)
   if on then
     for i = 1, 5 do SetOverrideBindingClick(abilityBar, true, tostring(i), "EsteriaHousingAbility" .. i) end
+    SetOverrideBindingClick(abilityBar, true, "CTRL-Z", "EsteriaHousingUndo")
+    SetOverrideBindingClick(abilityBar, true, "CTRL-Y", "EsteriaHousingRedo")
+    SetOverrideBindingClick(abilityBar, true, "CTRL-SHIFT-Z", "EsteriaHousingRedo")
+    SetOverrideBindingClick(abilityBar, true, "CTRL-D", "EsteriaHousingDuplicate")
   end
 end
 
@@ -803,6 +942,8 @@ controls:SetScript("OnEvent", function(self, event, result, op, placedId)
     for _, e in ipairs(catalog) do names[e.decorId] = e.name; fdids[e.decorId] = e.fileDataId end
   elseif event == "ESTERIA_HOUSING_STATE" or event == "ESTERIA_HOUSING_AVAILABLE" then
     state = EsteriaHousing_GetState()
+    local key = state and state.inHouse and (state.houseId .. (state.outdoors and "out" or "in"))
+    if key ~= historyKey then historyKey = key; wipe(undo); wipe(redo); wipe(placeWaiters) end
     if not Placed(selected) and not (selected == "house" and HouseTarget()) then selected = nil end
     if holding and holding.placedId and not Placed(holding.placedId) then H.Drop() end
     RedrawControls()
@@ -810,6 +951,10 @@ controls:SetScript("OnEvent", function(self, event, result, op, placedId)
     if result ~= 0 then Toast(RESULT[result] or ("Housing error " .. result))
     elseif op == 1 then selected = placedId end
     state = EsteriaHousing_GetState()
+    if op == 1 then -- a place's ack: whoever waits for it learns where it went (or that it did not happen)
+      local waiter = table.remove(placeWaiters, 1)
+      if waiter and result == 0 then waiter(placedId) end
+    end
     RedrawControls()
   end
   H.RedrawDecor()

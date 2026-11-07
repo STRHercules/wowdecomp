@@ -87,10 +87,13 @@ function EsteriaHousing_StyleRoom(...) return log("styleroom", ...) end
 function EsteriaHousing_SetCeilingHidden(...) return log("ceiling", ...) end
 function EsteriaHousing_StairsUp(...) return log("stairsup", ...) end
 function EasyMenu(items) lastMenu = items end
+function wipe(t) for k in pairs(t) do t[k] = nil end return t end
+function EsteriaHousing_SetSurfaceSnap(on) surfaceSnap = on end
 function EsteriaHousing_BuyDecor(...) return log("buydecor", ...) end
 function EsteriaHousing_Upgrade(...) return log("upgrade", ...) end
 function EsteriaHousing_SetPlotStyle(...) return log("plotstyle", ...) end
 function EsteriaHousing_SetPlotPart(...) return log("plotpart", ...) end
+function EsteriaHousing_SetPlotSpot(...) return log("plotspot", ...) end
 function EsteriaHousing_PlacePlotHouse(...) return log("plotplace", ...) end
 function ClearOverrideBindings() end
 function SetOverrideBindingClick() end
@@ -156,6 +159,16 @@ L.execute('assert(lastMenu[2].text == "Simple Entryway" and lastMenu[2].checked 
 assert last() == ["plotpart", 11, 1381], last()
 L.execute('lastMenu[3].func()')
 assert last() == ["plotpart", 11, 1419], last()
+# Roof spots: step to the second spot and put a tower there; a spot offers only what it takes.
+L.execute('''plot.spots = { { x = 1, y = 2, z = 3, dormer = false, tower = true, chimney = true, type = 16 },
+  { x = 4, y = 5, z = 6, dormer = false, tower = true, chimney = false, type = 0 } }''')
+g.event("ESTERIA_HOUSING_PLOT")
+assert g.EsteriaHousingPlotSpot._text == "Chimney", g.EsteriaHousingPlotSpot._text
+g.EsteriaHousingPlotSpotNext.Click(g.EsteriaHousingPlotSpotNext)
+g.EsteriaHousingPlotSpot.Click(g.EsteriaHousingPlotSpot)
+assert [i["text"] for i in g.lastMenu.values()][1:] == ["Empty", "Tower"], [i["text"] for i in g.lastMenu.values()]
+L.execute('lastMenu[3].func()')
+assert last() == ["plotspot", 2, 15], last()
 g.EsteriaHousingPlotNorth.Click(g.EsteriaHousingPlotNorth)
 assert last() == ["plotplace", 8, 0, 0, 0, 1], last()  # 8.5 would be past the reach: held at 8
 g.EsteriaHousingPlotTurnLeft.Click(g.EsteriaHousingPlotTurnLeft)
@@ -334,6 +347,40 @@ L.execute('layout.roomPrice, layout.roomStep, layout.roomCap = 500000, 4, 64')
 g.EsteriaHousingUpgrades.Hide(g.EsteriaHousingUpgrades); g.EsteriaHousingUpgrades.Show(g.EsteriaHousingUpgrades)
 L.execute('for _, o in ipairs(created) do if o.question and o.question:find("room limit") then o._scripts.OnClick(o) end end')
 assert last() == ["upgrade", "rooms"], last()
+
+# Undo / redo: a move goes back and forth; a stored piece comes back as a new one, and the history follows it.
+L.execute('''state.decor = { { placedId = 7, decorId = 498, x = 12, y = 21, z = 5, yaw = 0, qx = 0, qy = 0, qz = 0, qw = 1, scale = 1 } }
+EsteriaHousingUI.SetEditing(true); EsteriaHousingUI.SetAbility(2)''')
+g.event("ESTERIA_HOUSING_STATE")
+L.execute('EsteriaHousingUI.Move(7, 13, 21, 5, 0)')
+g.EsteriaHousingUndo.Click(g.EsteriaHousingUndo)
+assert last() == ["move", 7, 12, 21, 5, 0, 0, 0, 1, 1], last()
+g.EsteriaHousingRedo.Click(g.EsteriaHousingRedo)
+assert last() == ["move", 7, 13, 21, 5, 0, 0, 0, 1, 1], last()
+L.execute('EsteriaHousingUI.Remove(7); state.decor = {}')
+g.event("ESTERIA_HOUSING_STATE")
+g.EsteriaHousingUndo.Click(g.EsteriaHousingUndo)
+assert last() == ["place", 498, 12, 21, 5, 0], last()
+g.event("ESTERIA_HOUSING_RESULT", 0, 1, 9)
+g.EsteriaHousingRedo.Click(g.EsteriaHousingRedo)
+assert last() == ["remove", 9], last()
+g.EsteriaHousingUndo.Click(g.EsteriaHousingUndo)
+g.event("ESTERIA_HOUSING_RESULT", 0, 1, 10)
+# Duplicate (Ctrl+D) picks up a copy; placed, it takes the original's turn and size.
+L.execute('''state.decor = { { placedId = 10, decorId = 498, x = 1, y = 2, z = 3, yaw = 90, qx = 0, qy = 0,
+  qz = math.sin(math.rad(45)), qw = math.cos(math.rad(45)), scale = 1.5 } }''')
+g.event("ESTERIA_HOUSING_STATE")
+g.EsteriaHousingDuplicate.Click(g.EsteriaHousingDuplicate)
+L.execute('cursor = { 5, 6, 3 }')
+catcher.Click(catcher)
+assert last()[:2] == ["place", 498] and abs(last()[5] - 90) < 1e-6, last()
+g.event("ESTERIA_HOUSING_RESULT", 0, 1, 11)
+m = last()
+assert m[:2] == ["move", 11] and abs(m[7] - 0.70710678) < 1e-6 and m[9] == 1.5, m
+# Snap to surfaces is on by default and toggles from its button.
+g.EsteriaHousingSnap.Click(g.EsteriaHousingSnap)
+assert L.eval("surfaceSnap") is False
+g.EsteriaHousingSnap.Click(g.EsteriaHousingSnap)
 
 # Outdoors on your plot: the editor stays, without Exit, Customize, Layout or Scale.
 L.execute('state.outdoors = true')

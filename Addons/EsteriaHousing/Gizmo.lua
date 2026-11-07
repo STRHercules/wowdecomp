@@ -100,7 +100,7 @@ end
 -- Sends a transform for the target: its own commit, or a decor move.
 local function Commit(pos, q, scale)
   if target.commit then return target.commit(pos, q, scale) end
-  return EsteriaHousing_Move(target.placedId, pos[1], pos[2], pos[3], q[1], q[2], q[3], q[4], scale)
+  return (H.Move or EsteriaHousing_Move)(target.placedId, pos[1], pos[2], pos[3], q[1], q[2], q[3], q[4], scale)
 end
 
 local function Pick(o, d)

@@ -173,7 +173,8 @@ local function RedrawPlacement()
 end
 
 -- the parts: one dropdown each; a shape with colours opens them (retail names a variant "Shape - Colour")
-local PART_NAMES = { [9] = "Walls", [10] = "Roof", [11] = "Door", [12] = "Windows", [16] = "Chimney" }
+local PART_NAMES = { [9] = "Walls", [10] = "Roof", [11] = "Door", [12] = "Windows", [14] = "Dormers", [15] = "Towers",
+  [16] = "Chimneys" }
 local partsTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 partsTitle:SetPoint("TOPLEFT", 6, -242); partsTitle:SetText("House Parts")
 local partsBox = Inset(-256, 10)
@@ -220,6 +221,63 @@ local function PartRow(i)
   return row
 end
 
+-- Roof spots: step through the places on the walls and roof that take a dormer, tower or chimney; the handles mark the
+-- one you are on, and the menu puts something there or empties it.
+local SPOT_TYPES = { { 0, "Empty" }, { 16, "Chimney", "chimney" }, { 15, "Tower", "tower" }, { 14, "Dormer", "dormer" } }
+local spotsTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+spotsTitle:SetText("Roof Spots")
+local spotsBox = Inset(0, 38)
+local spotIndex = 1
+local spotLabel = house:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+local spotPrev = Key("SpotPrev", 0, 1, "housing-hotkey-icon-arrow-left", function() spotIndex = spotIndex - 1; H.RedrawSpots() end,
+  "Previous spot")
+local spotNext = Key("SpotNext", 0, 2, "housing-hotkey-icon-arrow-right", function() spotIndex = spotIndex + 1; H.RedrawSpots() end,
+  "Next spot")
+local spotButton = DropButton("EsteriaHousingPlotSpot", 120, 22)
+
+local function TypeName(t)
+  for _, x in ipairs(SPOT_TYPES) do if x[1] == t then return x[2] end end
+  return "Empty"
+end
+
+spotButton:SetScript("OnClick", function(self)
+  local spot = plot and plot.spots and plot.spots[spotIndex]
+  if not spot then return end
+  local items = { { text = "Spot " .. spotIndex, isTitle = true, notCheckable = true } }
+  for _, x in ipairs(SPOT_TYPES) do
+    if x[1] == 0 or spot[x[3]] then
+      items[#items + 1] = { text = x[2], checked = spot.type == x[1], func = function() EsteriaHousing_SetPlotSpot(spotIndex, x[1]) end }
+    end
+  end
+  EasyMenu(items, styleMenu, self, 0, 0, "MENU")
+end)
+
+function H.RedrawSpots()
+  local spots = plot and plot.status == "yours" and plot.spots or {}
+  local show = #spots > 0 and f:IsShown()
+  for _, w in ipairs({ spotsTitle, spotsBox, spotLabel, spotPrev, spotNext, spotButton }) do if show then w:Show() else w:Hide() end end
+  if not show then
+    if H.markingSpot then H.markingSpot = nil; EsteriaHousing_SetGizmo(0) end
+    return
+  end
+  spotIndex = (spotIndex - 1) % #spots + 1
+  local spot = spots[spotIndex]
+  spotLabel:SetText(string.format("%d of %d", spotIndex, #spots))
+  spotButton:SetText(TypeName(spot.type))
+  H.markingSpot = true
+  EsteriaHousing_SetGizmo(1, spot.x, spot.y, spot.z, 1.5, 0, false) -- the arrows point it out on the house
+end
+
+-- below the parts, wherever they end
+local function PlaceSpots(top)
+  spotsTitle:ClearAllPoints(); spotsTitle:SetPoint("TOPLEFT", 6, top)
+  spotsBox:ClearAllPoints(); spotsBox:SetPoint("TOPLEFT", 0, top - 14); spotsBox:SetPoint("TOPRIGHT", 0, top - 14)
+  spotPrev:ClearAllPoints(); spotPrev:SetPoint("TOPLEFT", 12, top - 20)
+  spotNext:ClearAllPoints(); spotNext:SetPoint("LEFT", spotPrev, "RIGHT", 4, 0)
+  spotLabel:ClearAllPoints(); spotLabel:SetPoint("LEFT", spotNext, "RIGHT", 10, 0)
+  spotButton:ClearAllPoints(); spotButton:SetPoint("TOPRIGHT", -34, top - 22)
+end
+
 local function RedrawParts(parts)
   for i, part in ipairs(parts) do
     local row = PartRow(i)
@@ -254,6 +312,8 @@ local function Redraw()
   if mine then house:Show() else house:Hide() end
   local parts = mine and plot.parts or {}
   local houseH = 242 + (#parts > 0 and 22 + #parts * PART_H or 0)
+  PlaceSpots(-houseH - 6)
+  if mine and plot.spots and #plot.spots > 0 then houseH = houseH + 62 end
   house:SetHeight(houseH)
   f:SetHeight(mine and 146 + houseH + 64 or SALE_H)
   RedrawParts(parts)
@@ -309,7 +369,10 @@ f:SetScript("OnUpdate", function(self, elapsed)
   local x, y = EsteriaHousing_GetPlayerPosition()
   if openedAt and x and ((x - openedAt[1]) ^ 2 + (y - openedAt[2]) ^ 2) > REACH * REACH then self:Hide() end
 end)
-f:SetScript("OnHide", function() StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT"); CloseDropDownMenus() end)
+f:SetScript("OnHide", function()
+  StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT"); CloseDropDownMenus()
+  if H.markingSpot then H.markingSpot = nil; EsteriaHousing_SetGizmo(0) end
+end)
 
 f:RegisterEvent("ESTERIA_HOUSING_PLOT")
 f:RegisterEvent("PLAYER_MONEY")
@@ -323,6 +386,6 @@ f:SetScript("OnEvent", function(self, event)
     end
     if plot then self:Show() end
   end
-  if self:IsShown() then Redraw() end
+  if self:IsShown() then Redraw(); H.RedrawSpots() end
 end)
-f:SetScript("OnShow", Redraw)
+f:SetScript("OnShow", function() Redraw(); H.RedrawSpots() end)

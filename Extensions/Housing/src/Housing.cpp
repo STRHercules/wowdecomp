@@ -71,6 +71,8 @@ struct PlotInfo {
     struct Option { uint32_t id = 0, parent = 0; std::string name; };
     struct Part { uint8_t type = 0; uint32_t chosen = 0; std::vector<Option> options; };
     std::vector<Part> parts;            // your plot: the house parts you may swap
+    struct SpotInfo { float pos[3] = { 0, 0, 0 }; uint8_t accepts = 0, type = 0; };
+    std::vector<SpotInfo> spots;        // your plot: the wall and roof spots for dormers, towers and chimneys
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
@@ -226,6 +228,7 @@ void TickBounds() {
     CMap::ObjectUpdate(s_bounds.entity, matrix, box, sphere, sphere.c, false, 0xFFFFFFFF);
 }
 
+bool s_snapSurfaces = true; // the cursor lands on decor too (game objects), so decor can sit on tables and shelves
 bool CursorRay(C3Vector& out);
 
 struct Gizmo;
@@ -446,6 +449,13 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
             part.options.push_back(std::move(o));
         }
         next.parts.push_back(std::move(part));
+    }
+    uint8_t spots;
+    if (!r.Get(spots)) return 0;
+    for (uint8_t i = 0; i < spots; ++i) {
+        PlotInfo::SpotInfo spot;
+        if (!r.Get(spot.pos[0]) || !r.Get(spot.pos[1]) || !r.Get(spot.pos[2]) || !r.Get(spot.accepts) || !r.Get(spot.type)) return 0;
+        next.spots.push_back(spot);
     }
     if (!r.Done()) return 0;
     next.valid = true;
@@ -688,6 +698,32 @@ int32_t GetPlot(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "parts");
+    // spots = { { x, y, z, dormer, tower, chimney (what it takes), type (0 empty, 14 dormer, 15 tower, 16 chimney) } }
+    lua_createtable(L, int(s_plot.spots.size()), 0);
+    i = 0;
+    for (PlotInfo::SpotInfo const& spot : s_plot.spots) {
+        lua_createtable(L, 0, 7);
+        NumberField(L, "x", spot.pos[0]); NumberField(L, "y", spot.pos[1]); NumberField(L, "z", spot.pos[2]);
+        lua_pushboolean(L, spot.accepts & SpotDormer); lua_setfield(L, -2, "dormer");
+        lua_pushboolean(L, spot.accepts & SpotTower); lua_setfield(L, -2, "tower");
+        lua_pushboolean(L, spot.accepts & SpotChimney); lua_setfield(L, -2, "chimney");
+        NumberField(L, "type", spot.type);
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "spots");
+    return 1;
+}
+
+// EsteriaHousing_SetSurfaceSnap(on): whether placing lands on decor (tables, shelves) as well as floors and walls.
+int32_t SetSurfaceSnap(lua_State* L) {
+    s_snapSurfaces = lua_toboolean(L, 1) != 0;
+    return 0;
+}
+
+// EsteriaHousing_SetPlotSpot(spot, type): what stands on that wall or roof spot (as GetPlot lists them); 0 empties it.
+int32_t SetPlotSpot(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionPlotSpot).Put<uint8_t>(uint8_t(luaL_checknumber(L, 1) - 1))
+        .Put<uint8_t>(uint8_t(luaL_checknumber(L, 2))).Send(CMSG_ACTION));
     return 1;
 }
 
@@ -1110,7 +1146,7 @@ bool CursorRay(C3Vector& out) {
     frame->m_camera->SetupWorldProjection(frame->m_viewportDDC);
     C3Vector start, end;
     HITTESTRESULT hit{};
-    bool const found = frame->GetLineSegment(x, y, &start, &end) && frame->HitTest(start, end, 0x3, &hit) != 0;
+    bool const found = frame->GetLineSegment(x, y, &start, &end) && frame->HitTest(start, end, s_snapSurfaces ? 0x7 : 0x3, &hit) != 0;
     device->XformSetProjection(projection);
     device->XformSetView(view);
     if (!found) return false;
@@ -1202,6 +1238,8 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelNeighborhood", TravelNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetHouseAccess", SetHouseAccess, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetPlotPart", SetPlotPart, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetPlotSpot", SetPlotSpot, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetSurfaceSnap", SetSurfaceSnap, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelBack", TravelBack, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelPlot", TravelPlot, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetLayout", GetLayout, FRAMESCRIPT_CONTEXTS_GAME);

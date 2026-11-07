@@ -17,8 +17,8 @@ porch()) becomes the door rows' mat_x, mat_z, where the clickable Front Door mat
 porch near its centre line, the mat lies 1.5 yd out on the ground.
 
 Also writes the owner's choices: <out dir>/fixtures.tsv, every base, roof, door, window and chimney of every style
-(colour variants name their shape as parent; a door's mat comes from its shape's geometry), and fixture_hooks.tsv,
-the door, window and chimney hooks of each base and roof shape.
+(and dormers and towers; colour variants name their shape as parent; a door's mat comes from its shape's geometry),
+and fixture_hooks.tsv, the door, window, dormer, tower and chimney hooks of each base and roof shape.
 """
 import csv
 import json
@@ -27,7 +27,7 @@ import os
 import struct
 import sys
 
-BASE, ROOF, DOOR, WINDOW, CHIMNEY = 9, 10, 11, 12, 16
+BASE, ROOF, DOOR, WINDOW, DORMER, TOWER, CHIMNEY = 9, 10, 11, 12, 14, 15, 16
 SIZES = {2: "Small", 3: "Medium", 4: "Large"}
 GROUND_MAT = (1.5, 0.0)
 FAR_HOUSE = 55  # yd: past this from its cornerstone, a plot's HousePosition is not used (see main)
@@ -128,7 +128,7 @@ def main(tables, out, doors=None):
     print(f"{len(plots)} plots; {len(made)} exterior styles: {', '.join(made)}")
 
     comps = {c["ID"]: c for c in t["ExteriorComponent"].values()
-             if c["Type"] in (BASE, ROOF, DOOR, WINDOW, CHIMNEY) and c["ModelFileDataID"]}
+             if c["Type"] in (BASE, ROOF, DOOR, WINDOW, DORMER, TOWER, CHIMNEY) and c["ModelFileDataID"]}
     with open(os.path.join(out, "fixtures.tsv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter="\t", lineterminator="\n")
         w.writerow(["component", "theme", "type", "size", "parent", "is_default", "fdid", "name", "mat_x", "mat_z"])
@@ -141,7 +141,7 @@ def main(tables, out, doors=None):
             w.writerow([c["ID"], c["HouseExteriorWmoDataID"], c["Type"], c["Size"], c["ParentComponentID"], c["Flags"] & 1,
                         c["ModelFileDataID"], c["Name_lang"], round(mat[0], 3), round(mat[1], 3)])
     hooks = sorted((h for h in t["ExteriorComponentHook"].values() if h["ExteriorComponentID"] in comps
-                    and h["ComponentType"] in (DOOR, WINDOW, CHIMNEY)), key=lambda h: h["ID"])
+                    and h["ComponentType"] in (DOOR, WINDOW, DORMER, TOWER, CHIMNEY)), key=lambda h: h["ID"])
     with open(os.path.join(out, "fixture_hooks.tsv"), "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f, delimiter="\t", lineterminator="\n")
         w.writerow(["component", "type", "x", "y", "z", "rot_deg"])
