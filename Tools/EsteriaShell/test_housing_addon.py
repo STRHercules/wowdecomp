@@ -188,7 +188,7 @@ L.execute('''catalog = { { decorId = 498, name = "Folk Rug", available = 5, plac
                          { decorId = 497, name = "Folk Long Table", available = 0, placed = 0, category = 1, fileDataId = 333, price = 50000 } }
 state = { inHouse = true, isOwner = true, houseId = 1, revision = 0, placed = 0, maxDecor = 50, pending = 0, decor = {} }
 assert(next(EsteriaHousingUI.THUMBNAILS), "Thumbnails.lua lists retail pictures")
-EsteriaHousingUI.THUMBNAILS = { [498] = 7001 }''')
+EsteriaHousingUI.THUMBNAILS = { [498] = { 7001, 0.78125 } }''')
 g.event("ESTERIA_HOUSING_CATALOG")
 g.event("ESTERIA_HOUSING_STATE")
 assert g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls) and g.EsteriaHousingBudget.IsShown(g.EsteriaHousingBudget)

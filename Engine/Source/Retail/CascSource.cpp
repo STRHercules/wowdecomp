@@ -62,6 +62,31 @@ bool TableName(const std::string& name) {
     return false;
 }
 bool Failure(std::string& error, const char* message) { error = message; return false; }
+
+// 3.3.5 draws only power-of-two textures (others show as the green missing-texture fill); retail's decor thumbnails
+// are 400 x 400 DXT. Copies mip 0's blocks into the top-left of the next power-of-two canvas, padding with zero blocks
+// and dropping the mip chain; the UI crops back with SetTexCoord. Leaves anything else untouched.
+void PadBlpToPowerOfTwo(std::vector<uint8_t>& bytes) {
+    const auto u32 = [&](size_t at) { uint32_t v; std::memcpy(&v, bytes.data() + at, 4); return v; };
+    const uint32_t w = u32(12), h = u32(16), offset = u32(20), size = u32(84);
+    const auto pow2 = [](uint32_t v) { uint32_t p = 1; while (p < v) p <<= 1; return p; };
+    if (bytes[8] != 2 || !w || !h || w > 2048 || h > 2048 || (w % 4) || (h % 4) || (pow2(w) == w && pow2(h) == h))
+        return;
+    const uint32_t block = bytes[10] == 0 ? 8 : 16; // DXT1, else DXT3/DXT5
+    const uint32_t rowBytes = w / 4 * block, rows = h / 4, W = pow2(w), H = pow2(h), outRow = W / 4 * block;
+    if (size < rowBytes * rows || uint64_t(offset) + rowBytes * rows > bytes.size()) return;
+    constexpr uint32_t data = 148 + 1024; // header, then BLP2's 256-entry palette (unused by DXT)
+    std::vector<uint8_t> out(data + size_t(outRow) * (H / 4), 0);
+    std::memcpy(out.data(), bytes.data(), 12);
+    out[11] = 0; // no mips
+    const uint32_t header[] = { W, H, data, outRow * (H / 4) };
+    std::memcpy(out.data() + 12, header, 8);
+    std::memcpy(out.data() + 20, header + 2, 4);
+    std::memcpy(out.data() + 84, header + 3, 4);
+    for (uint32_t y = 0; y < rows; ++y)
+        std::memcpy(out.data() + data + size_t(y) * outRow, bytes.data() + offset + size_t(y) * rowBytes, rowBytes);
+    bytes.swap(out);
+}
 bool CascFailure(std::string& error, const char* operation) {
     error = std::string(operation) + " (CascLib error " + std::to_string(GetCascError()) + ")";
     return false;
@@ -662,6 +687,7 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
         // BLP2 format version 1 is the existing client's native texture format.
         success = bytes.size() >= 148 && std::memcmp(bytes.data(), "BLP2\1\0\0\0", 8) == 0;
         if (!success) error = "Retail texture is not a supported BLP2 file";
+        if (success) PadBlpToPowerOfTwo(bytes);
     } else if (ext == ".wmo") {
         std::vector<uint8_t> prepared;
         if (IsWmoGroup(bytes)) {

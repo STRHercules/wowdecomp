@@ -400,7 +400,8 @@ function H.RedrawDecor()
       end
       local thumb = H.THUMBNAILS and H.THUMBNAILS[e.decorId]
       if thumb then
-        t.thumb:SetTexture("retail/" .. thumb .. ".blp"); t.thumb:Show(); t.model:Hide()
+        t.thumb:SetTexture("retail/" .. thumb[1] .. ".blp"); t.thumb:SetTexCoord(0, thumb[2], 0, thumb[2])
+        t.thumb:Show(); t.model:Hide()
       else
         t.thumb:Hide(); t.model:Show()
         if t.fdid ~= e.fileDataId then

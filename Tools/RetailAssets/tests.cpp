@@ -1614,6 +1614,24 @@ int main(int argc, char** argv) {
     Check(offline.Inspect("retail/42.m2", prepared, error) && prepared == valid, "offline source preserves original bytes");
     Check(!offline.Inspect("retail/43.m2", prepared, error), "offline source fails on missing dependency");
     {
+        // A 12 x 8 DXT5 BLP (3 x 2 blocks, with a mip) reads as 16 x 8 (4 x 2 blocks), no mips, blocks top-left.
+        std::vector<uint8_t> blp(1172 + 6 * 16 + 16, 0);
+        std::memcpy(blp.data(), "BLP2\1\0\0\0", 8);
+        blp[8] = 2; blp[9] = 8; blp[10] = 7; blp[11] = 1;
+        const uint32_t head[] = { 12, 8, 1172, 1172 + 96 };
+        std::memcpy(blp.data() + 12, head, 8); std::memcpy(blp.data() + 20, head + 2, 8);
+        const uint32_t sizes[] = { 96, 16 };
+        std::memcpy(blp.data() + 84, sizes, 8);
+        for (int i = 0; i < 96; ++i) blp[1172 + i] = uint8_t(i + 1);
+        std::ofstream(temp / "44.bin", std::ios::binary).write(reinterpret_cast<const char*>(blp.data()), blp.size());
+        uint32_t w = 0, h = 0, size = 0;
+        const bool read = offline.Read("retail/44.blp", prepared, error) && prepared.size() == 1172 + 128;
+        if (read) { std::memcpy(&w, prepared.data() + 12, 4); std::memcpy(&h, prepared.data() + 16, 4); std::memcpy(&size, prepared.data() + 84, 4); }
+        Check(read && w == 16 && h == 8 && size == 128 && prepared[11] == 0 && prepared[1172] == 1 && prepared[1172 + 47] == 48
+            && prepared[1172 + 48] == 0 && prepared[1172 + 64] == 49 && prepared[1172 + 127] == 0,
+            "non-power-of-two DXT texture is padded to a power of two");
+    }
+    {
         // A test reader stands in for SFile's mounted MPQ callback; the CASC/loose file remains absent.
         Retail::SetPackedAssetReader([](const char* name, std::vector<uint8_t>& out,
             std::string& error, uint32_t* size) -> int
