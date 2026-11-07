@@ -378,6 +378,7 @@ bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::
         if (!(Get<uint32_t>(main->data + i * 8) & 1)) continue;
         const uint8_t* e = maid->data + i * 32; // root, obj0, obj1, tex0, lod, map texture, normals, minimap
         WdtTile t{uint32_t(i % 64), uint32_t(i / 64), Get<uint32_t>(e), Get<uint32_t>(e + 4), Get<uint32_t>(e + 12)};
+        t.minimap = Get<uint32_t>(e + 28);
         if (t.root) tiles.push_back(t);
     }
     std::vector<uint8_t> header(32);

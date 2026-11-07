@@ -690,6 +690,14 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
             const auto name = base + "_" + std::to_string(tiles[i].x) + "_" + std::to_string(tiles[i].y) + ".adt";
             s.dependencies[name] = Reference{tiles[i].root};
             s.terrainTiles[name] = {tiles[i].obj0, tiles[i].tex0};
+            // The minimap's own path for the tile (MinimapFrame falls back to it when md5translate.trs has no entry):
+            // textures/minimap/<map directory>/map<x>_<yy>.blp, as 3.3.5 names minimap tiles.
+            const auto dir = base.substr(0, base.find_last_of('/'));
+            if (tiles[i].minimap && dir.find('/') != std::string::npos) {
+                char tileName[32];
+                std::snprintf(tileName, sizeof(tileName), "/map%u_%02u.blp", tiles[i].x, tiles[i].y);
+                s.dependencies["textures/minimap/" + dir.substr(dir.find_last_of('/') + 1) + tileName] = Reference{tiles[i].minimap};
+            }
         }
         if (success) bytes = std::move(prepared);
     } else if (ext == ".adt") {

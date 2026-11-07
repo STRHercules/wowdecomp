@@ -18,6 +18,11 @@ target_link_libraries(Ui
         Extension
 )
 
+# MinimapFrame finds retail terrain maps' minimap tiles through the retail source
+if (WOWDECOMP_RETAIL_ASSETS)
+    target_link_libraries(Ui PRIVATE RetailAssets)
+endif ()
+
 if (WIN32)
     target_link_libraries(Ui
         PRIVATE

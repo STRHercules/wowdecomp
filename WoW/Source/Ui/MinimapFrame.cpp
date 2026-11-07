@@ -13,6 +13,9 @@
 #include "Engine/Source/Frame/CSimpleTexture.h"
 #include "Engine/Source/FrameXML/XMLTree.h"
 #include "Engine/Source/Storm/H/storm.h"
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+#include "Engine/Source/Retail/CascSource.h"
+#endif
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "WoW/Source/Object/ObjectClient/Object_C.h"
@@ -1228,6 +1231,16 @@ static int32_t MinimapBuildSource(const int32_t* tile, char* path, uint32_t size
     MINIMAPMD5NAME* name = s_md5Names.Ptr(path);
 
     if (!name) {
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+        // Not in the original: a retail terrain map's tiles have no md5translate entry; the retail source names each
+        // one by its plain path when it reads the map's WDT.
+        char plain[260];
+        SStrPrintf(plain, sizeof(plain), "%s\\%s", s_minimapTexturePath, path);
+        if (Retail::SourceForPath(plain).Handles(plain)) {
+            SStrCopy(path, plain, size);
+            return 1;
+        }
+#endif
         SysMsgPrintf(STATUS_ERROR, 2, "No minimap texture: \"%s\"", path);
         *path = 0;
         return 0;

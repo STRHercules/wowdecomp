@@ -15,6 +15,7 @@ namespace Retail {
 struct WdtTile {
     uint32_t x = 0, y = 0;      // tile column and row, as in <map>_<x>_<y>.adt
     uint32_t root = 0, obj0 = 0, tex0 = 0;
+    uint32_t minimap = 0;       // the tile's minimap texture (MAID), 0 for none
 };
 
 // What each of a tile's 256 chunks keeps after that cut, so the tile beside it can fade to match. An id is 0 or stands for
