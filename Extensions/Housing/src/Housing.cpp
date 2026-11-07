@@ -78,6 +78,9 @@ struct Layout {
     std::vector<LayoutRoom> rooms;
     std::vector<LayoutSocket> sockets;
     std::vector<LayoutTheme> themes;
+    uint8_t maxFloors = 4;
+    uint32_t floorPrice = 0, decorPrice = 0;
+    uint16_t decorStep = 0, decorCap = 0;
 };
 
 struct PendingEdit {
@@ -195,7 +198,8 @@ public:
     explicit Reader(CDataStore* message) {
         if (!message || message->m_read > message->m_size) return;
         uint32_t size = message->m_size - message->m_read;
-        if (size > 65536 || !message->FetchRead(message->m_read, size)) return;
+        // a full house's SMSG_STATE: 5000 decor x 44 bytes
+        if (size > (1u << 20) || !message->FetchRead(message->m_read, size)) return;
         m_bytes.resize(size);
         message->GetData(m_bytes.data(), size);
         m_ok = true;
@@ -388,6 +392,8 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         if (!r.Get(theme.id) || !r.Get(theme.name)) return 0;
         next.themes.push_back(std::move(theme));
     }
+    if (!r.Get(next.maxFloors) || !r.Get(next.floorPrice) || !r.Get(next.decorPrice) || !r.Get(next.decorStep)
+        || !r.Get(next.decorCap)) return 0;
     if (!r.Done()) return 0;
     next.valid = true;
     s_layout = std::move(next);
@@ -604,6 +610,18 @@ int32_t GetLayout(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "themes");
+    NumberField(L, "maxFloors", s_layout.maxFloors); NumberField(L, "floorPrice", s_layout.floorPrice);
+    NumberField(L, "decorPrice", s_layout.decorPrice); NumberField(L, "decorStep", s_layout.decorStep);
+    NumberField(L, "decorCap", s_layout.decorCap);
+    return 1;
+}
+
+// EsteriaHousing_Upgrade("floors" | "decor"): buys the house's next floor or decor budget step.
+int32_t UpgradeHouse(lua_State* L) {
+    char const* what = luaL_checkstring(L, 1);
+    uint8_t const kind = !std::strcmp(what, "floors") ? UpgradeFloors : !std::strcmp(what, "decor") ? UpgradeDecor : 0;
+    lua_pushboolean(L, kind && s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionUpgrade).Put<uint8_t>(kind)
+        .Send(CMSG_ACTION));
     return 1;
 }
 
@@ -943,6 +961,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetCeilingHidden", SetCeilingHidden, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StairsUp", StairsUp, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_BuyDecor", BuyDecor, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_Upgrade", UpgradeHouse, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);

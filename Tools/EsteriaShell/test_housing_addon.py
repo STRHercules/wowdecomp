@@ -25,10 +25,10 @@ GameTooltip = W.new("GameTooltip")
 STANDARD_TEXT_FONT = "Fonts\FRIZQT__.TTF"
 UIErrorsFrame = { AddMessage = function(_, m) toasts[#toasts + 1] = m end }
 -- like the client's: the dialog text is formatted with two values at most, so a third %s errors
-function StaticPopup_Show(which, a1, a2)
+function StaticPopup_Show(which, a1, a2, data)
   shownPopup = which
   popupText = string.format(StaticPopupDialogs[which].text, a1, a2)
-  StaticPopupDialogs[which].OnAccept()
+  StaticPopupDialogs[which].OnAccept({ data = data }, data)
 end
 function StaticPopup_Hide() end
 function GetCoinTextureString(c) return c .. "c" end
@@ -67,6 +67,7 @@ function EsteriaHousing_SetCeilingHidden(...) return log("ceiling", ...) end
 function EsteriaHousing_StairsUp(...) return log("stairsup", ...) end
 function EasyMenu(items) lastMenu = items end
 function EsteriaHousing_BuyDecor(...) return log("buydecor", ...) end
+function EsteriaHousing_Upgrade(...) return log("upgrade", ...) end
 function ClearOverrideBindings() end
 function SetOverrideBindingClick() end
 function ReloadUI() end
@@ -268,6 +269,15 @@ assert last() == ["stairsup", 2], last()
 L.execute('layout.rooms[4] = { kind = 10, x = 0, y = 24, quarter = 0, wallTheme = 3, floorTheme = 3, ceilingTheme = 3, level = -1 }')
 g.event("ESTERIA_HOUSING_LAYOUT")
 assert g.buttonNamed("Basement")._shown
+
+# House upgrades: the House button opens them; each buys the next step after a confirmation.
+L.execute('layout.maxFloors, layout.floorPrice, layout.decorPrice, layout.decorStep, layout.decorCap = 4, 1000000, 100000, 100, 5000')
+g.EsteriaHousingControlhouseinfo.Click(g.EsteriaHousingControlhouseinfo)
+assert g.EsteriaHousingUpgrades.IsShown(g.EsteriaHousingUpgrades)
+L.execute('for _, o in ipairs(created) do if o.question and o.question:find("floor") then o._scripts.OnClick(o) end end')
+assert last() == ["upgrade", "floors"], last()
+L.execute('for _, o in ipairs(created) do if o.question and o.question:find("decor budget") then o._scripts.OnClick(o) end end')
+assert last() == ["upgrade", "decor"], last()
 
 # A visitor sees only Exit; leaving the house hides everything.
 L.execute('state.isOwner = false')

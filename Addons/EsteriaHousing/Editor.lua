@@ -147,13 +147,15 @@ end)
 decorate:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
 local inspect = Control("inspect", -100, 30, function() H.SetEditing(true); H.SetAbility(2) end, "Select decor (Expert)")
-local houseinfo = Control("houseinfo", -64, 30, function() end, "House")
+local houseinfo = Control("houseinfo", -64, 30, function() H.ToggleUpgrades() end, "House")
 houseinfo:SetScript("OnEnter", function(self)
   local layout = EsteriaHousing_GetLayout and EsteriaHousing_GetLayout()
   GameTooltip:SetOwner(self, "ANCHOR_BOTTOM")
   GameTooltip:AddLine("Your House")
   if state then GameTooltip:AddDoubleLine("Decor placed", state.placed .. " / " .. state.maxDecor, 1, 1, 1, 1, 0.82, 0) end
   if layout then GameTooltip:AddDoubleLine("Rooms", #layout.rooms .. " / " .. layout.maxRooms, 1, 1, 1, 1, 0.82, 0) end
+  if layout and layout.maxFloors then GameTooltip:AddDoubleLine("Floors", layout.maxFloors, 1, 1, 1, 1, 0.82, 0) end
+  GameTooltip:AddLine("Click for upgrades.", 0.5, 0.8, 1)
   GameTooltip:Show()
 end)
 local settingsMenu = CreateFrame("Frame", "EsteriaHousingSettingsMenu", UIParent, "UIDropDownMenuTemplate")
@@ -179,6 +181,64 @@ budget:SetScript("OnEnter", function(self)
   GameTooltip:AddLine("Decor placed in this house and how much it can hold.", 1, 1, 1, true); GameTooltip:Show()
 end)
 budget:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+-- ------------------------------------------------------------------------------------------------ upgrades
+
+-- More floors and a larger decor budget, bought with gold (the server sets the prices and the caps).
+local upgrades = H.Panel("EsteriaHousingUpgrades", 300, 150)
+upgrades:SetPoint("TOP", 0, -70)
+local upgradesTitle = upgrades:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+upgradesTitle:SetPoint("TOP", 0, -10); upgradesTitle:SetText("House Upgrades")
+local upgradesClose = CreateFrame("Button", nil, upgrades, "UIPanelCloseButton")
+upgradesClose:SetPoint("TOPRIGHT", 2, 2)
+tinsert(UISpecialFrames, "EsteriaHousingUpgrades")
+StaticPopupDialogs["ESTERIA_HOUSING_UPGRADE"] = {
+  text = "%s", button1 = YES, button2 = NO, timeout = 0, hideOnEscape = true,
+  OnAccept = function(self, what) EsteriaHousing_Upgrade(what) end,
+}
+local function UpgradeRow(y, icon, what)
+  local row = CreateFrame("Frame", nil, upgrades)
+  row:SetSize(276, 40); row:SetPoint("TOP", 0, y)
+  row.icon = H.Atlas(row:CreateTexture(nil, "ARTWORK"), icon, 28, 28); row.icon:SetPoint("LEFT")
+  row.text = row:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); row.text:SetPoint("LEFT", row.icon, "RIGHT", 8, 0)
+  row.text:SetJustifyH("LEFT"); row.text:SetWidth(130)
+  row.buy = H.Button(row, "", 110, 22); row.buy:SetPoint("RIGHT")
+  row.buy:SetScript("OnClick", function(self)
+    StaticPopup_Show("ESTERIA_HOUSING_UPGRADE", self.question, nil, what) -- data: which upgrade, handed to OnAccept
+  end)
+  return row
+end
+local floorRow = UpgradeRow(-44, "house-room-limit-icon", "floors")
+local decorRow = UpgradeRow(-90, "house-decor-budget-icon", "decor")
+
+local function SetUpgrade(row, label, have, cap, price, gain, question)
+  row.text:SetText(string.format("%s\n|cffffd100%d|r / %d", label, have, cap))
+  if price and price > 0 then
+    row.buy:SetText(gain .. "  " .. GetCoinTextureString(price))
+    row.buy.question = string.format(question, GetCoinTextureString(price))
+    if GetMoney() >= price then row.buy:Enable() else row.buy:Disable() end
+  else
+    row.buy:SetText("Maxed"); row.buy:Disable()
+  end
+end
+
+function H.RedrawUpgrades()
+  if not upgrades:IsShown() then return end
+  local layout = EsteriaHousing_GetLayout()
+  if not (layout and state) then return end
+  SetUpgrade(floorRow, "Floors", layout.maxFloors, 15, layout.floorPrice, "+1",
+    "Add a floor to your house for %s?")
+  SetUpgrade(decorRow, "Decor Budget", state.maxDecor, layout.decorCap, layout.decorPrice, "+" .. layout.decorStep,
+    "Raise your decor budget by " .. layout.decorStep .. " for %s?")
+end
+upgrades:SetScript("OnShow", H.RedrawUpgrades)
+upgrades:RegisterEvent("ESTERIA_HOUSING_LAYOUT")
+upgrades:RegisterEvent("PLAYER_MONEY")
+upgrades:SetScript("OnEvent", H.RedrawUpgrades)
+
+function H.ToggleUpgrades()
+  if upgrades:IsShown() then upgrades:Hide() else upgrades:Show() end
+end
 
 -- ------------------------------------------------------------------------------------------------ decor chest
 
@@ -680,7 +740,7 @@ end
 local function RedrawControls()
   if not (state and state.inHouse) then
     if editing then H.SetEditing(false) end
-    controls:Hide(); budget:Hide(); return
+    controls:Hide(); budget:Hide(); upgrades:Hide(); return
   end
   controls:Show()
   local owner = state.isOwner

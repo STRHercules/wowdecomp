@@ -11,11 +11,16 @@ local CANVAS, PLUS, PLUS_GAP = 380, 16, 1 -- the "+" sits PLUS_GAP px outside it
 local PARTS = { { 1, "Walls", "wallTheme" }, { 2, "Floor", "floorTheme" }, { 3, "Ceiling", "ceilingTheme" } }
 local layout
 local floor = 0 -- the floor shown: 0 the ground, -1 the basement
-local LEVEL, MIN_LEVEL, MAX_LEVEL, STAIRWELL_TOP = 12, -1, 3, 48
--- each floor's colour on its rooms and in the floor list: basement violet, then amber, teal, green, rose
-local FLOOR_COLORS = { [-1] = { 0.55, 0.4, 0.8 }, [0] = { 0.85, 0.62, 0.28 }, [1] = { 0.3, 0.72, 0.75 },
-  [2] = { 0.45, 0.78, 0.35 }, [3] = { 0.85, 0.42, 0.5 } }
-local function FloorColor(level) return unpack(FLOOR_COLORS[level] or FLOOR_COLORS[0]) end
+local LEVEL, MIN_LEVEL, MAX_LEVEL, STAIRWELL_TOP = 12, -1, 14, 48 -- MAX_LEVEL: the 15th floor, the most a house can buy
+local FLOOR_ROWS = 9 -- floors listed at once; the list follows the floor shown
+-- each floor's colour on its rooms and in the floor list: the basement violet, then amber, teal, green, rose, sky
+-- and gold, repeating up the house
+local BASEMENT_COLOR = { 0.55, 0.4, 0.8 }
+local FLOOR_COLORS = { { 0.85, 0.62, 0.28 }, { 0.3, 0.72, 0.75 }, { 0.45, 0.78, 0.35 }, { 0.85, 0.42, 0.5 },
+  { 0.45, 0.6, 0.95 }, { 0.9, 0.85, 0.4 } }
+local function FloorColor(level)
+  return unpack(level < 0 and BASEMENT_COLOR or FLOOR_COLORS[level % #FLOOR_COLORS + 1])
+end
 -- retail's room icon (housingroomicons) for each room kind; stairs down share their stairwell's
 local ROOM_ICONS = { [1] = "layout_square_s_icon", [2] = "layout_hallway_s_icon", [3] = "layout_closet_xs_icon",
   [6] = "layout_t-shape_s_icon", [7] = "layout_square_xs_icon", [8] = "layout_l-shape_s_icon", [9] = "layout_octogon_m_icon",
@@ -147,7 +152,7 @@ local function RoomMenu(index)
   end
   items[#items + 1] = { text = room.ceilingHidden and "Show Ceiling" or "Hide Ceiling", notCheckable = true,
     func = function() EsteriaHousing_SetCeilingHidden(index - 1, not room.ceilingHidden) end }
-  if room.kind == STAIRWELL_TOP and room.level < MAX_LEVEL then
+  if room.kind == STAIRWELL_TOP and room.level < (layout.maxFloors or 4) - 1 then
     local stairs = layout.kinds[10]
     local price = stairs and stairs.price or 0
     items[#items + 1] = { notCheckable = true, disabled = GetMoney() < price,
@@ -241,9 +246,12 @@ function H.RedrawLayout()
   local lowest, highest = 0, 0
   for _, room in ipairs(layout.rooms) do lowest, highest = math.min(lowest, room.level), math.max(highest, room.level) end
   floor = math.max(lowest, math.min(floor, highest))
+  -- the list shows FLOOR_ROWS floors at most, around the one shown (floorTabs runs from the top floor down)
+  local top = math.min(highest, math.max(floor + math.floor(FLOOR_ROWS / 2), lowest + FLOOR_ROWS - 1))
+  local bottom = math.max(lowest, top - FLOOR_ROWS + 1)
   local y = -30
   for _, b in ipairs(floorTabs) do
-    if b.level >= lowest and b.level <= highest then
+    if b.level >= bottom and b.level <= top then
       b:ClearAllPoints(); b:SetPoint("TOP", floors, "TOP", 0, y); y = y - 28
       b.bg:SetAlpha(b.level == floor and 1 or 0)
       H.Atlas(b.door, b.level == floor and "housing-floor-door" or "housing-floor-door-inactive")
