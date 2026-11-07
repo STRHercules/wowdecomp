@@ -558,8 +558,9 @@ for i, x in ipairs(EXPERT) do
   b:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 44, 6)
   b:SetScript("OnClick", function()
     local d = Placed(selected)
-    if x[4] == 3 and state and state.outdoors then return Toast("Outdoor decor cannot be resized.") end
     if type(x[4]) == "number" then H.Gizmo.SetMode(x[4]); H.RedrawExpert()
+    elseif selected == "house" and x[2] == "Store" then Toast("Your house stays on your plot.")
+    elseif selected == "house" then x[4]()
     elseif d then x[4](d) end
   end)
   b:SetScript("OnEnter", function(self)
@@ -570,17 +571,33 @@ for i, x in ipairs(EXPERT) do
   submodeButtons[i] = b
 end
 
+-- Outdoors your house is selectable too: the handles move, turn and size it on its plot (EsteriaHousing_PlacePlotHouse).
+local function HouseTarget()
+  local h = state and state.outdoors and state.house
+  if not h then return end
+  local function clamp(v, lo, hi) return math.max(lo, math.min(hi, v)) end
+  return { placedId = "house", x = h.spotX + h.dx, y = h.spotY + h.dy, z = h.spotZ + h.dz,
+    yaw = math.deg(h.spotYaw) + h.turn, scale = h.scale, yawOnly = true, minScale = 0.5, maxScale = 1.5,
+    commit = function(pos, q, scale)
+      local dx, dy = pos[1] - h.spotX, pos[2] - h.spotY
+      local far = math.sqrt(dx * dx + dy * dy)
+      if far > h.reach then dx, dy = dx * h.reach / far, dy * h.reach / far end
+      local turn = math.floor((math.deg(H.Gizmo.heading(q) - h.spotYaw)) % 360 + 0.5)
+      return EsteriaHousing_PlacePlotHouse(dx, dy, turn, clamp(pos[3] - h.spotZ, -15, 15), scale)
+    end }
+end
+H.HouseTarget = HouseTarget
+
 function H.RedrawExpert()
-  local d = Owner() and editing and ability == 2 and Placed(selected)
-  H.Gizmo.SetTarget(d or nil, d and fdids[d.decorId])
+  local d = Owner() and editing and ability == 2 and (selected == "house" and HouseTarget() or Placed(selected))
+  H.Gizmo.SetTarget(d or nil, d and d.decorId and fdids[d.decorId])
   if not d then return expert:Hide() end
-  if state and state.outdoors and H.Gizmo.Mode() == 3 then H.Gizmo.SetMode(1) end
   for _, b in ipairs(submodeButtons) do
     if b.submode then b:SetOn(b.submode == H.Gizmo.Mode()) end
-    b:SetAlpha(b.submode == 3 and state and state.outdoors and 0.35 or 1)
   end
   local scale = d.scale and math.abs(d.scale - 1) > 0.001 and string.format("  x%.2f", d.scale) or ""
-  expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176%s|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360, scale))
+  local name = d.placedId == "house" and "Your House" or names[d.decorId] or ("Decor " .. d.decorId)
+  expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176%s|r", name, d.yaw % 360, scale))
   expert:Show()
 end
 local RedrawExpert = H.RedrawExpert
@@ -663,7 +680,9 @@ catcher:SetScript("OnClick", function(self, button)
   elseif tool == "select" then
     local best = Nearest(x, y, z)
     selected = best and best.placedId
-    if not best then Toast("No decor there.") end
+    local house = not best and HouseTarget()
+    if house and (house.x - x) ^ 2 + (house.y - y) ^ 2 < (12 * house.scale) ^ 2 then selected = "house" end
+    if not selected then Toast("No decor there.") end
     RedrawExpert()
   elseif tool == "cleanup" then
     local best = Nearest(x, y, z)
@@ -677,7 +696,7 @@ catcher:SetScript("OnMouseWheel", function(self, delta)
     holding.yaw = holding.yaw + delta * TURN
     if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(fdids[holding.decorId], holding.yaw) end
   elseif tool == "select" and not H.Gizmo.Dragging() then
-    if Placed(selected) and not H.Gizmo.Turn(delta * TURN) then Toast("You can only edit your own house.") end
+    if (Placed(selected) or selected == "house") and not H.Gizmo.Turn(delta * TURN) then Toast("You can only edit your own house.") end
   end
 end)
 
@@ -784,7 +803,7 @@ controls:SetScript("OnEvent", function(self, event, result, op, placedId)
     for _, e in ipairs(catalog) do names[e.decorId] = e.name; fdids[e.decorId] = e.fileDataId end
   elseif event == "ESTERIA_HOUSING_STATE" or event == "ESTERIA_HOUSING_AVAILABLE" then
     state = EsteriaHousing_GetState()
-    if not Placed(selected) then selected = nil end
+    if not Placed(selected) and not (selected == "house" and HouseTarget()) then selected = nil end
     if holding and holding.placedId and not Placed(holding.placedId) then H.Drop() end
     RedrawControls()
   elseif event == "ESTERIA_HOUSING_RESULT" then

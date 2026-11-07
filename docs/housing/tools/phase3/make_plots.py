@@ -22,6 +22,7 @@ the door, window and chimney hooks of each base and roof shape.
 """
 import csv
 import json
+import math
 import os
 import struct
 import sys
@@ -29,6 +30,7 @@ import sys
 BASE, ROOF, DOOR, WINDOW, CHIMNEY = 9, 10, 11, 12, 16
 SIZES = {2: "Small", 3: "Medium", 4: "Large"}
 GROUND_MAT = (1.5, 0.0)
+FAR_HOUSE = 55  # yd: past this from its cornerstone, a plot's HousePosition is not used (see main)
 
 
 def porch(path):
@@ -77,9 +79,15 @@ def main(tables, out, doors=None):
                     "exit_x", "exit_y", "exit_z"])
         for p in plots:
             # In this build the DBD's HousePosition/HouseRotation arrive as Field_12_0_0_63534_004/005 (radians).
-            w.writerow([p["PlotIndex"], *[round(v, 3) for v in p["Field_12_0_0_63534_004"]],
-                        round(p["Field_12_0_0_63534_005"][2], 4), *[round(v, 3) for v in p["CornerstonePosition"]],
-                        round(p["CornerstoneRotation"][2], 4), *[round(v, 3) for v in p["TeleportPosition"]]])
+            house, yaw = list(p["Field_12_0_0_63534_004"]), p["Field_12_0_0_63534_005"][2]
+            corner, facing = p["CornerstonePosition"], p["CornerstoneRotation"][2]
+            if math.hypot(house[0] - corner[0], house[1] - corner[1]) > FAR_HOUSE:
+                # A few plots' HousePosition lies 60 to 1700 yd from their cornerstone (unfinished retail data): put the
+                # house where most plots have it, 32 yd out along the cornerstone's facing, at its height.
+                house = [corner[0] + 32 * math.cos(facing), corner[1] + 32 * math.sin(facing), corner[2]]
+                yaw = facing + math.pi
+            w.writerow([p["PlotIndex"], *[round(v, 3) for v in house], round(yaw, 4), *[round(v, 3) for v in corner],
+                        round(facing, 4), *[round(v, 3) for v in p["TeleportPosition"]]])
 
     hooks_of = lambda owner, kind: sorted((h for h in t["ExteriorComponentHook"].values()  # noqa: E731
                                            if h["ExteriorComponentID"] == owner["ID"] and h["ComponentType"] == kind),

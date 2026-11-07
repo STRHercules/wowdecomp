@@ -74,7 +74,7 @@ end
 -- ---------------------------------------------------------------------------------------------- state
 
 local mode = 1          -- 1 translate, 2 rotate, 3 scale
-local target            -- the selected placed decor: { placedId, decorId, pos, q, scale, fdid }
+local target            -- the selection: { placedId, pos, q, scale, fdid, commit, yawOnly, minScale, maxScale }
 local hover, drag       -- axis under the cursor; the drag in progress
 local radius = 1.2
 
@@ -82,7 +82,8 @@ function G.SetMode(m) mode = m; drag = nil end
 function G.Mode() return mode end
 function G.Dragging() return drag ~= nil end
 
--- The decor the handles act on (a GetState().decor entry), or nil.
+-- What the handles act on, or nil: a GetState().decor entry, or anything shaped like one (x y z, yaw or qx..qw, scale)
+-- with commit(pos, q, scale) to send it instead of a decor move, yawOnly to offer only the Z ring, minScale/maxScale.
 function G.SetTarget(d, fdid)
   if not d then
     target, drag, hover = nil, nil, nil
@@ -92,7 +93,14 @@ function G.SetTarget(d, fdid)
   if drag and target and target.placedId == d.placedId then return end -- the server echoed our own edit mid-drag
   target = { placedId = d.placedId, decorId = d.decorId, pos = { d.x, d.y, d.z },
     q = { d.qx or 0, d.qy or 0, d.qz or math.sin(math.rad(d.yaw) / 2), d.qw or math.cos(math.rad(d.yaw) / 2) },
-    scale = d.scale or 1, fdid = fdid }
+    scale = d.scale or 1, fdid = fdid, commit = d.commit, yawOnly = d.yawOnly, minScale = d.minScale or MIN_SCALE,
+    maxScale = d.maxScale or MAX_SCALE }
+end
+
+-- Sends a transform for the target: its own commit, or a decor move.
+local function Commit(pos, q, scale)
+  if target.commit then return target.commit(pos, q, scale) end
+  return EsteriaHousing_Move(target.placedId, pos[1], pos[2], pos[3], q[1], q[2], q[3], q[4], scale)
 end
 
 local function Pick(o, d)
@@ -105,7 +113,7 @@ local function Pick(o, d)
       if s and s >= 0 and s <= radius * 1.3 and gap < reach and t < bestT then best, bestT = axis, t end
     end
   elseif mode == 2 then
-    for axis = 1, 3 do
+    for axis = target.yawOnly and 3 or 1, 3 do
       local t, r = G.PlaneRay(c, axis, o, d)
       if t and math.abs(r - radius) < reach and t < bestT then best, bestT = axis, t end
     end
@@ -131,7 +139,7 @@ local function Dragged(o, d)
   else
     local s = G.LineRay(c, AXES[3], o, d)
     if not s or drag.s0 <= 0 then return drag.pos, drag.q, drag.scale end
-    local scale = math.max(MIN_SCALE, math.min(MAX_SCALE, snap(drag.scale * s / drag.s0, 0.05)))
+    local scale = math.max(target.minScale, math.min(target.maxScale, snap(drag.scale * s / drag.s0, 0.05)))
     return drag.pos, drag.q, scale
   end
 end
@@ -145,8 +153,10 @@ function G.Update()
     if drag then
       local pos, q, scale = Dragged(o, d)
       drag.now = { pos = pos, q = q, scale = scale }
-      EsteriaHousing_PinGhost(pos[1], pos[2], pos[3])
-      EsteriaHousing_SetGhost(target.fdid, q[1], q[2], q[3], q[4], scale)
+      if target.fdid then -- a preview where there is a model for one
+        EsteriaHousing_PinGhost(pos[1], pos[2], pos[3])
+        EsteriaHousing_SetGhost(target.fdid, q[1], q[2], q[3], q[4], scale)
+      end
     else
       hover = Pick(o, d)
     end
@@ -179,10 +189,7 @@ function G.MouseUp()
   EsteriaHousing_SetGhost()
   if now then
     target.pos, target.q, target.scale = now.pos, now.q, now.scale
-    local q = now.q
-    if not EsteriaHousing_Move(target.placedId, now.pos[1], now.pos[2], now.pos[3], q[1], q[2], q[3], q[4], now.scale) then
-      H.Toast("You can only edit your own house.")
-    end
+    if not Commit(now.pos, now.q, now.scale) then H.Toast("You can only edit your own house.") end
   end
   return true
 end
@@ -190,14 +197,11 @@ end
 -- The wheel turns the selection about Z; Reset keeps its heading, levels it and sets its size back.
 function G.Turn(degrees)
   if not target then return end
-  local q = qnorm(qmul(qaxis(AXES[3], math.rad(degrees)), target.q))
-  local p = target.pos
-  return EsteriaHousing_Move(target.placedId, p[1], p[2], p[3], q[1], q[2], q[3], q[4], target.scale)
+  return Commit(target.pos, qnorm(qmul(qaxis(AXES[3], math.rad(degrees)), target.q)), target.scale)
 end
 
 function G.Reset()
   if not target then return end
   local h = heading(target.q)
-  local p = target.pos
-  return EsteriaHousing_Move(target.placedId, p[1], p[2], p[3], 0, 0, math.sin(h / 2), math.cos(h / 2), 1)
+  return Commit(target.pos, { 0, 0, math.sin(h / 2), math.cos(h / 2) }, 1)
 end

@@ -157,9 +157,15 @@ assert last() == ["plotpart", 11, 1381], last()
 L.execute('lastMenu[3].func()')
 assert last() == ["plotpart", 11, 1419], last()
 g.EsteriaHousingPlotNorth.Click(g.EsteriaHousingPlotNorth)
-assert last() == ["plotplace", 8, 0, 0], last()  # 8.5 would be past the reach: held at 8
+assert last() == ["plotplace", 8, 0, 0, 0, 1], last()  # 8.5 would be past the reach: held at 8
 g.EsteriaHousingPlotTurnLeft.Click(g.EsteriaHousingPlotTurnLeft)
-assert last() == ["plotplace", 7.5, 0, 15], last()  # from where the server last put it
+assert last() == ["plotplace", 7.5, 0, 15, 0, 1], last()  # from where the server last put it
+# Up raises it a yard; + makes it 5% bigger; both keep where it stands.
+L.execute('plot.dz, plot.scale = 1, 1.2')
+g.EsteriaHousingPlotUp.Click(g.EsteriaHousingPlotUp)
+assert last() == ["plotplace", 7.5, 0, 0, 2, 1.2], last()
+g.EsteriaHousingPlotBigger.Click(g.EsteriaHousingPlotBigger)
+assert last() == ["plotplace", 7.5, 0, 0, 1, 1.25], last()
 click("Enter House")
 assert last() == ["enter"] and not g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHousingPlotFrame)
 
@@ -339,7 +345,17 @@ g.EsteriaHousingDecorate.Click(g.EsteriaHousingDecorate)
 was = L.eval('plotBounds')
 g.EsteriaHousingDecorate.Click(g.EsteriaHousingDecorate)
 assert was in (True, False) and L.eval('plotBounds') == (not was), "Decorate shows and hides the plot boundary"
-L.execute('state.outdoors = false')
+# Outdoors, clicking your house (no decor there) selects it; its Z arrow raises it from its spot.
+L.execute('''state.house = { spotX = 100, spotY = 200, spotZ = 50, spotYaw = 0, dx = 0, dy = 0, dz = 0, turn = 0, scale = 1, reach = 15 }
+state.decor = {}; EsteriaHousingUI.SetEditing(true); EsteriaHousingUI.SetAbility(2); cursor = { 101, 200, 50 }''')
+g.event("ESTERIA_HOUSING_STATE")
+catcher.Click(catcher)
+assert g.EsteriaHousingExpert.IsShown(g.EsteriaHousingExpert), "the house is not selected"
+assert any("Your House" in str(o._text) for o in g.created.values() if o._kind == "FontString")
+g.EsteriaHousingExpertTranslate.Click(g.EsteriaHousingExpertTranslate)
+drag((90, 200, 50.6, 100, 200, 50.6), (90, 200, 52.6, 100, 200, 52.6))
+assert last()[:4] == ["plotplace", 0, 0, 0] and abs(last()[4] - 2) < 1e-6 and last()[5] == 1, last()
+L.execute('state.outdoors = false; state.house = nil')
 g.event("ESTERIA_HOUSING_STATE")
 
 # A visitor sees only Exit; leaving the house hides everything.

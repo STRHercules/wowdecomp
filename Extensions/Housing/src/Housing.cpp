@@ -56,6 +56,7 @@ struct State {
     uint16_t placed = 0, maxDecor = 0;
     float boundsMin[3] = { 0, 0, 0 }, boundsMax[3] = { 0, 0, 0 };
     std::vector<PlacedEntry> decor;
+    float house[10] = { 0, 0, 0, 0, 0, 0, 0, 0, 1, 0 }; // outdoors: spot x y z yaw, dx dy dz turn scale reach
 };
 
 struct PlotInfo {
@@ -65,7 +66,7 @@ struct PlotInfo {
     uint32_t price = 0;
     std::string neighborhood, owner, message;
     uint32_t style = 0;                 // your plot: its house style, offset and turn, and the styles there are
-    float dx = 0, dy = 0, turn = 0, reach = 0;
+    float dx = 0, dy = 0, dz = 0, turn = 0, scale = 1, reach = 0;
     std::vector<std::pair<uint32_t, std::string>> styles;
     struct Option { uint32_t id = 0, parent = 0; std::string name; };
     struct Part { uint8_t type = 0; uint32_t chosen = 0; std::vector<Option> options; };
@@ -380,6 +381,7 @@ int32_t ReceiveState(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         p.yaw = Heading(p.rot);
         next.decor.push_back(p);
     }
+    for (float& v : next.house) if (!r.Get(v)) return 0;
     if (!r.Done()) return 0;
     next.valid = true;
     next.inHouse = inHouse != 0;
@@ -424,7 +426,8 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     if (!r.Get(next.plot) || !r.Get(next.status) || !r.Get(next.price) || !r.Get(next.houseElsewhere)
         || !r.Get(next.neighborhood) || !r.Get(next.owner) || !r.Get(next.message)) return 0;
     uint8_t styles;
-    if (!r.Get(next.style) || !r.Get(next.dx) || !r.Get(next.dy) || !r.Get(next.turn) || !r.Get(next.reach) || !r.Get(styles))
+    if (!r.Get(next.style) || !r.Get(next.dx) || !r.Get(next.dy) || !r.Get(next.dz) || !r.Get(next.turn) || !r.Get(next.scale)
+        || !r.Get(next.reach) || !r.Get(styles))
         return 0;
     for (uint8_t i = 0; i < styles; ++i) {
         std::pair<uint32_t, std::string> style;
@@ -547,6 +550,12 @@ int32_t GetState(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "decor");
+    if (s_state.outdoors) { // your plot's house, for the editor's handles
+        static char const* const names[] = { "spotX", "spotY", "spotZ", "spotYaw", "dx", "dy", "dz", "turn", "scale", "reach" };
+        lua_createtable(L, 0, 10);
+        for (int k = 0; k < 10; ++k) NumberField(L, names[k], s_state.house[k]);
+        lua_setfield(L, -2, "house");
+    }
     return 1;
 }
 
@@ -651,6 +660,7 @@ int32_t GetPlot(lua_State* L) {
     lua_pushstring(L, s_plot.message.c_str()); lua_setfield(L, -2, "message");
     NumberField(L, "style", s_plot.style); NumberField(L, "dx", s_plot.dx); NumberField(L, "dy", s_plot.dy);
     NumberField(L, "turn", s_plot.turn); NumberField(L, "reach", s_plot.reach);
+    NumberField(L, "dz", s_plot.dz); NumberField(L, "scale", s_plot.scale);
     lua_createtable(L, int(s_plot.styles.size()), 0);
     int i = 0;
     for (auto const& [id, name] : s_plot.styles) {
@@ -695,10 +705,13 @@ int32_t SetPlotStyle(lua_State* L) {
     return 1;
 }
 
-// EsteriaHousing_PlacePlotHouse(dx, dy, turnDegrees): where your house stands, yd north (dx) and west (dy) of its spot.
+// EsteriaHousing_PlacePlotHouse(dx, dy, turnDegrees[, dz, scale]): where your house stands, yd north (dx), west (dy) and up
+// (dz) of its spot, and its size. From the plot window, or the outdoor editor's handles while you stand on your plot.
 int32_t PlacePlotHouse(lua_State* L) {
+    float const dz = lua_isnumber(L, 4) ? float(lua_tonumber(L, 4)) : 0.0f;
+    float const scale = lua_isnumber(L, 5) ? float(lua_tonumber(L, 5)) : 1.0f;
     lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionPlotPlace).Put(float(luaL_checknumber(L, 1)))
-        .Put(float(luaL_checknumber(L, 2))).Put(float(luaL_checknumber(L, 3))).Send(CMSG_ACTION));
+        .Put(float(luaL_checknumber(L, 2))).Put(dz).Put(float(luaL_checknumber(L, 3))).Put(scale).Send(CMSG_ACTION));
     return 1;
 }
 

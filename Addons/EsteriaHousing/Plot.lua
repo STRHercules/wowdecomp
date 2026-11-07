@@ -89,14 +89,17 @@ local placeText = house:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall
 placeText:SetPoint("TOPLEFT", placeTitle, "BOTTOMLEFT", 0, -4); placeText:SetWidth(170); placeText:SetJustifyH("LEFT")
 
 -- one step: 1 yd, Shift 0.25 yd. dx is north, dy west (the world's axes); the pad reads as the map does, north up.
-local function Nudge(north, west, turn)
+-- Up and down move it 1 yd (Shift 0.25) up to 15 yd either way; size steps by 0.05 from x0.5 to x1.5.
+local function Nudge(north, west, turn, up, grow)
   if not plot then return end
   local step = IsShiftKeyDown() and 0.25 or 1
   local dx, dy = plot.dx + north * step, plot.dy + west * step
   local reach = plot.reach or 8
   local d = math.sqrt(dx * dx + dy * dy)
   if d > reach then dx, dy = dx * reach / d, dy * reach / d end
-  EsteriaHousing_PlacePlotHouse(dx, dy, plot.turn + turn)
+  local dz = math.max(-15, math.min(15, (plot.dz or 0) + (up or 0) * step))
+  local scale = math.max(0.5, math.min(1.5, (plot.scale or 1) + (grow or 0) * 0.05))
+  EsteriaHousing_PlacePlotHouse(dx, dy, plot.turn + turn, dz, math.floor(scale * 100 + 0.5) / 100)
 end
 
 local function IconButton(name, atlas, size, onClick, tip)
@@ -114,8 +117,8 @@ local function IconButton(name, atlas, size, onClick, tip)
   return b
 end
 
--- the move pad on the right, a compass with north up
-local PAD_X, PAD_Y, PAD = W - 100, -100, 28
+-- the move pad on the right, a compass with north up, and Up / Down beside it
+local PAD_X, PAD_Y, PAD = W - 128, -100, 28
 local north = IconButton("North", "housing-hotkey-icon-arrow-up", PAD, function() Nudge(1, 0, 0) end, "Move north")
 north:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y + 12)
 local west = IconButton("West", "housing-hotkey-icon-arrow-left", PAD, function() Nudge(0, 1, 0) end, "Move west")
@@ -124,6 +127,20 @@ local east = IconButton("East", "housing-hotkey-icon-arrow-right", PAD, function
 east:SetPoint("TOP", house, "TOPLEFT", PAD_X + PAD + 2, PAD_Y - PAD + 10)
 local south = IconButton("South", "housing-hotkey-icon-arrow-down", PAD, function() Nudge(-1, 0, 0) end, "Move south")
 south:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y - 2 * PAD + 8)
+local function TextButton(name, text, width, onClick, tip)
+  local b = CreateFrame("Button", "EsteriaHousingPlot" .. name, house, "UIPanelButtonTemplate")
+  b:SetSize(width, 22); b:SetText(text)
+  b:SetScript("OnClick", onClick)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(tip); GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return b
+end
+local raise = TextButton("Up", "Up", 50, function() Nudge(0, 0, 0, 1) end, "Raise the house (Shift: a quarter step)")
+raise:SetPoint("TOP", house, "TOPLEFT", PAD_X + 2 * PAD + 34, PAD_Y + 2)
+local lower = TextButton("Down", "Down", 50, function() Nudge(0, 0, 0, -1) end, "Lower the house (Shift: a quarter step)")
+lower:SetPoint("TOP", raise, "BOTTOM", 0, -4)
 local compass = house:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 compass:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y - PAD + 2); compass:SetText("N")
 
@@ -138,7 +155,11 @@ local rotate = H.ATLAS and H.ATLAS["decor-ability-expert-rotate-default"]
 if rotate then turnRight.icon:SetTexCoord(rotate[5], rotate[4], rotate[6], rotate[7]) end -- mirrored: turns the other way
 local reset = CreateFrame("Button", "EsteriaHousingPlotReset", house, "UIPanelButtonTemplate")
 reset:SetSize(64, 22); reset:SetPoint("LEFT", turnRight, "RIGHT", 8, 0); reset:SetText("Reset")
-reset:SetScript("OnClick", function() EsteriaHousing_PlacePlotHouse(0, 0, 0) end)
+reset:SetScript("OnClick", function() EsteriaHousing_PlacePlotHouse(0, 0, 0, 0, 1) end)
+local smaller = TextButton("Smaller", "-", 24, function() Nudge(0, 0, 0, 0, -1) end, "Make the house smaller")
+smaller:SetPoint("LEFT", reset, "RIGHT", 8, 0)
+local bigger = TextButton("Bigger", "+", 24, function() Nudge(0, 0, 0, 0, 1) end, "Make the house bigger")
+bigger:SetPoint("LEFT", smaller, "RIGHT", 2, 0)
 
 -- the parts: one dropdown each; a shape with colours opens them (retail names a variant "Shape - Colour")
 local PART_NAMES = { [9] = "Walls", [10] = "Roof", [11] = "Door", [12] = "Windows", [16] = "Chimney" }
@@ -225,8 +246,8 @@ local function Redraw()
     local name = "Style"
     for _, st in ipairs(plot.styles) do if st.id == plot.style then name = st.name end end
     styleButton:SetText(name)
-    placeText:SetText(string.format("%.2f yd north, %.2f yd west\nturned %d\194\176, up to %d yd from its spot",
-      plot.dx, plot.dy, plot.turn, plot.reach or 8))
+    placeText:SetText(string.format("%.2f yd north, %.2f yd west, %.2f yd up\nturned %d\194\176, size x%.2f\nup to %d yd from its spot",
+      plot.dx, plot.dy, plot.dz or 0, plot.turn, plot.scale or 1, plot.reach or 8))
   end
   if plot.status == "sale" then
     status:SetText("|cffffd100For Sale|r")
