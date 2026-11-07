@@ -121,12 +121,12 @@ g.event("ESTERIA_HOUSING_PLOT")
 L.execute('''plot.style, plot.dx, plot.dy, plot.turn, plot.reach = 92, 7.5, 0, 0, 8
 plot.styles = { { id = 92, name = "Human House (Small)" }, { id = 552, name = "Night Elf House (Small)" } }''')
 g.event("ESTERIA_HOUSING_PLOT")
-L.execute('for _, o in ipairs(created) do if type(o._text) == "string" and o._text:find("Human House") and o._kind == "Button" then o._scripts.OnClick(o) end end')
+g.EsteriaHousingPlotStyle.Click(g.EsteriaHousingPlotStyle)
 list(g.lastMenu.values())[2].func()
 assert last() == ["plotstyle", 552], last()
-click("N")
+g.EsteriaHousingPlotNorth.Click(g.EsteriaHousingPlotNorth)
 assert last() == ["plotplace", 8, 0, 0], last()  # 8.5 would be past the reach: held at 8
-click("Turn L")
+g.EsteriaHousingPlotTurnLeft.Click(g.EsteriaHousingPlotTurnLeft)
 assert last() == ["plotplace", 7.5, 0, 15], last()  # from where the server last put it
 click("Enter House")
 assert last() == ["enter"] and not g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHousingPlotFrame)
@@ -291,6 +291,20 @@ L.execute('for _, o in ipairs(created) do if o.question and o.question:find("flo
 assert last() == ["upgrade", "floors"], last()
 L.execute('for _, o in ipairs(created) do if o.question and o.question:find("decor budget") then o._scripts.OnClick(o) end end')
 assert last() == ["upgrade", "decor"], last()
+
+L.execute('layout.roomPrice, layout.roomStep, layout.roomCap = 500000, 4, 64')
+g.EsteriaHousingUpgrades.Hide(g.EsteriaHousingUpgrades); g.EsteriaHousingUpgrades.Show(g.EsteriaHousingUpgrades)
+L.execute('for _, o in ipairs(created) do if o.question and o.question:find("room limit") then o._scripts.OnClick(o) end end')
+assert last() == ["upgrade", "rooms"], last()
+
+# Outdoors on your plot: the editor stays, without Exit, Customize, Layout or Scale.
+L.execute('state.outdoors = true')
+g.event("ESTERIA_HOUSING_STATE")
+assert g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls) and not g.EsteriaHousingControlexit._shown
+g.EsteriaHousingAbility5.Click(g.EsteriaHousingAbility5)
+assert not g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and "inside your house" in toast()
+L.execute('state.outdoors = false')
+g.event("ESTERIA_HOUSING_STATE")
 
 # A visitor sees only Exit; leaving the house hides everything.
 L.execute('state.isOwner = false')

@@ -51,7 +51,7 @@ struct PlacedEntry {
 };
 
 struct State {
-    bool valid = false, inHouse = false, isOwner = false;
+    bool valid = false, inHouse = false, isOwner = false, outdoors = false;
     uint32_t houseId = 0, revision = 0;
     uint16_t placed = 0, maxDecor = 0;
     float boundsMin[3] = { 0, 0, 0 }, boundsMax[3] = { 0, 0, 0 };
@@ -84,6 +84,8 @@ struct Layout {
     uint8_t maxFloors = 4;
     uint32_t floorPrice = 0, decorPrice = 0;
     uint16_t decorStep = 0, decorCap = 0;
+    uint32_t roomPrice = 0;
+    uint8_t roomStep = 0, roomCap = 0;
 };
 
 struct PendingEdit {
@@ -295,9 +297,9 @@ int32_t ReceiveCatalog(void*, NETMESSAGE, uint32_t, CDataStore* message) {
 int32_t ReceiveState(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     Reader r(message);
     State next;
-    uint8_t inHouse, isOwner;
+    uint8_t inHouse, isOwner, outdoors;
     uint16_t n;
-    if (!r.Get(inHouse) || !r.Get(isOwner) || !r.Get(next.houseId) || !r.Get(next.revision) || !r.Get(next.placed)
+    if (!r.Get(inHouse) || !r.Get(isOwner) || !r.Get(outdoors) || !r.Get(next.houseId) || !r.Get(next.revision) || !r.Get(next.placed)
         || !r.Get(next.maxDecor)) return 0;
     for (float& v : next.boundsMin) if (!r.Get(v)) return 0;
     for (float& v : next.boundsMax) if (!r.Get(v)) return 0;
@@ -313,6 +315,7 @@ int32_t ReceiveState(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     next.valid = true;
     next.inHouse = inHouse != 0;
     next.isOwner = isOwner != 0;
+    next.outdoors = outdoors != 0;
     if (!next.inHouse) s_queue.clear();
     s_state = std::move(next);
     Signal("ESTERIA_HOUSING_STATE");
@@ -405,7 +408,7 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         next.themes.push_back(std::move(theme));
     }
     if (!r.Get(next.maxFloors) || !r.Get(next.floorPrice) || !r.Get(next.decorPrice) || !r.Get(next.decorStep)
-        || !r.Get(next.decorCap)) return 0;
+        || !r.Get(next.decorCap) || !r.Get(next.roomPrice) || !r.Get(next.roomStep) || !r.Get(next.roomCap)) return 0;
     if (!r.Done()) return 0;
     next.valid = true;
     s_layout = std::move(next);
@@ -426,6 +429,7 @@ int32_t GetState(lua_State* L) {
     lua_createtable(L, 0, 13);
     lua_pushboolean(L, s_state.inHouse); lua_setfield(L, -2, "inHouse");
     lua_pushboolean(L, s_state.isOwner); lua_setfield(L, -2, "isOwner");
+    lua_pushboolean(L, s_state.outdoors); lua_setfield(L, -2, "outdoors");
     NumberField(L, "houseId", s_state.houseId); NumberField(L, "revision", s_state.revision);
     NumberField(L, "placed", s_state.placed); NumberField(L, "maxDecor", s_state.maxDecor);
     NumberField(L, "minX", s_state.boundsMin[0]); NumberField(L, "minY", s_state.boundsMin[1]); NumberField(L, "minZ", s_state.boundsMin[2]);
@@ -650,13 +654,16 @@ int32_t GetLayout(lua_State* L) {
     NumberField(L, "maxFloors", s_layout.maxFloors); NumberField(L, "floorPrice", s_layout.floorPrice);
     NumberField(L, "decorPrice", s_layout.decorPrice); NumberField(L, "decorStep", s_layout.decorStep);
     NumberField(L, "decorCap", s_layout.decorCap);
+    NumberField(L, "roomPrice", s_layout.roomPrice); NumberField(L, "roomStep", s_layout.roomStep);
+    NumberField(L, "roomCap", s_layout.roomCap);
     return 1;
 }
 
 // EsteriaHousing_Upgrade("floors" | "decor"): buys the house's next floor or decor budget step.
 int32_t UpgradeHouse(lua_State* L) {
     char const* what = luaL_checkstring(L, 1);
-    uint8_t const kind = !std::strcmp(what, "floors") ? UpgradeFloors : !std::strcmp(what, "decor") ? UpgradeDecor : 0;
+    uint8_t const kind = !std::strcmp(what, "floors") ? UpgradeFloors : !std::strcmp(what, "decor") ? UpgradeDecor
+        : !std::strcmp(what, "rooms") ? UpgradeRooms : 0;
     lua_pushboolean(L, kind && s_available && s_state.isOwner && Writer().Put<uint8_t>(ActionUpgrade).Put<uint8_t>(kind)
         .Send(CMSG_ACTION));
     return 1;

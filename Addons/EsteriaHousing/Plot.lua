@@ -1,75 +1,88 @@
--- Esteria housing: the plot window. Clicking a plot's cornerstone opens it (the server sends SMSG_PLOT instead of a
--- gossip menu). A plot for sale shows its price and a Buy button; a bought plot offers Enter or Visit.
+-- Esteria housing: the plot window, in retail's housing art. Clicking a plot's cornerstone opens it (the server sends
+-- SMSG_PLOT instead of a gossip menu). A plot for sale shows its price and a Buy button; a bought plot offers Enter or
+-- Visit; your own plot also restyles your house and moves or turns it on the plot.
 
 if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
 local REACH = 15 -- yards from where the window opened; the server stops answering past this too
+local W, SALE_H, YOURS_H = 360, 260, 400
 
-local f = CreateFrame("Frame", "EsteriaHousingPlotFrame", UIParent)
-f:SetSize(340, 250)
+local f = H.Panel("EsteriaHousingPlotFrame", W, SALE_H)
 f:SetPoint("LEFT", 60, 40)
-f:SetBackdrop({ bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background", edgeFile = "Interface\\DialogFrame\\UI-DialogBox-Gold-Border",
-  tile = true, tileSize = 32, edgeSize = 32, insets = { left = 11, right = 12, top = 12, bottom = 11 } })
-f:SetMovable(true); f:EnableMouse(true); f:RegisterForDrag("LeftButton")
-f:SetScript("OnDragStart", f.StartMoving); f:SetScript("OnDragStop", f.StopMovingOrSizing)
-f:Hide()
 tinsert(UISpecialFrames, "EsteriaHousingPlotFrame")
 
-local header = f:CreateTexture(nil, "ARTWORK")
-header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
-header:SetSize(300, 64); header:SetPoint("TOP", 0, 12)
-local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-title:SetPoint("TOP", header, "TOP", 0, -14)
+local art = H.Atlas(f:CreateTexture(nil, "BACKGROUND"), "housing-cornerstone-background")
+art:SetPoint("TOPLEFT", 4, -40); art:SetPoint("BOTTOMRIGHT", -4, 4); art:SetAlpha(0.35)
+local title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+title:SetPoint("TOP", 0, -9)
+local place = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+place:SetPoint("TOP", title, "BOTTOM", 0, -2)
 local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
-close:SetPoint("TOPRIGHT", -6, -6)
+close:SetPoint("TOPRIGHT", 2, 2)
 
 local icon = f:CreateTexture(nil, "ARTWORK")
-icon:SetSize(48, 48); icon:SetPoint("TOPLEFT", 24, -34)
-icon:SetTexture("Interface\\Icons\\INV_Misc_Note_02")
+icon:SetSize(44, 44); icon:SetPoint("TOPLEFT", 18, -52)
 local status = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-status:SetPoint("TOPLEFT", icon, "TOPRIGHT", 12, -4)
-local place = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-place:SetPoint("TOPLEFT", status, "BOTTOMLEFT", 0, -4)
-
+status:SetPoint("LEFT", icon, "RIGHT", 10, 0)
 local body = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-body:SetPoint("TOPLEFT", 26, -96); body:SetWidth(288); body:SetJustifyH("LEFT")
+body:SetPoint("TOPLEFT", 20, -106); body:SetWidth(W - 40); body:SetJustifyH("LEFT")
 
 local priceLabel = f:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-priceLabel:SetPoint("TOPLEFT", 26, -160); priceLabel:SetText("Price:")
+priceLabel:SetPoint("TOPLEFT", 20, -156); priceLabel:SetText("Price:")
 local price = f:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 price:SetPoint("LEFT", priceLabel, "RIGHT", 8, 0)
 
 local message = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-message:SetPoint("BOTTOM", 0, 52); message:SetWidth(290)
+message:SetPoint("BOTTOM", 0, 50); message:SetWidth(W - 40)
 
 local action = CreateFrame("Button", nil, f, "UIPanelButtonTemplate")
-action:SetSize(150, 26); action:SetPoint("BOTTOM", 0, 20)
+action:SetSize(160, 26); action:SetPoint("BOTTOM", 0, 16)
 
 local plot, openedAt
 
+-- ------------------------------------------------------------------------------------------------ your house
+
 -- Your plot: the house's style, and where it stands (moved in yd from its spot, turned in 15 degree steps).
 local house = CreateFrame("Frame", nil, f)
-house:SetSize(300, 150); house:SetPoint("TOP", 0, -112)
+house:SetSize(W - 32, 190); house:SetPoint("TOP", 0, -146)
 house:Hide()
+local divider = H.Atlas(house:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
+divider:SetPoint("TOPLEFT", 0, 0); divider:SetPoint("TOPRIGHT", 0, 0); divider:SetHeight(2)
+local sign = H.Atlas(house:CreateTexture(nil, "ARTWORK"), "housing-woodsign", 150, 24)
+sign:SetPoint("TOP", 0, -10)
 local houseTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-houseTitle:SetPoint("TOPLEFT", 6, 0); houseTitle:SetText("Your House")
+houseTitle:SetPoint("CENTER", sign, "CENTER", 0, 1); houseTitle:SetText("Your House")
+
+-- the style: a dropdown in the client's own style
 local styleMenu = CreateFrame("Frame", "EsteriaHousingStyleMenu", UIParent, "UIDropDownMenuTemplate")
-local styleButton = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
-styleButton:SetSize(288, 24); styleButton:SetPoint("TOPLEFT", 6, -18)
+local styleButton = CreateFrame("Button", "EsteriaHousingPlotStyle", house)
+styleButton:SetSize(W - 72, 26); styleButton:SetPoint("TOP", -4, -44)
+styleButton:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+styleButton:SetBackdropColor(0, 0, 0, 0.7); styleButton:SetBackdropBorderColor(0.55, 0.42, 0.25)
+styleButton:SetFontString(styleButton:CreateFontString(nil, "OVERLAY", "GameFontHighlight"))
+styleButton:GetFontString():SetPoint("LEFT", 10, 0)
+local styleArrow = styleButton:CreateTexture(nil, "OVERLAY")
+styleArrow:SetTexture("Interface\\ChatFrame\\UI-ChatIcon-ScrollDown-Up"); styleArrow:SetSize(22, 22)
+styleArrow:SetPoint("RIGHT", 22, 0)
+styleButton:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
 styleButton:SetScript("OnClick", function()
   local items = { { text = "House Style", isTitle = true, notCheckable = true } }
   for _, st in ipairs(plot and plot.styles or {}) do
     items[#items + 1] = { text = st.name, checked = st.id == plot.style,
       func = function() EsteriaHousing_SetPlotStyle(st.id) end }
   end
-  EasyMenu(items, styleMenu, "cursor", 0, 0, "MENU")
+  EasyMenu(items, styleMenu, styleButton, 0, 0, "MENU")
 end)
-local placeText = house:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-placeText:SetPoint("TOPLEFT", 6, -50); placeText:SetWidth(150); placeText:SetJustifyH("LEFT")
 
--- step: 1 yd, Shift 0.25 yd. dx is north, dy west (the world's axes); the arrows read as the map does.
+local placeTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+placeTitle:SetPoint("TOPLEFT", 6, -84); placeTitle:SetText("Placement")
+local placeText = house:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+placeText:SetPoint("TOPLEFT", placeTitle, "BOTTOMLEFT", 0, -4); placeText:SetWidth(170); placeText:SetJustifyH("LEFT")
+
+-- one step: 1 yd, Shift 0.25 yd. dx is north, dy west (the world's axes); the pad reads as the map does, north up.
 local function Nudge(north, west, turn)
   if not plot then return end
   local step = IsShiftKeyDown() and 0.25 or 1
@@ -79,10 +92,14 @@ local function Nudge(north, west, turn)
   if d > reach then dx, dy = dx * reach / d, dy * reach / d end
   EsteriaHousing_PlacePlotHouse(dx, dy, plot.turn + turn)
 end
-local function Pad(text, x, y, north, west, turn, tip)
-  local b = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
-  b:SetSize(text:len() > 2 and 56 or 30, 24); b:SetPoint("TOPLEFT", x, y); b:SetText(text)
-  b:SetScript("OnClick", function() Nudge(north, west, turn) end)
+
+local function IconButton(name, atlas, size, onClick, tip)
+  local b = CreateFrame("Button", "EsteriaHousingPlot" .. name, house)
+  b:SetSize(size, size)
+  b.bg = b:CreateTexture(nil, "BACKGROUND"); b.bg:SetAllPoints(); b.bg:SetTexture(0, 0, 0, 0.55)
+  b.icon = H.Atlas(b:CreateTexture(nil, "ARTWORK"), atlas); b.icon:SetPoint("TOPLEFT", 3, -3); b.icon:SetPoint("BOTTOMRIGHT", -3, 3)
+  b:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+  b:SetScript("OnClick", onClick)
   b:SetScript("OnEnter", function(self)
     GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(tip); GameTooltip:AddLine("Shift: a quarter step", 1, 1, 1)
     GameTooltip:Show()
@@ -90,15 +107,34 @@ local function Pad(text, x, y, north, west, turn, tip)
   b:SetScript("OnLeave", function() GameTooltip:Hide() end)
   return b
 end
-Pad("N", 200, -50, 1, 0, 0, "Move north")
-Pad("W", 168, -76, 0, 1, 0, "Move west")
-Pad("E", 232, -76, 0, -1, 0, "Move east")
-Pad("S", 200, -102, -1, 0, 0, "Move south")
-Pad("Turn L", 6, -102, 0, 0, 15, "Turn left 15\194\176")
-Pad("Turn R", 66, -102, 0, 0, -15, "Turn right 15\194\176")
-local reset = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
-reset:SetSize(56, 24); reset:SetPoint("TOPLEFT", 126, -102); reset:SetText("Reset")
+
+-- the move pad on the right, a compass with north up
+local PAD_X, PAD_Y, PAD = W - 100, -100, 28
+local north = IconButton("North", "housing-hotkey-icon-arrow-up", PAD, function() Nudge(1, 0, 0) end, "Move north")
+north:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y + 12)
+local west = IconButton("West", "housing-hotkey-icon-arrow-left", PAD, function() Nudge(0, 1, 0) end, "Move west")
+west:SetPoint("TOP", house, "TOPLEFT", PAD_X - PAD - 2, PAD_Y - PAD + 10)
+local east = IconButton("East", "housing-hotkey-icon-arrow-right", PAD, function() Nudge(0, -1, 0) end, "Move east")
+east:SetPoint("TOP", house, "TOPLEFT", PAD_X + PAD + 2, PAD_Y - PAD + 10)
+local south = IconButton("South", "housing-hotkey-icon-arrow-down", PAD, function() Nudge(-1, 0, 0) end, "Move south")
+south:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y - 2 * PAD + 8)
+local compass = house:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+compass:SetPoint("TOP", house, "TOPLEFT", PAD_X, PAD_Y - PAD + 2); compass:SetText("N")
+
+-- turning on the left, under the placement text
+local turnLeft = IconButton("TurnLeft", "decor-ability-expert-rotate-default", 34, function() Nudge(0, 0, 15) end,
+  "Turn left 15\194\176")
+turnLeft:SetPoint("TOPLEFT", 6, -138)
+local turnRight = IconButton("TurnRight", "decor-ability-expert-rotate-default", 34, function() Nudge(0, 0, -15) end,
+  "Turn right 15\194\176")
+turnRight:SetPoint("LEFT", turnLeft, "RIGHT", 6, 0)
+local rotate = H.ATLAS and H.ATLAS["decor-ability-expert-rotate-default"]
+if rotate then turnRight.icon:SetTexCoord(rotate[5], rotate[4], rotate[6], rotate[7]) end -- mirrored: turns the other way
+local reset = CreateFrame("Button", "EsteriaHousingPlotReset", house, "UIPanelButtonTemplate")
+reset:SetSize(64, 22); reset:SetPoint("LEFT", turnRight, "RIGHT", 8, 0); reset:SetText("Reset")
 reset:SetScript("OnClick", function() EsteriaHousing_PlacePlotHouse(0, 0, 0) end)
+
+-- ------------------------------------------------------------------------------------------------ redraw
 
 StaticPopupDialogs["ESTERIA_HOUSING_BUY_PLOT"] = {
   -- StaticPopup_Show formats with two values only, so the whole question arrives as the first
@@ -114,22 +150,19 @@ local function Redraw()
   message:SetText(plot.message or "")
   priceLabel:Hide(); price:Hide(); action:Show(); action:Enable()
   local mine = plot.status == "yours" and plot.styles and #plot.styles > 0
+  if mine then house:Show() else house:Hide() end
+  f:SetHeight(mine and YOURS_H or SALE_H)
   if mine then
-    house:Show()
-    f:SetHeight(400)
     local name = "Style"
     for _, st in ipairs(plot.styles) do if st.id == plot.style then name = st.name end end
-    styleButton:SetText(name .. "  \226\150\190")
-    placeText:SetText(string.format("%.2f yd north, %.2f yd west\nturned %d\194\176 (up to %d yd from its spot)",
+    styleButton:SetText(name)
+    placeText:SetText(string.format("%.2f yd north, %.2f yd west\nturned %d\194\176, up to %d yd from its spot",
       plot.dx, plot.dy, plot.turn, plot.reach or 8))
-  else
-    house:Hide()
-    f:SetHeight(250)
   end
   if plot.status == "sale" then
     status:SetText("|cffffd100For Sale|r")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Note_02")
-    body:SetText("An empty plot. Buying it builds a Human House here that you can furnish and expand with new rooms.")
+    H.Atlas(icon, "housefinder_forsale-plot-icon")
+    body:SetText("An empty plot. Buying it builds a house here that you can furnish, expand and restyle.")
     priceLabel:Show(); price:Show()
     local afford = GetMoney() >= plot.price
     price:SetText((afford and "" or "|cffff4040") .. GetCoinTextureString(plot.price))
@@ -138,17 +171,17 @@ local function Redraw()
     if plot.houseElsewhere and plot.message == "" then message:SetText("Your house already stands on another plot.") end
   elseif plot.status == "yours" then
     status:SetText("|cff40ff40Your Home|r")
-    icon:SetTexture("Interface\\Icons\\Spell_Holy_Restoration")
-    body:SetText("Walk in through the front door, or step inside from here. Restyle and move your house below.")
+    H.Atlas(icon, "housefinder_main-icon")
+    body:SetText("Walk in through the front door or step inside from here.")
     action:SetText("Enter House")
   elseif plot.status == "visit" then
     status:SetText("|cff80c0ffA Neighbor's Home|r")
-    icon:SetTexture("Interface\\Icons\\Spell_Holy_PrayerOfSpirit")
+    H.Atlas(icon, "housefinder_friend-icon-circle")
     body:SetText("You are grouped with the owner, so you may visit.")
     action:SetText("Visit House")
   else
     status:SetText("|cffc0c0c0Occupied|r")
-    icon:SetTexture("Interface\\Icons\\INV_Misc_Key_03")
+    H.Atlas(icon, "housefinder_main-icon")
     body:SetText("Someone lives here. Group with them to visit.")
     action:Hide()
   end
@@ -172,7 +205,7 @@ f:SetScript("OnUpdate", function(self, elapsed)
   local x, y = EsteriaHousing_GetPlayerPosition()
   if openedAt and x and ((x - openedAt[1]) ^ 2 + (y - openedAt[2]) ^ 2) > REACH * REACH then self:Hide() end
 end)
-f:SetScript("OnHide", function() StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT") end)
+f:SetScript("OnHide", function() StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT"); CloseDropDownMenus() end)
 
 f:RegisterEvent("ESTERIA_HOUSING_PLOT")
 f:RegisterEvent("PLAYER_MONEY")

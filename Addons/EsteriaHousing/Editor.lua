@@ -164,7 +164,7 @@ local settings = Control("settings", 64, 30, function()
     { text = "Reset panel positions", notCheckable = true, func = function() H.ResetPositions() end } },
     settingsMenu, "cursor", 0, 0, "MENU")
 end, "Settings")
-Control("exit", 100, 30, function() EsteriaHousing_Leave() end, "Leave House")
+local exit = Control("exit", 100, 30, function() EsteriaHousing_Leave() end, "Leave House")
 
 -- the decor budget, top right
 local budget = CreateFrame("Frame", "EsteriaHousingBudget", UIParent)
@@ -185,7 +185,7 @@ budget:SetScript("OnLeave", function() GameTooltip:Hide() end)
 -- ------------------------------------------------------------------------------------------------ upgrades
 
 -- More floors and a larger decor budget, bought with gold (the server sets the prices and the caps).
-local upgrades = H.Panel("EsteriaHousingUpgrades", 300, 150)
+local upgrades = H.Panel("EsteriaHousingUpgrades", 300, 196)
 upgrades:SetPoint("TOP", 0, -70)
 local upgradesTitle = upgrades:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 upgradesTitle:SetPoint("TOP", 0, -10); upgradesTitle:SetText("House Upgrades")
@@ -210,6 +210,7 @@ local function UpgradeRow(y, icon, what)
 end
 local floorRow = UpgradeRow(-44, "house-room-limit-icon", "floors")
 local decorRow = UpgradeRow(-90, "house-decor-budget-icon", "decor")
+local roomRow = UpgradeRow(-136, "house-room-limit-icon", "rooms")
 
 local function SetUpgrade(row, label, have, cap, price, gain, question)
   row.text:SetText(string.format("%s\n|cffffd100%d|r / %d", label, have, cap))
@@ -230,6 +231,8 @@ function H.RedrawUpgrades()
     "Add a floor to your house for %s?")
   SetUpgrade(decorRow, "Decor Budget", state.maxDecor, layout.decorCap, layout.decorPrice, "+" .. layout.decorStep,
     "Raise your decor budget by " .. layout.decorStep .. " for %s?")
+  SetUpgrade(roomRow, "Room Limit", layout.maxRooms, layout.roomCap or 64, layout.roomPrice, "+" .. (layout.roomStep or 4),
+    "Raise your room limit by " .. (layout.roomStep or 4) .. " for %s?")
 end
 upgrades:SetScript("OnShow", H.RedrawUpgrades)
 upgrades:RegisterEvent("ESTERIA_HOUSING_LAYOUT")
@@ -554,6 +557,7 @@ for i, x in ipairs(EXPERT) do
   b:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 44, 6)
   b:SetScript("OnClick", function()
     local d = Placed(selected)
+    if x[4] == 3 and state and state.outdoors then return Toast("Outdoor decor cannot be resized.") end
     if type(x[4]) == "number" then H.Gizmo.SetMode(x[4]); H.RedrawExpert()
     elseif d then x[4](d) end
   end)
@@ -569,7 +573,11 @@ function H.RedrawExpert()
   local d = Owner() and editing and ability == 2 and Placed(selected)
   H.Gizmo.SetTarget(d or nil, d and fdids[d.decorId])
   if not d then return expert:Hide() end
-  for _, b in ipairs(submodeButtons) do if b.submode then b:SetOn(b.submode == H.Gizmo.Mode()) end end
+  if state and state.outdoors and H.Gizmo.Mode() == 3 then H.Gizmo.SetMode(1) end
+  for _, b in ipairs(submodeButtons) do
+    if b.submode then b:SetOn(b.submode == H.Gizmo.Mode()) end
+    b:SetAlpha(b.submode == 3 and state and state.outdoors and 0.35 or 1)
+  end
   local scale = d.scale and math.abs(d.scale - 1) > 0.001 and string.format("  x%.2f", d.scale) or ""
   expertName:SetText(string.format("%s  |cffa0a0a0%d\194\176%s|r", names[d.decorId] or ("Decor " .. d.decorId), d.yaw % 360, scale))
   expert:Show()
@@ -694,6 +702,10 @@ end)
 -- ------------------------------------------------------------------------------------------------ modes
 
 function H.SetAbility(i)
+  if state and state.outdoors and (i == 3 or i == 5) then
+    Toast("Rooms are styled and built inside your house.")
+    i = ability ~= 3 and ability ~= 5 and ability or 1
+  end
   if i == 3 then -- Customize is a menu for the room you stand in, not a mode of its own
     if H.CustomizeHere then H.CustomizeHere() end
     i = ability == 3 and 1 or ability
@@ -743,12 +755,17 @@ local function RedrawControls()
     controls:Hide(); budget:Hide(); upgrades:Hide(); return
   end
   controls:Show()
-  local owner = state.isOwner
+  local owner, outdoors = state.isOwner, state.outdoors
   for _, b in ipairs({ decorate, inspect, houseinfo, settings }) do if owner then b:Show() else b:Hide() end end
+  if outdoors then houseinfo:Hide(); exit:Hide(); upgrades:Hide() else exit:Show() end -- outside: the plot, no house to leave
   H.Atlas(controlsBg, owner and "controls-frame" or "controls-frame-guest")
   if not owner and editing then H.SetEditing(false) end
   budgetText:SetText(string.format("%d/%d", state.placed, state.maxDecor))
+  H.Atlas(budgetIcon, outdoors and "house-outdoor-budget-icon" or "house-decor-budget-icon")
   if owner then budget:Show() else budget:Hide() end
+  -- rooms are inside only
+  for _, i in ipairs({ 3, 5 }) do abilityButtons[i]:SetAlpha(outdoors and 0.35 or 1) end
+  if outdoors and (ability == 3 or ability == 5) then H.SetAbility(1) end
 end
 
 -- ------------------------------------------------------------------------------------------------ events

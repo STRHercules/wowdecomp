@@ -14,7 +14,8 @@ import sys
 WANTED = re.compile(r"^(category-icons_[a-z-]+_(active|inactive|pressed)|house-chest-.*|decor-controls-.*|controls-frame"
                     r"|decor-ability.*|decor-abilitybar-.*|house-decor-budget-icon|house-room-limit-icon|housing-floor-.*"
                     r"|housing-layout-room-.*|layout_.*_icon|housing-basic-.*|housing-wood-frame.*|catalog-.*"
-                    r"|housing-hotkey-icon-.*|housing-woodsign|housing-decorative-foliage-.*)$")
+                    r"|housing-hotkey-icon-.*|housing-woodsign|housing-decorative-foliage-.*|housing-cornerstone-background"
+                    r"|housefinder_.*|house-decor-exteriorbudget-icon|house-outdoor-budget-icon|house-fixture-budget-icon)$")
 
 
 def main(atlases_csv, members_csv, listfile, out):
