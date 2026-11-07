@@ -184,8 +184,14 @@ struct SMChunk {
     /* 0064 */ uint32_t m_sizeLiquid;
     /* 0068 */ C3Vector m_position;
     /* 0074 */ uint32_t m_ofsMCCV;
-    /* 0078 */ uint32_t m_unused1;
-    /* 007C */ uint32_t m_unused2;
+    // Not in the original binary: with flag 0x20000 (retail terrain), one row of holes per byte, bit = column.
+    /* 0078 */ uint8_t m_fineHoles[8];
+
+    // Whether this cell of the chunk's 8 x 8 is a hole. m_holes alone says only which 2 x 2 blocks hold one.
+    bool HoleAt(int32_t row, int32_t col) const {
+        if (this->m_flags & 0x20000) return (this->m_fineHoles[row] >> col) & 1;
+        return (this->m_holes >> (4 * (row >> 1) + (col >> 1))) & 1;
+    }
 };
 
 struct SWFlowv {

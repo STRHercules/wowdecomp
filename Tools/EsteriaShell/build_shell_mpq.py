@@ -221,6 +221,9 @@ def main():
     # The Codex draws with the character creator's style kit: one file, shipped in both places.
     entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
+    entries.update(tree(REPO / "Addons" / "EsteriaToolChest", "Interface" + B + "AddOns" + B + "EsteriaToolChest" + B))
+    entries["Interface" + B + "AddOns" + B + "EsteriaToolChest" + B + "esteria_style.lua"] = (
+        REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     # The swap wheel's art (EasyController, MIT: easycontroller/README.md)
     for png in (REPO / "Tools" / "EsteriaShell" / "easycontroller").glob("*.png"):
         name = "Interface" + B + "AddOns" + B + "EsteriaSwap" + B + "Textures" + B + png.stem + ".tga"

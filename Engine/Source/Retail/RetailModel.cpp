@@ -1070,7 +1070,7 @@ bool ValidateSkin(const std::vector<uint8_t>& b, const std::vector<uint8_t>& m, 
         uint32_t n = U16(b, p + 14);
         uint16_t shader = U16(b, p + 2);
         if (!n || n > 3 || (n == 3 && shader != 0x8010) ||
-            ((shader & 0x8000) && !((shader >= 0x8001 && shader <= 0x8003 && n == 2) ||
+            ((shader & 0x8000) && shader != 0x8000 && !((shader >= 0x8001 && shader <= 0x8003 && n == 2) ||
                 (shader == 0x8010 && n == 3) || ((shader == 0x8011 || shader == 0x8012) && n == 2))))
             return Fail(error, "Retail shader or texture count is not supported yet");
         // The batch geoset index (+6) is unused by the legacy renderer and may exceed the section count in newer models.
@@ -1205,8 +1205,14 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
             // Draw them with their first texture and the plain opaque combiner instead of failing the model.
             b[p] = b[p + 1] = 0;
             b[p + 12] = 1; b[p + 13] = 0;
+        } else if (shader == 0x8013) {
+            // Diffuse_EdgeFade_T1 / Combiners_Mod_Depth: soft cards for steam, dust and light rays (Generic_Steam_Cloud_Thin,
+            // 7VS_NightmareRays01), which rely on fading at their edges and where they meet geometry. Without that they are
+            // hard flat quads over waterfalls and hills, so the batch is off (0x8000 is the client's own disabled marker).
+            // shortcut: no mist or rays on these models; write an edge-fade and depth-fade shader to bring them back.
+            b[p] = 0; b[p + 1] = 0x80;
         } else if ((shader & 0x8000) && U16(b, p + 12) == 1) {
-            // Other single-texture explicit shaders (0x8013, 0x8022 on Founder's Point doodads): draw the texture with
+            // Other single-texture explicit shaders (0x8022 on Founder's Point doodads): draw the texture with
             // the plain combiner, as the character-layer fallback above does. shortcut: loses the retail combiner's
             // extra term; map the shader exactly if one of these looks wrong.
             b[p] = b[p + 1] = 0;

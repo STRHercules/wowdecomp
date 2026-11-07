@@ -300,8 +300,7 @@ int16_t CMapChunk::CreateIndices(char* buf, int32_t baseVertex) {
 
     for (int row = 0; row < 8; ++row) {
         for (int col = 0; col < 8; ++col) {
-            int holeMaskIndex = (row / 2) * 4 + (col / 2);
-            if (this->m_header->m_holes & CMap::s_holeMask[holeMaskIndex])
+            if (this->m_header->HoleAt(row, col))
                 continue;
 
             uint16_t TL = baseVertex + col;
@@ -1230,7 +1229,7 @@ void CMapChunk::CreateDetailDoodads() {
             continue;
         }
 
-        if (this->m_header->m_holes & CMap::s_holeMask[4 * (y >> 1) + (x >> 1)]) {
+        if (this->m_header->HoleAt(y, x)) {
             continue;
         }
 
@@ -1513,7 +1512,7 @@ bool CMapChunk::CanMergeChunkLayers(CMapChunk* chunkA, CMapChunk* chunkB) {
 int32_t CMapChunk::Intersect(int32_t subX, int32_t subY, const C3Ray& ray, float* t) {
     int32_t hit = 0;
 
-    if (this->m_header->m_holes & CMap::s_holeMask[4 * (subY >> 1) + (subX >> 1)]) {
+    if (this->m_header->HoleAt(subY, subX)) {
         return 0;
     }
 
@@ -1548,7 +1547,7 @@ void CMapChunk::Intersect(CiRect* rect, CAaBox* box, TSGrowableArray<CFacet>* fa
 
     for (int32_t y = rect->minY; y <= rect->maxY; y++) {
         for (int32_t x = rect->minX; x <= rect->maxX; x++, height++, vertices++) {
-            if (this->m_header->m_holes & CMap::s_holeMask[4 * (y >> 1) + (x >> 1)]) {
+            if (this->m_header->HoleAt(y, x)) {
                 continue;
             }
 
@@ -1622,7 +1621,7 @@ void CMapChunk::Intersect(CiRect* rect, const CFrustum* frustum, TSGrowableArray
 
     for (int32_t y = rect->minY; y <= rect->maxY; y++) {
         for (int32_t x = rect->minX; x <= rect->maxX; x++, vertices++, height++) {
-            if (this->m_header->m_holes & CMap::s_holeMask[4 * (y >> 1) + (x >> 1)]) {
+            if (this->m_header->HoleAt(y, x)) {
                 continue;
             }
 

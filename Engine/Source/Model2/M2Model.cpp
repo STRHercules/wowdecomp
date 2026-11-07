@@ -6600,7 +6600,9 @@ void CM2Model::AnimateSM() {
         return;
     }
 
-    if (this->m_attachParent || this->m_shared->m_billboardBoneCount) {
+    // Not in the original binary: the bone count. The path below only moves bone 0, so an off-screen caster with more
+    // bones (common in retail doodads) kept the others in an older camera's view space and its shadow stretched.
+    if (this->m_attachParent || this->m_shared->m_billboardBoneCount || this->m_shared->m_data->m_bones.m_count > 1) {
         this->Animate();
         return;
     }

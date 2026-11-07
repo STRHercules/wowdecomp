@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <functional>
 
 namespace Retail {
 namespace {
@@ -12,7 +13,182 @@ using namespace Iff;
 
 constexpr uint32_t kVersion = 18;
 constexpr size_t kTiles = 4096, kMcnk = 256, kMcnkHeader = 128, kDoodad = 36, kMapObj = 64, kLayer = 16;
-constexpr uint32_t kHighResHoles = 0x10000, kHasMcsh = 0x1, kHasMccv = 0x40, kLegacyLiquid = 0x3C;
+constexpr uint32_t kHighResHoles = 0x10000, kFineHoles = 0x20000, kHasMcsh = 0x1, kHasMccv = 0x40, kLegacyLiquid = 0x3C;
+
+constexpr size_t kAlphaSide = 64, kAlphaTexels = kAlphaSide * kAlphaSide, kMaxLayers = 4;
+constexpr uint32_t kUseAlpha = 0x100, kCompressedAlpha = 0x200;
+constexpr int kBorderFadeTexels = 8, kBorderRingTexels = 4, kBorderRingScore = 8;
+
+// One texture layer of a chunk: weight per texel out of 255. The terrain shaders blend additively (HdTerrain's
+// t0 * (1 - sum of alphas) + ...), so the base's weight is whatever the other layers leave.
+struct PaintLayer {
+    uint32_t texture, flags, effect, id; // id: stands for the texture across tiles, whose MDID indices differ
+    std::vector<uint8_t> weight;
+};
+
+struct ChunkPaint {
+    std::vector<PaintLayer> layers;
+    bool rewrite = false;
+    std::vector<uint8_t> mcly, mcal;
+    uint8_t predominant[16] = {};
+};
+
+bool DecodeAlpha(const std::vector<uint8_t>& mcal, size_t at, bool compressed, std::vector<uint8_t>& out) {
+    out.assign(kAlphaTexels, 0);
+    if (!compressed) {
+        if (at > mcal.size() || mcal.size() - at < kAlphaTexels) return false;
+        std::memcpy(out.data(), &mcal[at], kAlphaTexels);
+        return true;
+    }
+    for (size_t done = 0; done < kAlphaTexels;) {
+        if (at >= mcal.size()) return false;
+        const uint8_t control = mcal[at++];
+        const size_t count = std::min<size_t>(control & 0x7F, kAlphaTexels - done);
+        if (control & 0x80) {
+            if (at >= mcal.size()) return false;
+            std::memset(&out[done], mcal[at++], count);
+        } else {
+            if (mcal.size() - at < (control & 0x7Fu)) return false;
+            std::memcpy(&out[done], &mcal[at], count);
+            at += control & 0x7F;
+        }
+        done += count;
+    }
+    return true;
+}
+
+// Reads a chunk's layers, keeping the four that show most. Border texels count extra: a texture that reaches a chunk's
+// edge is what shows as a seam if it goes. Layers keep their source order; the first kept one is the new base.
+ChunkPaint ReadPaint(const std::vector<uint8_t>& mcly, const std::vector<uint8_t>& mcal, const std::vector<std::string>& textures) {
+    ChunkPaint paint;
+    const size_t count = mcly.size() / kLayer;
+    std::vector<int> base(kAlphaTexels, 255);
+    paint.layers.resize(count);
+    for (size_t l = 0; l < count; ++l) {
+        const uint8_t* p = &mcly[l * kLayer];
+        PaintLayer& layer = paint.layers[l];
+        layer.texture = Get<uint32_t>(p);
+        layer.id = layer.texture < textures.size() ? uint32_t(std::hash<std::string>{}(textures[layer.texture])) | 1u : 0u;
+        layer.flags = Get<uint32_t>(p + 4);
+        layer.effect = Get<uint32_t>(p + 12);
+        layer.weight.assign(kAlphaTexels, 0);
+        // A map that runs off MCAL's end counts as no paint: stripping only its alpha would cover everything below.
+        if (l && (layer.flags & kUseAlpha))
+            if (!DecodeAlpha(mcal, Get<uint32_t>(p + 8), (layer.flags & kCompressedAlpha) != 0, layer.weight))
+                std::fill(layer.weight.begin(), layer.weight.end(), uint8_t(0));
+        if (l)
+            for (size_t t = 0; t < kAlphaTexels; ++t) base[t] -= layer.weight[t];
+    }
+    if (count)
+        for (size_t t = 0; t < kAlphaTexels; ++t) paint.layers[0].weight[t] = uint8_t(std::max(base[t], 0));
+    if (count <= kMaxLayers) return paint;
+
+    paint.rewrite = true;
+    std::vector<std::pair<uint64_t, size_t>> score(count);
+    for (size_t l = 0; l < count; ++l) {
+        uint64_t sum = 0;
+        for (size_t t = 0; t < kAlphaTexels; ++t) {
+            const size_t x = t % kAlphaSide, y = t / kAlphaSide, last = kAlphaSide - 1 - kBorderRingTexels;
+            const bool ring = x < kBorderRingTexels || x > last || y < kBorderRingTexels || y > last;
+            sum += uint64_t(paint.layers[l].weight[t]) * (ring ? kBorderRingScore : 1);
+        }
+        score[l] = {sum, l};
+    }
+    std::stable_sort(score.begin(), score.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    score.resize(kMaxLayers);
+    std::sort(score.begin(), score.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+    std::vector<PaintLayer> kept;
+    for (const auto& s : score) kept.push_back(std::move(paint.layers[s.second]));
+    paint.layers = std::move(kept);
+    return paint;
+}
+
+// A texture a neighbouring chunk does not have would end in a hard line at the shared border, so each one fades out as
+// it nears that border and the rest of the chunk's paint takes over. Both sides then agree on the edge itself.
+// neighbours: left, right, up, down (null where there is no terrain).
+void FadeAndEncode(ChunkPaint& paint, const KeptTextures* const neighbours[4]) {
+    const size_t count = paint.layers.size();
+    if (!count) return;
+    std::vector<std::vector<float>> weights(count, std::vector<float>(kAlphaTexels));
+    for (size_t l = 0; l < count; ++l) {
+        bool missing[4] = {};
+        for (int e = 0; e < 4; ++e) {
+            if (!neighbours[e]) continue;
+            missing[e] = std::find(neighbours[e]->begin(), neighbours[e]->end(), paint.layers[l].id) == neighbours[e]->end();
+        }
+        for (size_t t = 0; t < kAlphaTexels; ++t) {
+            const int x = int(t % kAlphaSide), y = int(t / kAlphaSide), last = int(kAlphaSide) - 1;
+            const int distance[4] = {x, last - x, y, last - y};
+            float keep = 1.0f;
+            for (int e = 0; e < 4; ++e) {
+                if (!missing[e] || distance[e] >= kBorderFadeTexels) continue;
+                const float f = float(distance[e]) / kBorderFadeTexels;
+                keep *= f * f * (3.0f - 2.0f * f);
+            }
+            if (keep < 1.0f && paint.layers[l].weight[t]) paint.rewrite = true;
+            weights[l][t] = paint.layers[l].weight[t] * keep;
+        }
+    }
+    if (!paint.rewrite) return;
+
+    paint.mcly.assign(count * kLayer, 0);
+    paint.mcal.clear();
+    for (size_t l = 0; l < count; ++l) {
+        const PaintLayer& layer = paint.layers[l];
+        uint8_t* p = &paint.mcly[l * kLayer];
+        Put(p, layer.texture);
+        Put(p + 4, l ? (layer.flags & ~kCompressedAlpha) | kUseAlpha : layer.flags & ~(kUseAlpha | kCompressedAlpha));
+        Put(p + 8, l ? uint32_t((l - 1) * kAlphaTexels) : 0u);
+        Put(p + 12, layer.effect);
+    }
+    paint.mcal.resize((count - 1) * kAlphaTexels);
+    for (size_t t = 0; t < kAlphaTexels; ++t) {
+        float total = 0.0f;
+        for (size_t l = 0; l < count; ++l) total += weights[l][t];
+        // Nothing left here (every texture faded): the original proportions; a seam beats a hole.
+        const bool faded = total <= 0.0f;
+        if (faded)
+            for (size_t l = 0; l < count; ++l) total += paint.layers[l].weight[t];
+        if (total <= 0.0f) continue; // only dropped layers painted this texel: all base
+        for (size_t l = 1; l < count; ++l) {
+            const float w = faded ? float(paint.layers[l].weight[t]) : weights[l][t];
+            paint.mcal[(l - 1) * kAlphaTexels + t] = uint8_t(w * 255.0f / total); // floor: alphas never sum past 255
+        }
+    }
+    // The 8x8 low-quality map (2 bits a cell, header 0x40) names layers by index: which ground clutter grows there.
+    for (size_t cell = 0; cell < 64; ++cell) {
+        const size_t cx = cell % 8, cy = cell / 8;
+        const size_t texel = (cy * 8 + 4) * kAlphaSide + cx * 8 + 4;
+        int rest = 255, best = 0, bestWeight = 0;
+        for (size_t l = 1; l < count; ++l) {
+            const int w = paint.mcal[(l - 1) * kAlphaTexels + texel];
+            rest -= w;
+            if (w > bestWeight) { best = int(l); bestWeight = w; }
+        }
+        if (rest > bestWeight) best = 0;
+        paint.predominant[cell / 4] |= uint8_t(best << (cell % 4 * 2));
+    }
+}
+
+std::vector<std::string> Split(const std::vector<uint8_t>& table);
+
+// Textures: MDID FileDataIDs (8.1+) or a legacy MTEX table.
+std::vector<std::string> TextureNames(const Chunks& tex) {
+    if (tex.Find(Tag("MTEX"))) return Split(tex.Bytes(Tag("MTEX")));
+    std::vector<std::string> textures;
+    const auto mdid = tex.Bytes(Tag("MDID"));
+    for (size_t o = 0; o + 4 <= mdid.size(); o += 4) {
+        const uint32_t id = Get<uint32_t>(&mdid[o]);
+        textures.push_back(id ? RetailPath(id, ".blp") : "");
+    }
+    return textures;
+}
+
+KeptTextures KeptOf(const ChunkPaint& paint) {
+    KeptTextures kept{};
+    for (size_t l = 0; l < paint.layers.size() && l < kept.size(); ++l) kept[l] = paint.layers[l].id;
+    return kept;
+}
 
 bool Version(const Chunks& c, std::string& error, const char* what) {
     const auto* v = c.Find(Tag("MVER"));
@@ -214,8 +390,22 @@ bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::
     return true;
 }
 
+bool ReadTileTextures(const std::vector<uint8_t>& texBytes, TileTextures& out) {
+    out.chunks.clear();
+    Chunks tex;
+    if (!tex.Parse(texBytes.data(), texBytes.size())) return false;
+    const std::vector<std::string> textures = TextureNames(tex);
+    for (const auto& ch : tex.list) {
+        if (ch.tag != Tag("MCNK")) continue;
+        Chunks ts;
+        if (!ts.Parse(ch.data, ch.size)) return false;
+        out.chunks.push_back(KeptOf(ReadPaint(ts.Bytes(Tag("MCLY")), ts.Bytes(Tag("MCAL")), textures)));
+    }
+    return out.chunks.size() == kMcnk;
+}
+
 bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t>& objBytes,
-    const std::vector<uint8_t>& texBytes, std::vector<uint8_t>& out, std::string& error) {
+    const std::vector<uint8_t>& texBytes, std::vector<uint8_t>& out, std::string& error, const TileTextures* const* adjoining) {
     out.clear();
     Chunks root, obj, tex;
     if (!root.Parse(rootBytes.data(), rootBytes.size()) || !obj.Parse(objBytes.data(), objBytes.size())
@@ -231,17 +421,8 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
     for (const auto& ch : tex.list) if (ch.tag == Tag("MCNK")) texChunks.push_back(&ch);
     if (rootChunks.size() != kMcnk) return Fail(error, "Retail ADT does not have 256 MCNK chunks");
 
-    // Textures: MDID FileDataIDs (8.1+) or a legacy MTEX table. MTXF 0x1 stops 3.3.5 asking for <name>_s.blp,
-    // which has no retail\<fdid> equivalent; the diffuse is loaded as named.
-    std::vector<std::string> textures;
-    if (tex.Find(Tag("MTEX"))) textures = Split(tex.Bytes(Tag("MTEX")));
-    else {
-        const auto mdid = tex.Bytes(Tag("MDID"));
-        for (size_t o = 0; o + 4 <= mdid.size(); o += 4) {
-            const uint32_t id = Get<uint32_t>(&mdid[o]);
-            textures.push_back(id ? RetailPath(id, ".blp") : "");
-        }
-    }
+    // MTXF 0x1 stops 3.3.5 asking for <name>_s.blp, which has no retail\<fdid> equivalent; the diffuse is loaded as named.
+    const std::vector<std::string> textures = TextureNames(tex);
     std::vector<uint8_t> mtex;
     for (const auto& t : textures) { mtex.insert(mtex.end(), t.begin(), t.end()); mtex.push_back(0); }
     std::vector<uint8_t> mtxf(textures.size() * 4);
@@ -254,7 +435,6 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
     for (size_t i = 0; i < modf.size() / kMapObj; ++i) {
         uint8_t* d = &modf[i * kMapObj];
         Put(d + 0x38, uint16_t(Get<uint16_t>(d + 0x38) & 0x1)); // 3.3.5 knows only "destroyable"
-        Put(d + 0x3E, uint16_t(0)); // retail scale: Wrath reads padding there and cannot scale world objects
     }
 
     // 3.3.5 draws a placement only while a chunk whose MCRF lists it is visible. Retail lists objects in fewer chunks
@@ -290,6 +470,25 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         return out;
     };
 
+    // Retail paints up to eight layers on a chunk and 3.3.5 draws four (over half the chunks of a Founder's Point tile).
+    std::vector<ChunkPaint> paints(kMcnk);
+    for (size_t i = 0; i < kMcnk && i < texChunks.size(); ++i) {
+        Chunks ts;
+        if (!ts.Parse(texChunks[i]->data, texChunks[i]->size)) return Fail(error, "Retail ADT MCNK has a truncated sub-chunk");
+        paints[i] = ReadPaint(ts.Bytes(Tag("MCLY")), ts.Bytes(Tag("MCAL")), textures);
+    }
+    std::vector<KeptTextures> kept(kMcnk);
+    for (size_t i = 0; i < kMcnk; ++i) kept[i] = KeptOf(paints[i]);
+    const auto beyond = [&](int side, size_t chunk) -> const KeptTextures* {
+        return adjoining && adjoining[side] && adjoining[side]->chunks.size() == kMcnk ? &adjoining[side]->chunks[chunk] : nullptr;
+    };
+    for (size_t i = 0; i < kMcnk; ++i) {
+        const size_t x = i % 16, y = i / 16;
+        const KeptTextures* const neighbours[4] = {x ? &kept[i - 1] : beyond(0, y * 16 + 15), x < 15 ? &kept[i + 1] : beyond(1, y * 16),
+                                                   y ? &kept[i - 16] : beyond(2, 240 + x), y < 15 ? &kept[i + 16] : beyond(3, x)};
+        FadeAndEncode(paints[i], neighbours);
+    }
+
     std::vector<std::vector<uint8_t>> mcnks;
     for (size_t i = 0; i < kMcnk; ++i) {
         const Chunk& r = *rootChunks[i];
@@ -302,14 +501,19 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
 
         std::vector<uint8_t> header(r.data, r.data + kMcnkHeader);
         uint32_t flags = Get<uint32_t>(&header[0]);
+        uint8_t fineHoles[8] = {};
         if (flags & kHighResHoles) {
             // A split root walks its sub-chunks, so the MCVT/MCNR offset words at 0x14 hold the 8x8 mask instead.
+            // Kept as it is for CMapChunk (HoleAt): folded alone, a 4 yd hole becomes 8 yd of open ground beside what
+            // fills it. The fold still answers "has any hole" and the low-detail terrain.
             Put(&header[0x3C], FoldHoles(&header[0x14]));
-            flags &= ~kHighResHoles;
+            std::memcpy(fineHoles, &header[0x14], sizeof fineHoles);
+            flags = (flags & ~kHighResHoles) | kFineHoles;
         }
-        auto mcly = ts.Bytes(Tag("MCLY"));
-        // shortcut: more than four layers is cut to the first four; port wotlkconv's limit_layers when a tile needs it.
-        if (mcly.size() > 4 * kLayer) mcly.resize(4 * kLayer);
+        const ChunkPaint& paint = paints[i];
+        const auto mcly = paint.rewrite ? paint.mcly : ts.Bytes(Tag("MCLY"));
+        const auto mcal = paint.rewrite ? paint.mcal : ts.Bytes(Tag("MCAL"));
+        if (paint.rewrite) std::memcpy(&header[0x40], paint.predominant, sizeof paint.predominant);
         auto mcrf = merge(os.Bytes(Tag("MCRD")), extraDoodads[i]);
         const auto mcrw = merge(os.Bytes(Tag("MCRW")), extraObjects[i]);
         const uint32_t doodadRefs = uint32_t(mcrf.size() / 4), objectRefs = uint32_t(mcrw.size() / 4);
@@ -318,7 +522,7 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         struct Piece { uint32_t tag; std::vector<uint8_t> data; };
         const Piece pieces[] = {
             {Tag("MCVT"), rs.Bytes(Tag("MCVT"))}, {Tag("MCCV"), rs.Bytes(Tag("MCCV"))}, {Tag("MCNR"), rs.Bytes(Tag("MCNR"))},
-            {Tag("MCLY"), mcly}, {Tag("MCRF"), mcrf}, {Tag("MCSH"), ts.Bytes(Tag("MCSH"))}, {Tag("MCAL"), ts.Bytes(Tag("MCAL"))},
+            {Tag("MCLY"), mcly}, {Tag("MCRF"), mcrf}, {Tag("MCSH"), ts.Bytes(Tag("MCSH"))}, {Tag("MCAL"), mcal},
         };
         std::vector<uint8_t> body;
         uint32_t offsetOf[7] = {}, sizeOf[7] = {};
@@ -345,11 +549,10 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         Put(&header[0x60], 0u);        // no MCLQ: a chunk without liquid declares the empty chunk's 8 bytes
         Put(&header[0x64], 8u);
         Put(&header[0x74], offsetOf[1]);
-        Put(&header[0x78], 0u);
-        Put(&header[0x7C], 0u);
+        std::memcpy(&header[0x78], fineHoles, sizeof fineHoles);
         flags = offsetOf[5] ? flags | kHasMcsh : flags & ~kHasMcsh;
         flags = offsetOf[1] ? flags | kHasMccv : flags & ~kHasMccv;
-        Put(&header[0], flags & ~kLegacyLiquid & 0xFFFFu);
+        Put(&header[0], flags & ~kLegacyLiquid & (0xFFFFu | kFineHoles));
         header.insert(header.end(), body.begin(), body.end());
         mcnks.push_back(std::move(header));
     }

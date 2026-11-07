@@ -1592,7 +1592,7 @@ bool CMap::GetHeightTerrain(CMapChunk* chunk, C3Vector& pos, int32_t cellX, int3
     int32_t col = cellX & 7;
     int32_t row = cellY & 7;
 
-    if (chunk->m_header->m_holes & CMap::s_holeMask[4 * (row >> 1) + (col >> 1)]) {
+    if (chunk->m_header->HoleAt(row, col)) {
         return false;
     }
 
@@ -2811,7 +2811,12 @@ CMapObjDef* CMap::CreateMapObjDef(char* fileName, SMMapObjDef* mapObjectDef, C3V
     mapObjDef->m_mat.RotateAroundZ(rotZ + 3.1415927f);
     mapObjDef->m_mat.RotateAroundY(rotY);
     mapObjDef->m_mat.RotateAroundX(rotX);
-    mapObjDef->m_invMat = mapObjDef->m_mat.AffineInverse();
+    // Not in the original binary: retail places world objects scaled (1024 = 1.0; 3.3.5 files hold 0 there). Rock at 1.5
+    // drawn at 1.0 left everything standing on it in mid-air. The range keeps junk in old files' padding from counting.
+    const uint16_t placedScale = mapObjectDef->m_scale;
+    const float scale = placedScale >= 256 && placedScale <= 8192 ? placedScale / 1024.0f : 1.0f;
+    mapObjDef->m_mat.Scale(scale);
+    mapObjDef->m_invMat = mapObjDef->m_mat.AffineInverse(scale);
 
     mapObjDef->m_bbox.b.x = -mapObjectDef->m_extents.t.z;
     mapObjDef->m_bbox.b.y = -mapObjectDef->m_extents.t.x;
@@ -5453,7 +5458,7 @@ bool CMap::QueryGroundTypeTerrain(C3Vector* pos, uint32_t* groundType) {
     int32_t col = cellX & 7;
     int32_t row = cellY & 7;
 
-    if (chunk->m_header->m_holes & CMap::s_holeMask[4 * (row >> 1) + (col >> 1)]) {
+    if (chunk->m_header->HoleAt(row, col)) {
         return false;
     }
 
@@ -6149,7 +6154,7 @@ bool CMap::GetTriSubchunk(CMapChunk* chunk, const CiRect* rect, const CAaBox* bo
 
     for (int32_t y = rect->minY; y <= rect->maxY; y++, vertices += rowSkip, height += rowSkip) {
         for (int32_t x = rect->minX; x <= rect->maxX; x++, vertices++, height++) {
-            if (chunk->m_header->m_holes & CMap::s_holeMask[4 * (y >> 1) + (x >> 1)]) {
+            if (chunk->m_header->HoleAt(y, x)) {
                 continue;
             }
 

@@ -120,6 +120,7 @@ struct CascSource::Impl {
     std::map<std::string, uint32_t> names;
     std::map<std::string, Reference> dependencies;
     std::map<std::string, std::array<uint32_t, 2>> terrainTiles; // <map>_<x>_<y>.adt -> obj0, tex0 (root is the dependency)
+    std::map<uint32_t, TileTextures> terrainEdges; // by _tex0 FileDataID
     std::map<std::string, std::pair<std::shared_ptr<Model>, size_t>> models;
     std::map<std::string, uint32_t> cachedSizes;
     std::set<uint32_t> characterModels;
@@ -598,6 +599,11 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
         } else {
             success = success && PrepareModel(bytes, model->bytes, model->files, error, skeleton.empty() ? nullptr : &skeleton);
         }
+        // This water-ripple sheet's emitter is additive with a cyan texture (2904679) and relies on the retail EXP2 data the
+        // legacy emitter ignores, so it floods the pool neon green. The same sheet without an emitter (2903897) draws fine.
+        // shortcut: only this model, by id; read EXP2's alpha cutoff if other emitters show the same tint.
+        if (success && s.kind == SourceKind::Retail && ref.id == 2904371 && model->bytes.size() >= 0x12C)
+            std::memset(&model->bytes[0x128], 0, 4);
         if (success && model->slimeGiant) success = SlimeGiant::PrepareModel(model->bytes, ref.id, error);
         if (success && model->centaur) success = Centaur::PrepareModel(model->bytes, ref.id, error);
         if (success && model->ethereal && model->ethereal != Ethereal::Bodies[2])
@@ -691,7 +697,30 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
         std::vector<uint8_t> obj0, tex0, prepared;
         success = tile != s.terrainTiles.end() ? true : Failure(error, "Open the Retail WDT before its tiles");
         success = success && s.Fetch(Reference{tile->second[0]}, "", obj0, error)
-            && s.Fetch(Reference{tile->second[1]}, "", tex0, error) && PrepareAdt(bytes, obj0, tex0, prepared, error);
+            && s.Fetch(Reference{tile->second[1]}, "", tex0, error);
+        if (success) {
+            // <base>_<x>_<y>.adt: the four tiles around this one, so ground textures carry over the shared edges.
+            const TileTextures* adjoining[4] = {};
+            const size_t yAt = key.find_last_of('_'), xAt = yAt == std::string::npos ? yAt : key.find_last_of('_', yAt - 1);
+            if (xAt != std::string::npos) {
+                const int x = std::atoi(key.c_str() + xAt + 1), y = std::atoi(key.c_str() + yAt + 1);
+                const int steps[4][2] = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+                for (int side = 0; side < 4; ++side) {
+                    const auto next = s.terrainTiles.find(key.substr(0, xAt + 1) + std::to_string(x + steps[side][0]) + "_" + std::to_string(y + steps[side][1]) + ".adt");
+                    if (next == s.terrainTiles.end()) continue;
+                    auto cached = s.terrainEdges.find(next->second[1]);
+                    if (cached == s.terrainEdges.end()) {
+                        std::vector<uint8_t> nextTex;
+                        std::string ignored; // a neighbour that won't read only costs a seam
+                        TileTextures read;
+                        if (s.Fetch(Reference{next->second[1]}, "", nextTex, ignored)) ReadTileTextures(nextTex, read);
+                        cached = s.terrainEdges.emplace(next->second[1], std::move(read)).first;
+                    }
+                    adjoining[side] = &cached->second;
+                }
+            }
+            success = PrepareAdt(bytes, obj0, tex0, prepared, error, adjoining);
+        }
         if (success) bytes = std::move(prepared);
     } else {
         success = Failure(error, "Retail runtime supports M2, SKIN, ANIM, BLP, WMO, WDT and ADT references only");

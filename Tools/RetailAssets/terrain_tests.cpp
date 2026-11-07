@@ -80,19 +80,49 @@ void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
     for (int i = 0; i < 256; ++i) refsTotal += U32(a, U32(a, mcin + i * 16) + 8 + 0x10);
     Check(listed == doodads, name + ": every doodad listed by its own chunk (" + std::to_string(listed) + "/" + std::to_string(doodads) + ")");
     std::printf("%s: %u doodads, %zu doodad refs, %u WMOs\n", name.c_str(), doodads, refsTotal, objects);
+    // Placed WMOs keep their retail scale for CMap::CreateMapObjDef.
+    size_t scaled = 0;
+    if (objects) {
+        const size_t modf = table(7) + 8;
+        for (uint32_t o = 0; o < objects; ++o) {
+            const uint32_t scale = U32(a, modf + o * 64 + 0x3C) >> 16;
+            Check(scale != 0, name + ": WMO placement " + std::to_string(o) + " keeps its scale");
+            scaled += scale != 1024;
+        }
+    }
+    std::printf("%s: %zu of %u WMOs not at scale 1.0\n", name.c_str(), scaled, objects);
+    int holeChunks = 0;
     for (int i = 0; i < 256; ++i) {
         const size_t at = U32(a, mcin + i * 16), size = U32(a, mcin + i * 16 + 4);
         if (U32(a, at) != Tag("MCNK") || U32(a, at + 4) + 8 != size) { Check(false, name + ": MCIN entry " + std::to_string(i)); continue; }
         const size_t hdr = at + 8, end = hdr + U32(a, at + 4);
         const uint32_t layers = U32(a, hdr + 0x0C), refs = U32(a, hdr + 0x10) + U32(a, hdr + 0x38), alpha = U32(a, hdr + 0x28);
         bool ok = !(U32(a, hdr) & 0x10000);
+        // A hole keeps its fine 8x8 mask and the flag that makes CMapChunk::HoleAt read it.
+        const uint32_t folded = U32(a, hdr + 0x3C) & 0xFFFF;
+        const bool fine = U32(a, hdr + 0x78) || U32(a, hdr + 0x7C);
+        Check(!folded || (fine && (U32(a, hdr) & 0x20000)), name + ": MCNK " + std::to_string(i) + " hole keeps its fine mask");
+        holeChunks += folded != 0;
         size_t mcly = 0;
         for (size_t p = hdr + 128; ok && p < end;) {
             const uint32_t tag = U32(a, p), n = U32(a, p + 4);
             if (tag == Tag("MCLY")) { ok = n == layers * 16 && layers <= 4; mcly = p + 8; }
             if (tag == Tag("MCAL") && mcly) // every layer with an alpha map (0x100) starts inside MCAL
-                for (uint32_t l = 1; ok && l < layers; ++l)
-                    ok = !(U32(a, mcly + l * 16 + 4) & 0x100) || U32(a, mcly + l * 16 + 8) < n;
+                for (uint32_t l = 1; ok && l < layers; ++l) {
+                    const uint32_t flags = U32(a, mcly + l * 16 + 4), offset = U32(a, mcly + l * 16 + 8);
+                    ok = !(flags & 0x100) || offset < n;
+                    // an uncompressed map holds all 4096 texels; flag 0x8000 makes the client read it as 8-bit
+                    if (ok && (flags & 0x100) && !(flags & 0x200)) ok = n - offset >= 4096 && (U32(a, hdr) & 0x8000);
+                    if (flags & 0x200) continue;
+                    // the shaders subtract the alphas from the base, which breaks if they sum past 255
+                    if (ok && l == layers - 1 && !(U32(a, mcly + 20) & 0x200) && layers > 1)
+                        for (uint32_t t = 0; ok && t < 4096; t += 13) {
+                            uint32_t sum = 0;
+                            for (uint32_t k = 1; k < layers; ++k)
+                                if (!(U32(a, mcly + k * 16 + 4) & 0x200)) sum += a[p + 8 + U32(a, mcly + k * 16 + 8) + t];
+                            ok = sum <= 255;
+                        }
+                }
             if (tag == Tag("MCRF")) ok = n == refs * 4;
             if (tag == Tag("MCAL")) ok = n + 8 == alpha;
             if (tag == Tag("MCNR")) ok = n == 448;
@@ -100,6 +130,28 @@ void CheckAdt(const std::vector<uint8_t>& a, const std::string& name) {
             ok = ok && p <= end;
         }
         Check(ok, name + ": MCNK " + std::to_string(i) + " walks cleanly");
+    }
+    std::printf("%s: %d chunks with holes\n", name.c_str(), holeChunks);
+}
+
+void CheckLeftEdgeFaded(const std::vector<uint8_t>& a, const std::string& name) {
+    const size_t h = 20, mcin = h + U32(a, h + 4) + 8;
+    for (int y = 0; y < 16; ++y) {
+        const size_t at = U32(a, mcin + y * 16 * 16), hdr = at + 8, end = hdr + U32(a, at + 4);
+        const uint32_t layers = U32(a, hdr + 0x0C);
+        size_t mcly = 0, mcal = 0;
+        for (size_t p = hdr + 128; p < end; p += 8 + U32(a, p + 4)) {
+            if (U32(a, p) == Tag("MCLY")) mcly = p + 8;
+            if (U32(a, p) == Tag("MCAL")) mcal = p + 8;
+        }
+        bool clean = true;
+        if (mcly && mcal && layers > 1 && !(U32(a, mcly + 20) & 0x200)) // a chunk left compressed had nothing to fade
+            for (int row = 0; row < 64; ++row) {
+                uint32_t sum = 0;
+                for (uint32_t l = 1; l < layers; ++l) sum += a[mcal + U32(a, mcly + l * 16 + 8) + row * 64];
+                clean = clean && (sum == 0 || sum >= 250); // 250+: no base was painted here, so the proportions stay
+            }
+        Check(clean || layers < 2, name + ": left edge of row " + std::to_string(y) + " fades to the base");
     }
 }
 }
@@ -121,6 +173,14 @@ int main(int argc, char** argv) {
         const bool ok = Retail::PrepareAdt(root, Load(argv[i + 1]), Load(argv[i + 2]), out, error);
         Check(ok, std::string(argv[i]) + ": " + error);
         if (ok) CheckAdt(out, argv[i]);
+        // A neighbour tile holding only each border chunk's base texture: the left column must lose every other layer.
+        Retail::TileTextures own, left;
+        Check(Retail::ReadTileTextures(Load(argv[i + 2]), own), std::string(argv[i]) + ": kept textures read");
+        left.chunks = own.chunks;
+        for (int y = 0; y < 16 && own.chunks.size() == 256; ++y) left.chunks[y * 16 + 15] = {own.chunks[y * 16][0], 0, 0, 0};
+        const Retail::TileTextures* adjoining[4] = {&left, nullptr, nullptr, nullptr};
+        std::vector<uint8_t> faded;
+        if (ok && Retail::PrepareAdt(root, Load(argv[i + 1]), Load(argv[i + 2]), faded, error, adjoining)) CheckLeftEdgeFaded(faded, argv[i]);
         std::printf("%s: %zu -> %zu bytes\n", argv[i], root.size(), out.size());
     }
     if (failures) return 1;

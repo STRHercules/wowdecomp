@@ -222,10 +222,12 @@ bool PrepareWmoGroup(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, 
     if (colours.size() > 2) colours.resize(2);
     // 3.3.5 adds MOCV to the lit colour as baked light (CMapObjGroup::FillVertexVB uses 0 when there is none).
     // Retail groups whose MOCV is white on every vertex use only its alpha, as shader-23 layer weights: as light it
-    // turns walls pure white (12hu_human_house02), so it goes.
+    // turns walls pure white (12hu_human_house02), so it goes. Near-white counts: the Founder's Point brewery has
+    // 1,021 F7F7F7 vertices among 52,638 FFFFFF ones.
     const auto white = [](const std::vector<uint8_t>& mocv) {
+        constexpr uint8_t kNearWhite = 0xE0;
         for (size_t i = 0; i + 4 <= mocv.size(); i += 4)
-            if (mocv[i] != 0xFF || mocv[i + 1] != 0xFF || mocv[i + 2] != 0xFF) return false;
+            if (mocv[i] < kNearWhite || mocv[i + 1] < kNearWhite || mocv[i + 2] < kNearWhite) return false;
         return true;
     };
     if (!colours.empty() && white(colours[0])) colours.clear();

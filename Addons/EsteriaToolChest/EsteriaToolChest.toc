@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Esteria Tool Chest
+## Notes: In-client building tools for GM accounts. /tc to open.
+## SavedVariables: EsteriaToolChestDB
+
+esteria_style.lua
+Meta.lua
+ToolChest.lua
