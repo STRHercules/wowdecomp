@@ -68,6 +68,8 @@ function EsteriaHousing_StairsUp(...) return log("stairsup", ...) end
 function EasyMenu(items) lastMenu = items end
 function EsteriaHousing_BuyDecor(...) return log("buydecor", ...) end
 function EsteriaHousing_Upgrade(...) return log("upgrade", ...) end
+function EsteriaHousing_SetPlotStyle(...) return log("plotstyle", ...) end
+function EsteriaHousing_PlacePlotHouse(...) return log("plotplace", ...) end
 function ClearOverrideBindings() end
 function SetOverrideBindingClick() end
 function ReloadUI() end
@@ -115,6 +117,17 @@ assert "Buy plot 4 in Founder's Point" in g.popupText, g.popupText
 # Bought: the same window now enters the house.
 L.execute('plot.status = "yours"; plot.message = "Welcome home!"')
 g.event("ESTERIA_HOUSING_PLOT")
+# Your plot: the style menu restyles the house, the pad moves and turns it, clamped to its reach.
+L.execute('''plot.style, plot.dx, plot.dy, plot.turn, plot.reach = 92, 7.5, 0, 0, 8
+plot.styles = { { id = 92, name = "Human House (Small)" }, { id = 552, name = "Night Elf House (Small)" } }''')
+g.event("ESTERIA_HOUSING_PLOT")
+L.execute('for _, o in ipairs(created) do if type(o._text) == "string" and o._text:find("Human House") and o._kind == "Button" then o._scripts.OnClick(o) end end')
+list(g.lastMenu.values())[2].func()
+assert last() == ["plotstyle", 552], last()
+click("N")
+assert last() == ["plotplace", 8, 0, 0], last()  # 8.5 would be past the reach: held at 8
+click("Turn L")
+assert last() == ["plotplace", 7.5, 0, 15], last()  # from where the server last put it
 click("Enter House")
 assert last() == ["enter"] and not g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHousingPlotFrame)
 

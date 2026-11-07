@@ -64,6 +64,9 @@ struct PlotInfo {
     uint8_t status = 0, houseElsewhere = 0;
     uint32_t price = 0;
     std::string neighborhood, owner, message;
+    uint32_t style = 0;                 // your plot: its house style, offset and turn, and the styles there are
+    float dx = 0, dy = 0, turn = 0, reach = 0;
+    std::vector<std::pair<uint32_t, std::string>> styles;
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
@@ -347,7 +350,16 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     Reader r(message);
     PlotInfo next;
     if (!r.Get(next.plot) || !r.Get(next.status) || !r.Get(next.price) || !r.Get(next.houseElsewhere)
-        || !r.Get(next.neighborhood) || !r.Get(next.owner) || !r.Get(next.message) || !r.Done()) return 0;
+        || !r.Get(next.neighborhood) || !r.Get(next.owner) || !r.Get(next.message)) return 0;
+    uint8_t styles;
+    if (!r.Get(next.style) || !r.Get(next.dx) || !r.Get(next.dy) || !r.Get(next.turn) || !r.Get(next.reach) || !r.Get(styles))
+        return 0;
+    for (uint8_t i = 0; i < styles; ++i) {
+        std::pair<uint32_t, std::string> style;
+        if (!r.Get(style.first) || !r.Get(style.second)) return 0;
+        next.styles.push_back(std::move(style));
+    }
+    if (!r.Done()) return 0;
     next.valid = true;
     s_plot = std::move(next);
     Signal("ESTERIA_HOUSING_PLOT");
@@ -533,6 +545,31 @@ int32_t GetPlot(lua_State* L) {
     lua_pushstring(L, s_plot.neighborhood.c_str()); lua_setfield(L, -2, "neighborhood");
     lua_pushstring(L, s_plot.owner.c_str()); lua_setfield(L, -2, "owner");
     lua_pushstring(L, s_plot.message.c_str()); lua_setfield(L, -2, "message");
+    NumberField(L, "style", s_plot.style); NumberField(L, "dx", s_plot.dx); NumberField(L, "dy", s_plot.dy);
+    NumberField(L, "turn", s_plot.turn); NumberField(L, "reach", s_plot.reach);
+    lua_createtable(L, int(s_plot.styles.size()), 0);
+    int i = 0;
+    for (auto const& [id, name] : s_plot.styles) {
+        lua_createtable(L, 0, 2);
+        NumberField(L, "id", id);
+        lua_pushstring(L, name.c_str()); lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "styles");
+    return 1;
+}
+
+// EsteriaHousing_SetPlotStyle(style): rebuilds your plot's house in that exterior style (plot window open).
+int32_t SetPlotStyle(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionPlotStyle).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_PlacePlotHouse(dx, dy, turnDegrees): where your house stands, yd north (dx) and west (dy) of its spot.
+int32_t PlacePlotHouse(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionPlotPlace).Put(float(luaL_checknumber(L, 1)))
+        .Put(float(luaL_checknumber(L, 2))).Put(float(luaL_checknumber(L, 3))).Send(CMSG_ACTION));
     return 1;
 }
 
@@ -962,6 +999,8 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_StairsUp", StairsUp, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_BuyDecor", BuyDecor, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_Upgrade", UpgradeHouse, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetPlotStyle", SetPlotStyle, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_PlacePlotHouse", PlacePlotHouse, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);

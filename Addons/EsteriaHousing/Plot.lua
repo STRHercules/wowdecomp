@@ -49,6 +49,57 @@ action:SetSize(150, 26); action:SetPoint("BOTTOM", 0, 20)
 
 local plot, openedAt
 
+-- Your plot: the house's style, and where it stands (moved in yd from its spot, turned in 15 degree steps).
+local house = CreateFrame("Frame", nil, f)
+house:SetSize(300, 150); house:SetPoint("TOP", 0, -112)
+house:Hide()
+local houseTitle = house:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+houseTitle:SetPoint("TOPLEFT", 6, 0); houseTitle:SetText("Your House")
+local styleMenu = CreateFrame("Frame", "EsteriaHousingStyleMenu", UIParent, "UIDropDownMenuTemplate")
+local styleButton = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
+styleButton:SetSize(288, 24); styleButton:SetPoint("TOPLEFT", 6, -18)
+styleButton:SetScript("OnClick", function()
+  local items = { { text = "House Style", isTitle = true, notCheckable = true } }
+  for _, st in ipairs(plot and plot.styles or {}) do
+    items[#items + 1] = { text = st.name, checked = st.id == plot.style,
+      func = function() EsteriaHousing_SetPlotStyle(st.id) end }
+  end
+  EasyMenu(items, styleMenu, "cursor", 0, 0, "MENU")
+end)
+local placeText = house:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+placeText:SetPoint("TOPLEFT", 6, -50); placeText:SetWidth(150); placeText:SetJustifyH("LEFT")
+
+-- step: 1 yd, Shift 0.25 yd. dx is north, dy west (the world's axes); the arrows read as the map does.
+local function Nudge(north, west, turn)
+  if not plot then return end
+  local step = IsShiftKeyDown() and 0.25 or 1
+  local dx, dy = plot.dx + north * step, plot.dy + west * step
+  local reach = plot.reach or 8
+  local d = math.sqrt(dx * dx + dy * dy)
+  if d > reach then dx, dy = dx * reach / d, dy * reach / d end
+  EsteriaHousing_PlacePlotHouse(dx, dy, plot.turn + turn)
+end
+local function Pad(text, x, y, north, west, turn, tip)
+  local b = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
+  b:SetSize(text:len() > 2 and 56 or 30, 24); b:SetPoint("TOPLEFT", x, y); b:SetText(text)
+  b:SetScript("OnClick", function() Nudge(north, west, turn) end)
+  b:SetScript("OnEnter", function(self)
+    GameTooltip:SetOwner(self, "ANCHOR_TOP"); GameTooltip:AddLine(tip); GameTooltip:AddLine("Shift: a quarter step", 1, 1, 1)
+    GameTooltip:Show()
+  end)
+  b:SetScript("OnLeave", function() GameTooltip:Hide() end)
+  return b
+end
+Pad("N", 200, -50, 1, 0, 0, "Move north")
+Pad("W", 168, -76, 0, 1, 0, "Move west")
+Pad("E", 232, -76, 0, -1, 0, "Move east")
+Pad("S", 200, -102, -1, 0, 0, "Move south")
+Pad("Turn L", 6, -102, 0, 0, 15, "Turn left 15\194\176")
+Pad("Turn R", 66, -102, 0, 0, -15, "Turn right 15\194\176")
+local reset = CreateFrame("Button", nil, house, "UIPanelButtonTemplate")
+reset:SetSize(56, 24); reset:SetPoint("TOPLEFT", 126, -102); reset:SetText("Reset")
+reset:SetScript("OnClick", function() EsteriaHousing_PlacePlotHouse(0, 0, 0) end)
+
 StaticPopupDialogs["ESTERIA_HOUSING_BUY_PLOT"] = {
   -- StaticPopup_Show formats with two values only, so the whole question arrives as the first
   text = "%s",
@@ -62,6 +113,19 @@ local function Redraw()
   place:SetText(plot.neighborhood)
   message:SetText(plot.message or "")
   priceLabel:Hide(); price:Hide(); action:Show(); action:Enable()
+  local mine = plot.status == "yours" and plot.styles and #plot.styles > 0
+  if mine then
+    house:Show()
+    f:SetHeight(400)
+    local name = "Style"
+    for _, st in ipairs(plot.styles) do if st.id == plot.style then name = st.name end end
+    styleButton:SetText(name .. "  \226\150\190")
+    placeText:SetText(string.format("%.2f yd north, %.2f yd west\nturned %d\194\176 (up to %d yd from its spot)",
+      plot.dx, plot.dy, plot.turn, plot.reach or 8))
+  else
+    house:Hide()
+    f:SetHeight(250)
+  end
   if plot.status == "sale" then
     status:SetText("|cffffd100For Sale|r")
     icon:SetTexture("Interface\\Icons\\INV_Misc_Note_02")
@@ -75,7 +139,7 @@ local function Redraw()
   elseif plot.status == "yours" then
     status:SetText("|cff40ff40Your Home|r")
     icon:SetTexture("Interface\\Icons\\Spell_Holy_Restoration")
-    body:SetText("Walk in through the front door, or step inside from here.")
+    body:SetText("Walk in through the front door, or step inside from here. Restyle and move your house below.")
     action:SetText("Enter House")
   elseif plot.status == "visit" then
     status:SetText("|cff80c0ffA Neighbor's Home|r")
