@@ -15,6 +15,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Retail/CascSource.h"
+#include "Engine/Source/Retail/RetailTerrain.h"
 #endif
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
@@ -996,6 +997,13 @@ void MinimapShutdown() {
     s_updateFlags = 0;
     s_md5Names.InternalClear(0);
 }
+
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+// Not in the original: retail terrain keeps the area IDs this client's AreaTable knows, so zone text and music work.
+// Installed at startup, before the first map's tiles load; it reads AreaTable only when a tile converts.
+static bool AreaKnown(uint32_t area) { return g_areaTableDB.GetRecord(static_cast<int32_t>(area)) != nullptr; }
+static const bool s_areaFilterSet = (Retail::SetAreaFilter(AreaKnown), true);
+#endif
 
 // VERIFY: 885c45ba manual
 // OFFSET: 0x007F6730

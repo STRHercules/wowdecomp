@@ -1,3 +1,4 @@
+#include <atomic>
 #include "Engine/Source/Retail/RetailTerrain.h"
 #include "Engine/Source/Retail/IffChunks.h"
 
@@ -391,6 +392,12 @@ bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::
     return true;
 }
 
+namespace {
+std::atomic<AreaKnown> s_areaKnown{nullptr};
+}
+
+void SetAreaFilter(AreaKnown known) { s_areaKnown = known; }
+
 bool ReadTileTextures(const std::vector<uint8_t>& texBytes, TileTextures& out) {
     out.chunks.clear();
     Chunks tex;
@@ -543,7 +550,9 @@ bool PrepareAdt(const std::vector<uint8_t>& rootBytes, const std::vector<uint8_t
         Put(&header[0x28], sizeOf[6]); // CMapChunk::ProcessIffChunks trusts this over MCAL's own size
         Put(&header[0x2C], offsetOf[5]);
         Put(&header[0x30], sizeOf[5]);
-        Put(&header[0x34], 0u);        // retail AreaTable IDs mean nothing to 3.3.5
+        const uint32_t area = Get<uint32_t>(&header[0x34]);
+        const AreaKnown known = s_areaKnown;
+        Put(&header[0x34], known && area && known(area) ? area : 0u); // an area 3.3.5's AreaTable lacks means nothing
         Put(&header[0x38], objectRefs);
         Put(&header[0x58], 0u);        // MCSE sound emitters name retail SoundEntries; dropped
         Put(&header[0x5C], 0u);

@@ -24,6 +24,11 @@ using KeptTextures = std::array<uint32_t, 4>;
 struct TileTextures { std::vector<KeptTextures> chunks; };
 bool ReadTileTextures(const std::vector<uint8_t>& tex0, TileTextures& out);
 
+// Whether the client's AreaTable has an area. A converted terrain chunk keeps its retail area ID when it does (Blizzard
+// never reuses one, so it names the same place), and 0 otherwise. Without a filter every chunk gets 0.
+using AreaKnown = bool (*)(uint32_t area);
+void SetAreaFilter(AreaKnown known);
+
 // A terrain WDT (MPHD flag 0x200, MAID): keeps MVER/MPHD/MAIN with the flags 3.3.5 understands and lists the tiles.
 bool PrepareWdt(const std::vector<uint8_t>& in, std::vector<uint8_t>& out, std::vector<WdtTile>& tiles, std::string& error);
 
