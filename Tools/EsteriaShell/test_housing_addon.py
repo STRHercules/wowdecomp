@@ -1,6 +1,6 @@
 """Runs the EsteriaHousing addon against the creator skin test's fake widget layer and a fake Housing extension, and
-checks the plot window (buy, enter), the House Editor (click-to-place, select, turn, store, errors) and Layout mode
-(a room built through a free wall)."""
+checks the plot window (buy, enter), the House Editor (click-to-place, select, turn, store, errors), Layout mode
+(a room built through a free wall) and the Neighborhood window with its stock and DragonUI buttons."""
 import re
 from pathlib import Path
 from lupa.lua51 import LuaRuntime
@@ -16,6 +16,9 @@ local W = HarnessWidget
 -- OnShow/OnHide fire like the client's, on a real change only
 function W:Show() local was = self._shown; self._shown = true; if not was and self._scripts.OnShow then self._scripts.OnShow(self) end end
 function W:Hide() local was = self._shown; self._shown = false; if was and self._scripts.OnHide then self._scripts.OnHide(self) end end
+function W:Enable() self._disabled = false end
+function W:Disable() self._disabled = true end
+function W:IsEnabled() return not self._disabled end
 function W:Click(button) local f = self._scripts.OnClick if f then f(self, button or "LeftButton") end end
 SlashCmdList, UISpecialFrames, toasts, sent, StaticPopupDialogs = {}, {}, {}, {}, {}
 tinsert = table.insert
@@ -52,12 +55,29 @@ function GetCursorPosition() return 500, 400 end
 function UIParent:GetEffectiveScale() return 1 end
 function EsteriaHousing_SetGizmo(...) gizmo = { ... } end
 function EsteriaHousing_PinGhost(...) pinned = { ... } end
+function EsteriaHousing_ShowPlotBounds(on) plotBounds = on end
 function EsteriaHousing_GetGhost() if ghost and cursor then return cursor[1], cursor[2], math.abs(cursor[3] - pz) > 4 and pz or cursor[3] end end
 local function log(...) sent[#sent + 1] = { ... } return state == nil or state.isOwner end
 function EsteriaHousing_Place(...) return log("place", ...) end
 function EsteriaHousing_Move(...) return log("move", ...) end
 function EsteriaHousing_Remove(...) return log("remove", ...) end
 function EsteriaHousing_Leave() return log("leave") end
+function EsteriaHousing_GetNeighborhood() return neighborhood end
+function EsteriaHousing_RequestNeighborhood() return log("nrequest") end
+function EsteriaHousing_TravelNeighborhood() return log("ntravel") end
+function EsteriaHousing_TravelBack() return log("nback") end
+function EsteriaHousing_TravelPlot(...) return log("nplot", ...) end
+inCombat, dead, onTaxi, inInstance, instanceKind = false, false, false, nil, "none"
+function UnitAffectingCombat() return inCombat end
+function UnitIsDeadOrGhost() return dead end
+function UnitOnTaxi() return onTaxi end
+function IsInInstance() return inInstance, instanceKind end
+function UnitName() return "Tester" end
+function PlaySound() end
+vehicleHooks = {}
+function hooksecurefunc(name, fn) if name == "VehicleMenuBar_MoveMicroButtons" then vehicleHooks[#vehicleHooks + 1] = fn end end
+MainMenuBarArtFrame = W.new("MainMenuBarArtFrame")
+HelpMicroButton = W.new("HelpMicroButton")
 function EsteriaHousing_BuyPlot() sent[#sent + 1] = { "buy" } return true end
 function EsteriaHousing_EnterPlot() sent[#sent + 1] = { "enter" } return true end
 function EsteriaHousing_AddRoom(...) return log("addroom", ...) end
@@ -88,7 +108,7 @@ end
 L = LuaRuntime()
 L.execute(HARNESS + "\nHarnessWidget = W\n")
 L.execute(GAME)
-for name in ("Atlas.lua", "Gizmo.lua", "Editor.lua", "Layout.lua", "Plot.lua"):
+for name in ("Atlas.lua", "Gizmo.lua", "Editor.lua", "Layout.lua", "Plot.lua", "Neighborhood.lua"):
     L.execute((ADDON / name).read_text(encoding="utf-8"))
 g = L.globals()
 
@@ -303,6 +323,10 @@ g.event("ESTERIA_HOUSING_STATE")
 assert g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls) and not g.EsteriaHousingControlexit._shown
 g.EsteriaHousingAbility5.Click(g.EsteriaHousingAbility5)
 assert not g.EsteriaHousingLayout.IsShown(g.EsteriaHousingLayout) and "inside your house" in toast()
+g.EsteriaHousingDecorate.Click(g.EsteriaHousingDecorate)
+was = L.eval('plotBounds')
+g.EsteriaHousingDecorate.Click(g.EsteriaHousingDecorate)
+assert was in (True, False) and L.eval('plotBounds') == (not was), "Decorate shows and hides the plot boundary"
 L.execute('state.outdoors = false')
 g.event("ESTERIA_HOUSING_STATE")
 
@@ -315,4 +339,82 @@ assert last() == ["leave"]
 L.execute('state = { inHouse = false, isOwner = false, houseId = 0, revision = 0, placed = 0, maxDecor = 0, pending = 0, decor = {} }')
 g.event("ESTERIA_HOUSING_STATE")
 assert not g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls)
+
+# The Neighborhood button: on the stock bar after Help, greyed until the realm says housing is available.
+frame, micro = g.EsteriaHousingNeighborhoodFrame, g.NeighborhoodMicroButton
+assert micro is not None and not g.buttonNamed("Teleport to Neighborhood")
+L.execute('available = false')
+g.event("ESTERIA_HOUSING_AVAILABLE")
+g.EsteriaHousing_ToggleNeighborhood()
+assert not frame.IsShown(frame), "opened without housing"
+L.execute('available = true')
+g.event("ESTERIA_HOUSING_AVAILABLE")
+
+# Opening asks the server; the buttons wait for its answer.
+g.EsteriaHousing_ToggleNeighborhood()
+assert frame.IsShown(frame) and last() == ["nrequest"]
+travel = g.EsteriaHousingNeighborhoodTravel
+L.execute('''neighborhood = { name = "Founder's Point", price = 1000000, where = "away", message = "", homePlot = 0, rooms = 0, placed = 0, maxDecor = 0,
+  plots = { { plot = 1, status = "private", name = "" }, { plot = 2, status = "sale", name = "" }, { plot = 3, status = "visit", name = "Friend" } } }
+for i = 4, 12 do neighborhood.plots[i] = { plot = i, status = "sale", name = "" } end''')
+g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+
+# Teleport is the primary action; a plot's Go passes its number. Occupied plots aren't offered; your group's come first.
+travel.Click(travel)
+assert last() == ["ntravel"], last()
+g.EsteriaHousingNeighborhoodGo1.Click(g.EsteriaHousingNeighborhoodGo1)
+assert last() == ["nplot", 3], last()
+g.EsteriaHousingNeighborhoodGo2.Click(g.EsteriaHousingNeighborhoodGo2)
+assert last() == ["nplot", 2], last()
+# 11 listed plots: the second page holds the rest.
+g.EsteriaHousingNeighborhoodNext.Click(g.EsteriaHousingNeighborhoodNext)
+g.EsteriaHousingNeighborhoodGo1.Click(g.EsteriaHousingNeighborhoodGo1)
+assert last() == ["nplot", 8], last()
+g.EsteriaHousingNeighborhoodPrev.Click(g.EsteriaHousingNeighborhoodPrev)
+
+# Your home comes first, and inside the neighborhood the primary action leaves it.
+L.execute('''neighborhood.homePlot, neighborhood.rooms, neighborhood.placed, neighborhood.maxDecor, neighborhood.where = 2, 3, 12, 200, "neighborhood"
+neighborhood.plots[2].status = "yours"''')
+g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+g.EsteriaHousingNeighborhoodGo1.Click(g.EsteriaHousingNeighborhoodGo1)
+assert last() == ["nplot", 2], last()
+travel.Click(travel)
+assert last() == ["nback"], last()
+assert travel._text == "Leave Founder's Point", travel._text
+
+# Restricted states grey travel and say why; a housing instance is not "a dungeon".
+def blocked(setup, clear, text):
+    L.execute(setup)
+    g.event("PLAYER_REGEN_DISABLED")
+    assert any(text in str(o._text) for o in g.created.values() if o._kind == "FontString"), text
+    assert travel.IsEnabled(travel) in (False, 0, None), "travel enabled: " + text
+    L.execute(clear)
+    g.event("PLAYER_REGEN_ENABLED")
+    assert travel.IsEnabled(travel) not in (False, 0, None), "travel still off: " + text
+
+blocked("inCombat = true", "inCombat = false", "while in combat")
+blocked("dead = true", "dead = false", "while dead")
+blocked("onTaxi = true", "onTaxi = false", "flight path")
+blocked('inInstance, instanceKind = 1, "pvp"', 'inInstance, instanceKind = nil, "none"', "battleground")
+L.execute('neighborhood.where = "away"')
+g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+blocked('inInstance, instanceKind = 1, "party"', 'inInstance, instanceKind = nil, "none"', "dungeon or raid")
+L.execute('neighborhood.where = "house"; inInstance, instanceKind = 1, "party"')
+g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+assert travel.IsEnabled(travel) not in (False, 0, None), "a house counted as a dungeon"
+L.execute('inInstance, instanceKind = nil, "none"')
+# The server's refusal shows too.
+L.execute('neighborhood.message = "You are already traveling."')
+g.event("ESTERIA_HOUSING_NEIGHBORHOOD")
+assert any("already traveling" in str(o._text) for o in g.created.values() if o._kind == "FontString")
+
+# A vehicle bar takes the button along with Help.
+assert len(g.vehicleHooks) == 1
+
+# Closing closes; a second load (DragonUI's strip made the button first) keeps that button instead of a stock one.
+g.EsteriaHousing_ToggleNeighborhood()
+assert not frame.IsShown(frame)
+L.execute("firstMicro = NeighborhoodMicroButton")
+L.execute((ADDON / "Neighborhood.lua").read_text(encoding="utf-8"))
+assert L.eval("firstMicro == NeighborhoodMicroButton") and len(g.vehicleHooks) == 1
 print("housing addon test passed")

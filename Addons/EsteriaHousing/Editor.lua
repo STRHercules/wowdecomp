@@ -730,6 +730,7 @@ function H.SetEditing(on)
   decorate:SetOn(editing)
   if editing then abilityBar:Show() else abilityBar:Hide() end
   Bind(editing)
+  if EsteriaHousing_ShowPlotBounds then EsteriaHousing_ShowPlotBounds(editing and true or false) end
   H.SetAbility(editing and ability or 1)
   H.RedrawCart()
 end

@@ -88,6 +88,21 @@ struct Layout {
     uint8_t roomStep = 0, roomCap = 0;
 };
 
+struct NeighborhoodPlot {
+    uint16_t plot = 0;
+    uint8_t status = 0;
+    std::string name;
+};
+
+struct Neighborhood {
+    bool valid = false;
+    std::string name, message;
+    uint32_t price = 0;
+    uint8_t where = 0, rooms = 0;
+    uint16_t homePlot = 0, placed = 0, maxDecor = 0;
+    std::vector<NeighborhoodPlot> plots;
+};
+
 struct PendingEdit {
     uint8_t op = 0;
     uint64_t placedId = 0;
@@ -110,6 +125,7 @@ float s_snapDegrees = 15;
 std::vector<CatalogEntry> s_catalog, s_catalogNext;
 State s_state;
 PlotInfo s_plot;
+Neighborhood s_neighborhood;
 Layout s_layout;
 std::deque<PendingEdit> s_queue;
 uint32_t s_seq = 0;
@@ -158,6 +174,54 @@ int32_t UpdateGhost(void*, uint32_t, uint64_t, uintptr_t) {
     return 1;
 }
 
+// The plot boundary: retail's glowing fence (spells/fx_housingareatriggervisualsmediumplot_areatrigger.m2), stretched
+// over the plot box from SMSG_STATE while the owner decorates outdoors.
+constexpr uint32_t PlotBoundsFdid = 7637275;
+constexpr float PlotBoundsHalfX = 35.75f, PlotBoundsHalfY = 30.6f; // the model's own half extents
+struct PlotBounds {
+    CM2Model* model = nullptr;
+    CMapEntity* entity = nullptr;
+    bool wanted = false;
+} s_bounds;
+
+C44Matrix BoundsMatrix() {
+    C44Matrix matrix;
+    matrix.Scale(C3Vector((s_state.boundsMax[0] - s_state.boundsMin[0]) / 2 / PlotBoundsHalfX,
+                          (s_state.boundsMax[1] - s_state.boundsMin[1]) / 2 / PlotBoundsHalfY, 1));
+    matrix.d0 = (s_state.boundsMin[0] + s_state.boundsMax[0]) / 2;
+    matrix.d1 = (s_state.boundsMin[1] + s_state.boundsMax[1]) / 2;
+    matrix.d2 = s_state.boundsMin[2] + 10; // the server's box runs from 10 yd below the plot's house spot
+    return matrix;
+}
+
+void DestroyBounds() {
+    if (s_bounds.entity) World::ObjectDestroy(s_bounds.entity);
+    if (s_bounds.model) s_bounds.model->Release();
+    s_bounds.model = nullptr;
+    s_bounds.entity = nullptr;
+}
+
+int32_t UpdateBounds(void*, uint32_t, uint64_t, uintptr_t) {
+    if (!s_bounds.model) return 1;
+    s_bounds.model->m_fFlags |= 0x8000;
+    s_bounds.model->m_worldTransform = BoundsMatrix();
+    return 1;
+}
+
+void TickBounds() {
+    bool const show = s_bounds.wanted && s_state.valid && s_state.inHouse && s_state.outdoors && s_state.isOwner;
+    if (!show) { DestroyBounds(); return; }
+    if (!s_bounds.model && World::s_m2Scene) {
+        s_bounds.model = World::s_m2Scene->CreateModel(("retail/" + std::to_string(PlotBoundsFdid) + ".m2").c_str(), 0);
+        if (s_bounds.model) s_bounds.entity = CMap::ObjectCreate(s_bounds.model, UpdateBounds, nullptr, 0, 0, 10);
+    }
+    if (!s_bounds.model || !s_bounds.entity || !s_bounds.model->IsLoaded(0, 0)) return;
+    C44Matrix matrix = BoundsMatrix();
+    CAaBox box = s_bounds.model->GetBoundingBox();
+    CAaSphere sphere = s_bounds.model->GetBoundingSphere();
+    CMap::ObjectUpdate(s_bounds.entity, matrix, box, sphere, sphere.c, false, 0xFFFFFFFF);
+}
+
 bool CursorRay(C3Vector& out);
 
 struct Gizmo;
@@ -165,6 +229,8 @@ void HideGizmo();
 
 void Reset() {
     DestroyGhost();
+    DestroyBounds();
+    s_bounds.wanted = false;
     HideGizmo();
     s_available = false;
     s_catalog.clear();
@@ -366,6 +432,24 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     next.valid = true;
     s_plot = std::move(next);
     Signal("ESTERIA_HOUSING_PLOT");
+    return 1;
+}
+
+int32_t ReceiveNeighborhood(void*, NETMESSAGE, uint32_t, CDataStore* message) {
+    Reader r(message);
+    Neighborhood next;
+    uint16_t plots;
+    if (!r.Get(next.name) || !r.Get(next.price) || !r.Get(next.where) || !r.Get(next.message) || !r.Get(next.homePlot)
+        || !r.Get(next.rooms) || !r.Get(next.placed) || !r.Get(next.maxDecor) || !r.Get(plots)) return 0;
+    for (uint16_t i = 0; i < plots; ++i) {
+        NeighborhoodPlot p;
+        if (!r.Get(p.plot) || !r.Get(p.status) || !r.Get(p.name)) return 0;
+        next.plots.push_back(std::move(p));
+    }
+    if (!r.Done()) return 0;
+    next.valid = true;
+    s_neighborhood = std::move(next);
+    Signal("ESTERIA_HOUSING_NEIGHBORHOOD");
     return 1;
 }
 
@@ -582,6 +666,43 @@ int32_t SendAction(lua_State* L, uint8_t action) {
     return 1;
 }
 
+// { name, price (copper), where ("away" "neighborhood" "house"), message, homePlot (0 none), rooms, placed, maxDecor,
+//   plots = { { plot, status (as GetPlot), name } } }. nil until the first answer to RequestNeighborhood.
+int32_t GetNeighborhood(lua_State* L) {
+    if (!s_available || !s_neighborhood.valid) { lua_pushnil(L); return 1; }
+    static char const* const wheres[] = { "away", "neighborhood", "house" };
+    static char const* const statuses[] = { "sale", "yours", "visit", "private" };
+    lua_createtable(L, 0, 9);
+    lua_pushstring(L, s_neighborhood.name.c_str()); lua_setfield(L, -2, "name");
+    NumberField(L, "price", s_neighborhood.price);
+    lua_pushstring(L, wheres[s_neighborhood.where < 3 ? s_neighborhood.where : 0]); lua_setfield(L, -2, "where");
+    lua_pushstring(L, s_neighborhood.message.c_str()); lua_setfield(L, -2, "message");
+    NumberField(L, "homePlot", s_neighborhood.homePlot); NumberField(L, "rooms", s_neighborhood.rooms);
+    NumberField(L, "placed", s_neighborhood.placed); NumberField(L, "maxDecor", s_neighborhood.maxDecor);
+    lua_createtable(L, int(s_neighborhood.plots.size()), 0);
+    int i = 0;
+    for (NeighborhoodPlot const& p : s_neighborhood.plots) {
+        lua_createtable(L, 0, 3);
+        NumberField(L, "plot", p.plot);
+        lua_pushstring(L, statuses[p.status < 4 ? p.status : 3]); lua_setfield(L, -2, "status");
+        lua_pushstring(L, p.name.c_str()); lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "plots");
+    return 1;
+}
+
+int32_t RequestNeighborhood(lua_State* L) { return SendAction(L, ActionNeighborhood); }
+int32_t TravelNeighborhood(lua_State* L) { return SendAction(L, ActionTravelNeighborhood); }
+int32_t TravelBack(lua_State* L) { return SendAction(L, ActionTravelBack); }
+
+// EsteriaHousing_TravelPlot(plot): plot as GetNeighborhood gives it. The server refuses what isn't allowed.
+int32_t TravelPlot(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionTravelPlot).Put<uint16_t>(uint16_t(luaL_checknumber(L, 1)))
+        .Send(CMSG_ACTION));
+    return 1;
+}
+
 int32_t BuyPlot(lua_State* L) { return SendAction(L, ActionBuyPlot); }
 int32_t EnterPlot(lua_State* L) { return SendAction(L, ActionEnterPlot); }
 int32_t RemoveRoom(lua_State* L) { return SendAction(L, ActionRemoveRoom); }
@@ -737,6 +858,12 @@ int32_t SetGhost(lua_State* L) {
     s_ghost.model = World::s_m2Scene ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
     if (s_ghost.model) s_ghost.entity = CMap::ObjectCreate(s_ghost.model, UpdateGhost, nullptr, 0, 0, 10);
     shown = fdid;
+    return 0;
+}
+
+// EsteriaHousing_ShowPlotBounds(on) shows the plot's boundary while you stand on your own plot.
+int32_t ShowPlotBounds(lua_State* L) {
+    s_bounds.wanted = lua_toboolean(L, 1) != 0;
     return 0;
 }
 
@@ -939,6 +1066,7 @@ class Ticks : public ClientScript {
 public:
     Ticks() : ClientScript("HousingTicks") { }
     void OnUpdate(float elapsedSec) override {
+        TickBounds();
         if (s_ghost.model && s_ghost.entity) {
             s_ghost.onFloor = s_ghost.pinned || CursorRay(s_ghost.pos);
             // Move the map entity too (CGWorldFrame does this for a spell's ground object), or it stays culled at 0,0,0.
@@ -986,6 +1114,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterMessageHandler(SMSG_STATE, ReceiveState, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_PLOT, ReceivePlot, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_LAYOUT, ReceiveLayout, nullptr);
+    sExtensionMgr->RegisterMessageHandler(SMSG_NEIGHBORHOOD, ReceiveNeighborhood, nullptr);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_IsAvailable", IsAvailable, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetState", GetState, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCatalog", GetCatalog, FRAMESCRIPT_CONTEXTS_GAME);
@@ -998,6 +1127,11 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetPlot", GetPlot, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_BuyPlot", BuyPlot, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_EnterPlot", EnterPlot, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetNeighborhood", GetNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RequestNeighborhood", RequestNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelNeighborhood", TravelNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelBack", TravelBack, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelPlot", TravelPlot, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetLayout", GetLayout, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_AddRoom", AddRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RemoveRoom", RemoveRoom, FRAMESCRIPT_CONTEXTS_GAME);
@@ -1012,6 +1146,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_PinGhost", PinGhost, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_ShowPlotBounds", ShowPlotBounds, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorRay", GetCursorRay, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGizmo", SetGizmo, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_AVAILABLE", FRAMESCRIPT_CONTEXTS_GAME);
@@ -1020,6 +1155,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_RESULT", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_PLOT", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_LAYOUT", FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_NEIGHBORHOOD", FRAMESCRIPT_CONTEXTS_GAME);
     new Maps();
     new Ticks();
     new GizmoRender();
