@@ -16,6 +16,26 @@ int main(int argc, char** argv) {
         std::puts("{\"original_extract\":true,\"table_extract\":true,\"native_validation\":true}");
         return 0;
     }
+    // --batch <list>: Read every name in the list (one per line) with one Configure, printing "ok <name>" or
+    // "fail <name>: <error>"; a cold Configure costs ~30 s, so per-file runs are too slow for whole catalogs.
+    if (argc == 4 && std::string(argv[2]) == "--batch") {
+        Retail::SourceScope scope(Retail::SourceKind::Retail);
+        Retail::CascSource source(Retail::SourceKind::Retail);
+        std::string error;
+        if (!source.Configure(argv[1], error)) { std::fprintf(stderr, "configure: %s\n", error.c_str()); return 1; }
+        std::ifstream list(argv[3]);
+        int failed = 0;
+        for (std::string name; std::getline(list, name);) {
+            if (!name.empty() && name.back() == '\r') name.pop_back();
+            if (name.empty()) continue;
+            std::vector<uint8_t> bytes;
+            error.clear();
+            if (source.Read(name.c_str(), bytes, error)) std::printf("ok %s\n", name.c_str());
+            else { std::printf("fail %s: %s\n", name.c_str(), error.c_str()); ++failed; }
+            std::fflush(stdout);
+        }
+        return failed ? 1 : 0;
+    }
     const bool character = argc > 3 && std::string(argv[3]) == "--character";
     if (character) {
         for (int i = 3; i + 1 < argc; ++i) argv[i] = argv[i + 1];

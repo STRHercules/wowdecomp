@@ -315,6 +315,8 @@ for i = 1, COLS * ROWS do
   if hl then hl:SetBlendMode("ADD") end
   t.model = CreateFrame("Model", nil, t)
   t.model:SetPoint("TOPLEFT", 6, -6); t.model:SetPoint("BOTTOMRIGHT", -6, 14)
+  t.thumb = t:CreateTexture(nil, "ARTWORK") -- retail's picture of the decor (Thumbnails.lua); the 3D model when none
+  t.thumb:SetPoint("TOPLEFT", 6, -6); t.thumb:SetPoint("BOTTOMRIGHT", -6, 14)
   t.count = t:CreateFontString(nil, "OVERLAY", "NumberFontNormal")
   t.count:SetPoint("BOTTOMRIGHT", -6, 5)
   t:SetScript("OnClick", function(self)
@@ -396,11 +398,17 @@ function H.RedrawDecor()
       else
         t.count:SetText(e.available); t:SetAlpha(e.available > 0 and 1 or 0.45)
       end
-      if t.fdid ~= e.fileDataId then
-        t.fdid = e.fileDataId
-        t.model:ClearModel()
-        t.model:SetModel("retail/" .. e.fileDataId .. ".m2")
-        FitModel(t.model)
+      local thumb = H.THUMBNAILS and H.THUMBNAILS[e.decorId]
+      if thumb then
+        t.thumb:SetTexture("retail/" .. thumb .. ".blp"); t.thumb:Show(); t.model:Hide()
+      else
+        t.thumb:Hide(); t.model:Show()
+        if t.fdid ~= e.fileDataId then
+          t.fdid = e.fileDataId
+          t.model:ClearModel()
+          t.model:SetModel("retail/" .. e.fileDataId .. ".m2")
+          FitModel(t.model)
+        end
       end
       t:Show()
     else

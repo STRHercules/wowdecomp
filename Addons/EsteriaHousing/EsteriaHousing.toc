@@ -4,6 +4,7 @@
 ## Version: 0.3
 
 Atlas.lua
+Thumbnails.lua
 Gizmo.lua
 Editor.lua
 Layout.lua

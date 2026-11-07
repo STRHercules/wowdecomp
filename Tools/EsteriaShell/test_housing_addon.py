@@ -113,7 +113,7 @@ end
 L = LuaRuntime()
 L.execute(HARNESS + "\nHarnessWidget = W\n")
 L.execute(GAME)
-for name in ("Atlas.lua", "Gizmo.lua", "Editor.lua", "Layout.lua", "Plot.lua", "Neighborhood.lua"):
+for name in ("Atlas.lua", "Thumbnails.lua", "Gizmo.lua", "Editor.lua", "Layout.lua", "Plot.lua", "Neighborhood.lua"):
     L.execute((ADDON / name).read_text(encoding="utf-8"))
 g = L.globals()
 
@@ -186,7 +186,9 @@ assert last() == ["enter"] and not g.EsteriaHousingPlotFrame.IsShown(g.EsteriaHo
 L.execute('''catalog = { { decorId = 498, name = "Folk Rug", available = 5, placed = 0, category = 2, fileDataId = 111, price = 20000 },
                          { decorId = 496, name = "Folk Table", available = 0, placed = 5, category = 1, fileDataId = 222, price = 50000 },
                          { decorId = 497, name = "Folk Long Table", available = 0, placed = 0, category = 1, fileDataId = 333, price = 50000 } }
-state = { inHouse = true, isOwner = true, houseId = 1, revision = 0, placed = 0, maxDecor = 50, pending = 0, decor = {} }''')
+state = { inHouse = true, isOwner = true, houseId = 1, revision = 0, placed = 0, maxDecor = 50, pending = 0, decor = {} }
+assert(next(EsteriaHousingUI.THUMBNAILS), "Thumbnails.lua lists retail pictures")
+EsteriaHousingUI.THUMBNAILS = { [498] = 7001 }''')
 g.event("ESTERIA_HOUSING_CATALOG")
 g.event("ESTERIA_HOUSING_STATE")
 assert g.EsteriaHousingControls.IsShown(g.EsteriaHousingControls) and g.EsteriaHousingBudget.IsShown(g.EsteriaHousingBudget)
@@ -195,6 +197,9 @@ assert g.EsteriaHousingDecor.IsShown(g.EsteriaHousingDecor) and g.EsteriaHousing
 def tile_ids():
     return sorted(o.entry.decorId for o in g.created.values() if o.entry and o._shown)
 assert tile_ids() == [496, 498], "storage lists what you own (placed or not), not the whole catalog"
+tile = {o.entry.decorId: o for o in g.created.values() if o.entry and o._shown}
+assert tile[498].thumb._shown and not tile[498].model._shown, "a decor with a retail thumbnail shows the picture"
+assert tile[496].model._shown and not tile[496].thumb._shown, "one without falls back to its 3D model"
 
 # A tile with none left is refused; one in storage is picked up and placed where the cursor meets the floor, facing the
 # player. A ray that misses the room floor (z far off) is kept at the player's floor.
