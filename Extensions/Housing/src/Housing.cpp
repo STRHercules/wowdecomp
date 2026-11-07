@@ -468,9 +468,10 @@ int32_t Queue(lua_State* L, PendingEdit const& e) {
 bool Transform(lua_State* L, int first, PendingEdit& e) {
     for (int i = 0; i < 4; ++i) if (!lua_isnumber(L, first + i)) return false;
     for (int i = 0; i < 3; ++i) e.pos[i] = float(lua_tonumber(L, first + i));
-    if (lua_isnumber(L, first + 7)) {
+    // first .. first+2 position, first+3 .. first+6 the quaternion, first+7 the scale
+    if (lua_isnumber(L, first + 6)) {
         for (int i = 0; i < 4; ++i) e.rot[i] = float(lua_tonumber(L, first + 3 + i));
-        e.scale = lua_isnumber(L, first + 8) ? float(lua_tonumber(L, first + 8)) : 1.0f;
+        e.scale = lua_isnumber(L, first + 7) ? float(lua_tonumber(L, first + 7)) : 1.0f;
         return true;
     }
     double const step = s_snapDegrees, degrees = std::round(lua_tonumber(L, first + 3) / step) * step;
