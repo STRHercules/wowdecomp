@@ -12,6 +12,7 @@ local H = EsteriaHousingUI
 local TURN, ZSTEP, PICK = 15, 0.1, 2.5
 local COLS, ROWS, TILE, GAP = 3, 5, 78, 6
 local RESULT = {
+  [15] = "Empty this shop's stock before removing it: take its items back from its Shop tab.",
   [1] = "Housing is disabled on this realm.", [2] = "You are not in a house.", [3] = "Only the owner can edit this house.",
   [4] = "Duplicate request ignored.", [5] = "The house changed; resynced. Try again.", [6] = "Unknown decor.",
   [7] = "You have none of that decor left.", [8] = "That decor is no longer placed.", [9] = "That spot is outside your rooms.",
