@@ -333,12 +333,19 @@ local function ListFor(blocked)
   elseif tab == "homes" then
     for _, h in ipairs(info.homes) do
       local where = h.hood > 0 and string.format("Plot %d, %s", h.plot, h.hoodName) or "|cffc0c0c0Saved, on no plot|r"
+      local home = H.homeChoice and H.homeChoice.house == h.house and (H.homeChoice.hood == h.hood or H.homeChoice.hood == 0)
       out[#out + 1] = { icon = "housefinder_main-icon",
-        text = string.format("|cff40ff40House %d|r  |cffffd100%s|r\n|cffb0b0b0%s, %d/%d decor, visitors: %s|r", h.house, where,
-          Plural(h.rooms, "room"), h.placed, h.maxDecor, VisitorText(h.access)),
+        text = string.format("|cff40ff40House %d|r  |cffffd100%s|r%s\n|cffb0b0b0%s, %d/%d decor, visitors: %s|r", h.house, where,
+          home and "  |cff80c0ff(Home)|r" or "", Plural(h.rooms, "room"), h.placed, h.maxDecor, VisitorText(h.access)),
         go = h.hood > 0 and { "Go", GoPlot(h.hood, h.plot), not blocked }
           or { "Enter", function() EsteriaHousing_EnterHouse(h.house) end, not blocked },
-        extra = { "Visitors", function(b) H.ShowAccessMenu(b, h.house) end } }
+        -- who may visit, and whether Teleport: Home and Portal: Home lead here
+        extra = { "Options", function(b)
+          EasyMenu({ { text = "House " .. h.house, isTitle = true, notCheckable = true },
+            { text = "Who can visit...", notCheckable = true, func = function() H.ShowAccessMenu(b, h.house) end },
+            { text = "Teleport: Home leads here", checked = home, func = function()
+              EsteriaHousing_Commerce(table.concat({ "adv", "home", h.house, h.hood }, "\t")) end } }, menu, b, 0, 0, "MENU")
+        end } }
     end
   elseif tab == "hoods" then
     for _, n in ipairs(info.hoods) do
@@ -505,6 +512,7 @@ end
 
 f:SetScript("OnShow", function()
   PlaySound("igCharacterInfoOpen")
+  if EsteriaHousing_Commerce then EsteriaHousing_Commerce("adv\thomeget") end -- where Teleport: Home leads (Adventure.lua)
   button:SetButtonState("PUSHED", 1)
   EsteriaHousing_RequestNeighborhood()
   Redraw()
@@ -534,3 +542,5 @@ f:SetScript("OnEvent", function(self, event)
   elseif event == "PLAYER_ENTERING_WORLD" and self:IsShown() then EsteriaHousing_RequestNeighborhood() end
   if self:IsShown() then Redraw() end
 end)
+
+H.RedrawNeighborhood = function() if f:IsShown() then Redraw() end end

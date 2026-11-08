@@ -20,7 +20,8 @@ local RESULT = {
 }
 -- our categories and the retail category icon for each
 local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, { 2, "Accents", "accents" },
-  { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" }, { 6, "Shops", "interactive" } }
+  { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" }, { 6, "Shops", "interactive" },
+  { 7, "Utility", "utility" } }
 
 -- shop decor shows the picture of the retail piece it borrows its model from
 H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 15061, [40006] = 26483, [40007] = 3985 }
