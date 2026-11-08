@@ -175,7 +175,8 @@ enum BlitFormat {
     BlitFormat_Gr1616F = 10,
     BlitFormat_R32F = 11,
     BlitFormat_D24X8 = 12,
-    BlitFormats_Last = 13,
+    BlitFormat_Bc5 = 13, // CoA: retail two-channel block format, decode-only
+    BlitFormats_Last = 14,
 };
 
 class CGxBatch {

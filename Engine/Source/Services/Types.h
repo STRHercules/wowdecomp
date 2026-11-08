@@ -55,6 +55,7 @@ enum PIXEL_FORMAT {
     PIXEL_UNSPECIFIED = 8,
     PIXEL_ARGB2565 = 9,
     NUM_PIXEL_FORMATS = 10,
+    PIXEL_BC5 = 11, // CoA: retail BLP format, decoded to ARGB8888 on load
 };
 
 #endif

@@ -237,12 +237,17 @@ static void Blit_Dxt35_Dxt35(const C2iVector& size, const void* in, uint32_t inS
 // OFFSET: 0x006AC130
 uint32_t CalcRowStride(BlitFormat format, uint32_t width, uint32_t height) {
     // STATIC: 0x00AD9038
-    static const uint32_t BYTES_PER_BLOCK[BlitFormats_Last] = { 0, 4, 4, 2, 2, 2, 8, 16, 16, 2, 4, 4, 4 };
+    static const uint32_t BYTES_PER_BLOCK[BlitFormats_Last] = { 0, 4, 4, 2, 2, 2, 8, 16, 16, 2, 4, 4, 4, 16 };
 
     // STATIC: 0x00AD906C
-    static const uint32_t PIXELS_PER_BLOCK_SHIFT[BlitFormats_Last] = { 0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0 };
+    static const uint32_t PIXELS_PER_BLOCK_SHIFT[BlitFormats_Last] = { 0, 0, 0, 0, 0, 0, 2, 2, 2, 0, 0, 0, 0, 2 };
 
-    if (format >= BlitFormat_Dxt1 && format <= BlitFormat_Dxt5) {
+    // CoA: reject out-of-range formats instead of indexing the tables with them.
+    if (static_cast<uint32_t>(format) >= BlitFormats_Last) {
+        return 0;
+    }
+
+    if ((format >= BlitFormat_Dxt1 && format <= BlitFormat_Dxt5) || format == BlitFormat_Bc5) {
         if (width == 6 * height) {
             width = 6 * (height > 4 ? height : 4);
         } else if (width <= 4) {
@@ -803,6 +808,38 @@ static void Blit_Dxt5_Argb8888(const C2iVector& size, const void* in, uint32_t i
     }
 }
 
+// CoA: BC5 is two BC4 blocks (red, then green); output matches D3D sampling (R, G, 0, 1).
+static void Blit_Bc5_Argb8888(const C2iVector& size, const void* in, uint32_t inStride, void* out, uint32_t outStride) {
+    const uint8_t* src = static_cast<const uint8_t*>(in);
+
+    for (int32_t by = 0; by < size.y; by += 4, src += inStride) {
+        const uint8_t* block = src;
+
+        for (int32_t bx = 0; bx < size.x; bx += 4, block += 16) {
+            uint8_t red[8] = { block[0], block[1] };
+            uint8_t green[8] = { block[8], block[9] };
+            Dxt5AlphaTable(red);
+            Dxt5AlphaTable(green);
+
+            uint64_t redBits = 0;
+            uint64_t greenBits = 0;
+            for (int32_t i = 5; i >= 0; i--) {
+                redBits = (redBits << 8) | block[2 + i];
+                greenBits = (greenBits << 8) | block[10 + i];
+            }
+
+            for (int32_t py = 0; py < 4 && by + py < size.y; py++) {
+                CImVector* dst = reinterpret_cast<CImVector*>(static_cast<uint8_t*>(out) + (by + py) * outStride) + bx;
+
+                for (int32_t px = 0; px < 4 && bx + px < size.x; px++) {
+                    uint32_t shift = 3 * (py * 4 + px);
+                    dst[px] = CImVector(0, green[(greenBits >> shift) & 7], red[(redBits >> shift) & 7], 0xFF);
+                }
+            }
+        }
+    }
+}
+
 // VERIFY: 93653188 auto
 // OFFSET: 0x006AE6E0
 static void InitBlit() {
@@ -831,6 +868,7 @@ static void InitBlit() {
     s_blits[BlitFormat_Gr1616F][BlitFormat_Gr1616F][BlitAlpha_0] = Blit_generic32_generic32;
     s_blits[BlitFormat_R32F][BlitFormat_R32F][BlitAlpha_0] = Blit_generic32_generic32;
     s_blits[BlitFormat_D24X8][BlitFormat_D24X8][BlitAlpha_0] = Blit_generic32_generic32;
+    s_blits[BlitFormat_Bc5][BlitFormat_Argb8888][BlitAlpha_0] = Blit_Bc5_Argb8888;
 }
 
 // VERIFY: f1f74b3d auto
@@ -842,6 +880,10 @@ int32_t Blit(const C2iVector& size, BlitAlpha alpha, const void* in, uint32_t in
     if (!initBlit) {
         InitBlit();
         initBlit = 1;
+    }
+
+    if (static_cast<uint32_t>(inFormat) >= BlitFormats_Last || static_cast<uint32_t>(outFormat) >= BlitFormats_Last || static_cast<uint32_t>(alpha) >= BlitAlphas_Last) {
+        return 0;
     }
 
     BLIT_FUNCTION blit = s_blits[inFormat][outFormat][alpha];

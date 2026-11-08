@@ -712,6 +712,9 @@ int32_t TextureLoadBlpMips(char* fileName, char* extension, int32_t flags, MipBi
                 format = GxTex_Argb4444;
                 pixels = PIXEL_ARGB4444;
             }
+        } else if (static_cast<uint32_t>(pixels) >= NUM_PIXEL_FORMATS) {
+            // CoA: BC5 decodes to ARGB8888 in Lock; unknown formats then fail there instead of copying garbage.
+            pixels = PIXEL_ARGB8888;
         }
     }
 
@@ -922,9 +925,14 @@ void TextureGetTextureFormats(PIXEL_FORMAT& pixelFormat, EGxTexFormat& gxTexForm
 
             break;
 
+        case PIXEL_BC5:
+            gxTexFormat = GxTex_Argb8888;
+            pixelFormat = PIXEL_ARGB8888;
+            break;
+
         default:
-            // Unknown BLP preferred format: the original left the out-params uninitialized,
-            // crashing in CGxDeviceD3d::ITexCreate with a garbage format index. Fall back to a safe format.
+            // Unknown BLP preferred format: the original left the out-params uninitialized (ITexCreate crash).
+            // The DXT decode of such files fails in CBLPFile::Lock2 and the texture falls back to solid.
             gxTexFormat = alphaBits > 1 ? GxTex_Argb8888 : (alphaBits == 1 ? GxTex_Argb1555 : GxTex_Rgb565);
             pixelFormat = PIXEL_ARGB8888;
             break;
