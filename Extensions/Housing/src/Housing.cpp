@@ -149,9 +149,13 @@ C4Quaternion Quat(float x, float y, float z, float w) {
     return q;
 }
 
+// A catalog model_fdid with this bit is a WMO decor (the server sets it): its ghost is a client-only map object.
+constexpr uint32_t WmoDecorBit = 0x80000000u;
+
 struct Ghost {
     CM2Model* model = nullptr;
     CMapEntity* entity = nullptr;
+    CMapBaseObj* wmo = nullptr; // a WMO decor's ghost (CWorld::ObjectCreate, as a game object's WMO)
     C4Quaternion rot = Quat(0, 0, 0, 1);
     float scale = 1;
     bool onFloor = false;       // the cursor met the floor this frame (or the ghost is pinned)
@@ -167,6 +171,7 @@ C44Matrix GhostMatrix() {
 }
 
 void DestroyGhost() {
+    if (s_ghost.wmo) CWorld::ObjectDestroy(s_ghost.wmo);
     if (s_ghost.entity) World::ObjectDestroy(s_ghost.entity);
     if (s_ghost.model) s_ghost.model->Release();
     s_ghost = Ghost{};
@@ -952,13 +957,19 @@ int32_t SetGhost(lua_State* L) {
     }
     static uint32_t shown = 0;
     if (!fdid || !s_available) { DestroyGhost(); shown = 0; return 0; }
-    if (s_ghost.model && shown == fdid) return 0; // only the rotation or scale changed
+    if ((s_ghost.model || s_ghost.wmo) && shown == fdid) return 0; // only the rotation or scale changed
     Ghost const keep = s_ghost;
     DestroyGhost();
     s_ghost.rot = keep.rot;
     s_ghost.scale = keep.scale;
     s_ghost.pinned = keep.pinned;
     s_ghost.pos = keep.pos;
+    if (fdid & WmoDecorBit) {
+        std::string const path = "retail/" + std::to_string(fdid & ~WmoDecorBit) + ".wmo";
+        s_ghost.wmo = CWorld::ObjectCreate(path.c_str(), s_ghost.pos, 0, 0, 0, 0, 0, nullptr, nullptr, 0);
+        shown = fdid;
+        return 0;
+    }
     std::string const path = "retail/" + std::to_string(fdid) + ".m2";
     s_ghost.model = World::s_m2Scene ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
     if (s_ghost.model) s_ghost.entity = CMap::ObjectCreate(s_ghost.model, UpdateGhost, nullptr, 0, 0, 10);
@@ -982,7 +993,7 @@ int32_t PinGhost(lua_State* L) {
 
 // x, y, z of the ghost (where a click places it), or nothing when the cursor is off the floor.
 int32_t GetGhost(lua_State* L) {
-    if (!s_ghost.model || !s_ghost.onFloor) return 0;
+    if ((!s_ghost.model && !s_ghost.wmo) || !s_ghost.onFloor) return 0;
     lua_pushnumber(L, s_ghost.pos.x); lua_pushnumber(L, s_ghost.pos.y); lua_pushnumber(L, s_ghost.pos.z);
     return 3;
 }
@@ -1172,6 +1183,17 @@ public:
     Ticks() : ClientScript("HousingTicks") { }
     void OnUpdate(float elapsedSec) override {
         TickBounds();
+        if (s_ghost.wmo) {
+            // A map object has collision: park it far below while the cursor's ray looks for the floor, so the ray
+            // never lands on the ghost itself, and leave it there while the cursor is off the floor (hidden).
+            C44Matrix away;
+            away.Identity();
+            away.d2 = -100000.0f;
+            // World::ObjectUpdate takes its CMapEntity as the CMapBaseObj it is (a CMapObjDef for a WMO)
+            World::ObjectUpdate(reinterpret_cast<CMapEntity*>(s_ghost.wmo), away);
+            s_ghost.onFloor = s_ghost.pinned || CursorRay(s_ghost.pos);
+            if (s_ghost.onFloor) World::ObjectUpdate(reinterpret_cast<CMapEntity*>(s_ghost.wmo), GhostMatrix());
+        }
         if (s_ghost.model && s_ghost.entity) {
             s_ghost.onFloor = s_ghost.pinned || CursorRay(s_ghost.pos);
             // Move the map entity too (CGWorldFrame does this for a spell's ground object), or it stays culled at 0,0,0.

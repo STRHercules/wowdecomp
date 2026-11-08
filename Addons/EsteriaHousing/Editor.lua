@@ -402,6 +402,8 @@ function H.RedrawDecor()
       if thumb then
         t.thumb:SetTexture("retail/" .. thumb[1] .. ".blp"); t.thumb:SetTexCoord(0, thumb[2], 0, thumb[2])
         t.thumb:Show(); t.model:Hide()
+      elseif e.fileDataId >= 2147483648 then -- a WMO decor (high bit) without a picture: no M2 to preview
+        t.thumb:Hide(); t.model:Hide()
       else
         t.thumb:Hide(); t.model:Show()
         if t.fdid ~= e.fileDataId then
