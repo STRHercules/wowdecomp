@@ -9,7 +9,8 @@ if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
-local W, HEIGHT, ROWS, ROW_H, LIST_TOP = 460, 500, 8, 34, -186
+local W, HEIGHT, ROWS, ROW_H = 470, 520, 8, 34
+local BOX_TOP, LIST_TOP = -136, -170 -- the inset the tabs stand on, and its first row
 local MAPS = { [0] = "Founder's Point", [1] = "Razorwind Shores" }
 
 local f = H.Panel("EsteriaHousingNeighborhoodFrame", W, HEIGHT)
@@ -23,29 +24,41 @@ place:SetPoint("TOP", title, "BOTTOM", 0, -2)
 local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
 close:SetPoint("TOPRIGHT", 2, 2)
 
--- the neighborhood shown
+-- the neighborhood shown, and the way there: a short button on the right, its name and state on the left
 local hoodIcon = H.Atlas(f:CreateTexture(nil, "ARTWORK"), "housefinder_main-icon")
 hoodIcon:SetSize(44, 44); hoodIcon:SetPoint("TOPLEFT", 18, -52)
 local hoodTitle = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-hoodTitle:SetPoint("TOPLEFT", hoodIcon, "TOPRIGHT", 10, -2); hoodTitle:SetWidth(W - 90); hoodTitle:SetJustifyH("LEFT")
+hoodTitle:SetPoint("TOPLEFT", hoodIcon, "TOPRIGHT", 10, -2); hoodTitle:SetWidth(W - 210); hoodTitle:SetJustifyH("LEFT")
 local hoodBody = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-hoodBody:SetPoint("TOPLEFT", hoodTitle, "BOTTOMLEFT", 0, -4); hoodBody:SetWidth(W - 90); hoodBody:SetJustifyH("LEFT")
-
--- the way there
+hoodBody:SetPoint("TOPLEFT", hoodTitle, "BOTTOMLEFT", 0, -4); hoodBody:SetWidth(W - 210); hoodBody:SetJustifyH("LEFT")
 local travel = CreateFrame("Button", "EsteriaHousingNeighborhoodTravel", f, "UIPanelButtonTemplate")
-travel:SetSize(240, 26); travel:SetPoint("TOP", 0, -114)
+travel:SetSize(100, 22); travel:SetPoint("TOPRIGHT", -20, -58)
+travel:SetScript("OnEnter", function(self)
+  if not info then return end
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:AddLine(info.here and "Leave " .. info.name or "Teleport to " .. info.name)
+  GameTooltip:Show()
+end)
+travel:SetScript("OnLeave", function() GameTooltip:Hide() end)
+-- why travel is greyed, or the server's last word: one line under the name, cut short rather than wrapped
 local reason = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-reason:SetPoint("TOP", travel, "BOTTOM", 0, -3); reason:SetWidth(W - 40); reason:SetTextColor(1, 0.3, 0.3)
+reason:SetPoint("TOPLEFT", hoodIcon, "BOTTOMLEFT", 0, -6); reason:SetSize(W - 40, 12); reason:SetJustifyH("LEFT")
+reason:SetTextColor(1, 0.3, 0.3)
 
--- tabs: the client's own, hanging under the window as the Character frame's do
+-- tabs: the Interface Options' small tabs, standing on the list's inset
 local TABS = { { "plots", "Plots" }, { "homes", "My Homes" }, { "hoods", "Neighborhoods" }, { "favorites", "Favorites" },
   { "recent", "Recent" }, { "manage", "Manage" } }
 local tab = "plots"
 local tabButtons = {}
-local divider = H.Atlas(f:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
-divider:SetPoint("TOPLEFT", 16, -152); divider:SetPoint("TOPRIGHT", -16, -152); divider:SetHeight(2)
+local box = CreateFrame("Frame", nil, f)
+box:SetPoint("TOPLEFT", 14, BOX_TOP); box:SetPoint("BOTTOMRIGHT", -14, 42)
+box:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+box:SetBackdropColor(0, 0, 0, 0.45); box:SetBackdropBorderColor(0.55, 0.42, 0.25)
+local divider = box -- hidden with the rest while choosing
 local summary = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-summary:SetPoint("TOPLEFT", 20, -160); summary:SetWidth(W - 40); summary:SetJustifyH("LEFT"); summary:SetTextColor(0.75, 0.75, 0.75)
+summary:SetPoint("TOPLEFT", 22, BOX_TOP - 10); summary:SetWidth(W - 44); summary:SetJustifyH("LEFT")
+summary:SetTextColor(0.75, 0.75, 0.75)
 
 local info      -- the server's last answer
 local listed = {}
@@ -54,11 +67,12 @@ local rows = {}
 local Redraw
 
 for i, t in ipairs(TABS) do
-  local b = CreateFrame("Button", "EsteriaHousingNeighborhoodFrameTab" .. i, f, "CharacterFrameTabButtonTemplate")
+  local b = CreateFrame("Button", "EsteriaHousingNeighborhoodFrameTab" .. i, f, "OptionsFrameTabButtonTemplate")
   b:SetID(i); b:SetText(t[2])
-  if i == 1 then b:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 10, 4)
-  else b:SetPoint("LEFT", tabButtons[TABS[i - 1][1]], "RIGHT", -16, 0) end
-  PanelTemplates_TabResize(b, 0)
+  if i == 1 then b:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 6, -2)
+  else b:SetPoint("LEFT", tabButtons[TABS[i - 1][1]], "RIGHT", -14, 0) end
+  PanelTemplates_TabResize(b, -8)
+  b:SetScript("OnShow", function(self) PanelTemplates_TabResize(self, -8) end) -- the template resizes with 0 padding
   b:SetScript("OnClick", function() tab = t[1]; page = 0; PlaySound("igCharacterInfoTab"); Redraw() end)
   tabButtons[t[1]] = b
 end
@@ -66,47 +80,55 @@ f.numTabs = #TABS
 
 for i = 1, ROWS do
   local row = CreateFrame("Frame", nil, f)
-  row:SetSize(W - 32, ROW_H - 2); row:SetPoint("TOP", 0, LIST_TOP - (i - 1) * ROW_H)
-  row.bg = row:CreateTexture(nil, "BACKGROUND"); row.bg:SetAllPoints(); row.bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.04 or 0.08)
+  row:SetSize(W - 44, ROW_H - 2); row:SetPoint("TOP", 0, LIST_TOP - (i - 1) * ROW_H)
+  row.bg = row:CreateTexture(nil, "BACKGROUND"); row.bg:SetAllPoints(); row.bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.03 or 0.07)
   row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 4, 0)
   row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.label:SetPoint("LEFT", row.icon, "RIGHT", 8, 0); row.label:SetWidth(W - 200); row.label:SetJustifyH("LEFT")
+  row.label:SetPoint("LEFT", row.icon, "RIGHT", 8, 0); row.label:SetWidth(W - 210); row.label:SetJustifyH("LEFT")
   row.go = CreateFrame("Button", "EsteriaHousingNeighborhoodGo" .. i, row, "UIPanelButtonTemplate")
-  row.go:SetSize(56, 22); row.go:SetPoint("RIGHT", -4, 0)
+  row.go:SetSize(64, 22); row.go:SetPoint("RIGHT", -4, 0)
   row.go:SetScript("OnClick", function() if row.onGo then row.onGo(row.go) end end)
   row.extra = CreateFrame("Button", "EsteriaHousingNeighborhoodExtra" .. i, row, "UIPanelButtonTemplate")
-  row.extra:SetSize(72, 22); row.extra:SetPoint("RIGHT", row.go, "LEFT", -4, 0)
+  row.extra:SetSize(76, 22); row.extra:SetPoint("RIGHT", row.go, "LEFT", -4, 0)
   row.extra:SetScript("OnClick", function() if row.onExtra then row.onExtra(row.extra) end end)
   rows[i] = row
 end
 
 local prev = CreateFrame("Button", "EsteriaHousingNeighborhoodPrev", f, "UIPanelButtonTemplate")
-prev:SetSize(70, 22); prev:SetPoint("BOTTOMLEFT", 20, 14); prev:SetText("Previous")
+prev:SetSize(76, 22); prev:SetPoint("BOTTOMLEFT", 16, 14); prev:SetText("Previous")
 local nextPage = CreateFrame("Button", "EsteriaHousingNeighborhoodNext", f, "UIPanelButtonTemplate")
-nextPage:SetSize(70, 22); nextPage:SetPoint("BOTTOMRIGHT", -20, 14); nextPage:SetText("Next")
+nextPage:SetSize(76, 22); nextPage:SetPoint("BOTTOMRIGHT", -16, 14); nextPage:SetText("Next")
 local pageText = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
 pageText:SetPoint("BOTTOM", 0, 20)
 
--- Manage: invite by name, move to the other map, and the guild's neighborhoods
+-- Manage: a line per setting, what it is on the left and one short button on the right
 local manage = CreateFrame("Frame", nil, f)
-manage:SetSize(W - 32, 120); manage:SetPoint("TOP", 0, LIST_TOP + 6)
-local inviteBox = CreateFrame("EditBox", "EsteriaHousingInviteName", manage, "InputBoxTemplate")
-inviteBox:SetSize(150, 20); inviteBox:SetPoint("TOPLEFT", 10, -4); inviteBox:SetAutoFocus(false); inviteBox:SetMaxLetters(12)
-local inviteButton = CreateFrame("Button", "EsteriaHousingInvite", manage, "UIPanelButtonTemplate")
-inviteButton:SetSize(80, 22); inviteButton:SetPoint("LEFT", inviteBox, "RIGHT", 8, 0); inviteButton:SetText("Invite")
-local inviteHint = manage:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-inviteHint:SetPoint("LEFT", inviteButton, "RIGHT", 8, 0); inviteHint:SetWidth(140); inviteHint:SetJustifyH("LEFT")
-inviteHint:SetText("Invited players may visit and buy plots here.")
-local moveButton = CreateFrame("Button", "EsteriaHousingMoveHood", manage, "UIPanelButtonTemplate")
-moveButton:SetSize(W - 52, 22); moveButton:SetPoint("TOPLEFT", 10, -32)
-local guildButton = CreateFrame("Button", "EsteriaHousingBuyGuildHood", manage, "UIPanelButtonTemplate")
-guildButton:SetSize((W - 58) / 2, 22); guildButton:SetPoint("TOPLEFT", 10, -60); guildButton:SetText("Buy Guild Neighborhood")
-local ranksButton = CreateFrame("Button", "EsteriaHousingGuildRanks", manage, "UIPanelButtonTemplate")
-ranksButton:SetSize((W - 58) / 2, 22); ranksButton:SetPoint("LEFT", guildButton, "RIGHT", 6, 0); ranksButton:SetText("Rank Permissions")
-local guildText = manage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-guildText:SetPoint("TOPLEFT", 12, -88); guildText:SetWidth(W - 56); guildText:SetJustifyH("LEFT")
+manage:SetSize(W - 44, 4 * ROW_H); manage:SetPoint("TOP", 0, LIST_TOP)
+local function Setting(i, buttonText)
+  local line = CreateFrame("Frame", nil, manage)
+  line:SetSize(W - 44, ROW_H - 2); line:SetPoint("TOP", 0, -(i - 1) * ROW_H)
+  local bg = line:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.03 or 0.07)
+  line.label = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  line.label:SetPoint("LEFT", 10, 0); line.label:SetWidth(W - 150); line.label:SetJustifyH("LEFT")
+  line.button = CreateFrame("Button", nil, line, "UIPanelButtonTemplate")
+  line.button:SetSize(76, 22); line.button:SetPoint("RIGHT", -4, 0); line.button:SetText(buttonText)
+  return line
+end
+local inviteLine = Setting(1, "Invite")
+inviteLine.label:SetWidth(110)
+local inviteBox = CreateFrame("EditBox", "EsteriaHousingInviteName", inviteLine, "InputBoxTemplate")
+inviteBox:SetSize(150, 20); inviteBox:SetPoint("RIGHT", inviteLine.button, "LEFT", -10, 0)
+inviteBox:SetAutoFocus(false); inviteBox:SetMaxLetters(12)
+local inviteButton = inviteLine.button
+local moveLine = Setting(2, "Move")
+local moveButton = moveLine.button
+local guildLine = Setting(3, "Buy")
+local guildButton = guildLine.button
+local ranksLine = Setting(4, "Edit")
+local ranksButton = ranksLine.button
 local membersTitle = manage:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-membersTitle:SetPoint("TOPLEFT", 10, -110); membersTitle:SetText("Invited")
+membersTitle:SetPoint("TOPLEFT", 8, -4 * ROW_H - 4)
+local MANAGE_LIST_TOP = LIST_TOP - 4 * ROW_H - 18 -- the invited players, under the settings
 
 -- The first time (until the account picks): where the account's neighborhood is. Either can be changed later
 -- from Manage.
@@ -337,7 +359,7 @@ local function ListFor(blocked)
       end
       out[#out + 1] = { icon = "housefinder_friend-plot-icon", text = text,
         go = { "Go", GoPlot(v.hood, v.plot), v.ok and not blocked },
-        extra = { fav and "Unfavorite" or "Favorite", function() EsteriaHousing_SetFavorite(v.house, v.hood, not fav) end } }
+        extra = { fav and "Remove" or "Favorite", function() EsteriaHousing_SetFavorite(v.house, v.hood, not fav) end } }
     end
   elseif tab == "manage" then
     for _, m in ipairs(info.members) do
@@ -385,36 +407,41 @@ function Redraw()
   end
   local who = info.rights.manage and (info.kind == "guild" and "You manage it." or "It is yours.")
     or info.rights.buy and "You may buy plots here." or "You are visiting."
-  hoodBody:SetText(string.format("%s  |cffb0b0b0%d of %d plots free, %s each|r\n%s%s", info.mapName, free, #info.plots,
+  hoodBody:SetText(string.format("|cffb0b0b0%d of %d plots free, %s each|r\n%s%s", free, #info.plots,
     GetCoinTextureString(info.price), who, yours > 0 and " You have " .. Plural(yours, "home") .. " here." or ""))
   H.Atlas(hoodIcon, info.kind == "guild" and "housefinder_friend-icon-circle" or "housefinder_main-icon")
-  travel:SetText(info.here and "Leave " .. info.name or "Teleport to " .. info.name)
+  travel:SetText(info.here and "Leave" or "Teleport")
 
   if tab == "manage" then
     manage:Show()
     local canInvite = info.rights.invite
-    for _, w in ipairs({ inviteBox, inviteButton, inviteHint }) do if canInvite then w:Show() else w:Hide() end end
-    moveButton:SetText(string.format("Move this neighborhood to %s", MAPS[1 - info.map]))
+    inviteLine.label:SetText(canInvite and "Invite a player" or "|cff808080Only the owner can invite|r")
+    if canInvite then inviteBox:Show() else inviteBox:Hide() end
+    SetEnabled(inviteButton, canInvite)
+    moveLine.label:SetText(string.format("Location: |cffffd100%s|r\n|cffb0b0b0Move it to %s|r", MAPS[info.map], MAPS[1 - info.map]))
     SetEnabled(moveButton, info.rights.manage)
     local g = info.guild
     if g then
-      guildButton:Show(); ranksButton:Show()
-      SetEnabled(guildButton, g.leader and g.canBuy and g.bank >= g.price); SetEnabled(ranksButton, g.leader)
-      guildText:SetText(g.leader and string.format("A guild neighborhood costs %s from the guild bank (%s). Another can be " ..
-        "bought once every one the guild has is full.", GetCoinTextureString(g.price), GetCoinTextureString(g.bank))
-        or "Your Guild Master can buy a guild neighborhood; your guild's appear under Neighborhoods.")
+      guildLine.label:SetText(string.format("Guild neighborhood: %s\n|cffb0b0b0From the guild bank (%s)|r",
+        GetCoinTextureString(g.price), GetCoinTextureString(g.bank)))
+      SetEnabled(guildButton, g.leader and g.canBuy and g.bank >= g.price)
+      ranksLine.label:SetText(g.leader and "Guild rank permissions" or "|cff808080Guild rank permissions (Guild Master)|r")
+      SetEnabled(ranksButton, g.leader)
+      guildLine:Show(); ranksLine:Show()
     else
-      guildButton:Hide(); ranksButton:Hide(); guildText:SetText("Join a guild to live in a guild neighborhood.")
+      guildLine.label:SetText("|cff808080Join a guild to live in a guild neighborhood.|r")
+      SetEnabled(guildButton, false)
+      ranksLine:Hide()
     end
-    membersTitle:SetText(canInvite and (#info.members > 0 and "Invited" or "No one is invited yet.") or "")
-    summary:SetText(canInvite and "" or "Only the owner (or a guild rank the Guild Master allows) can invite or move this neighborhood.")
+    membersTitle:SetText(canInvite and (#info.members > 0 and "Invited players" or "No one is invited yet.") or "")
+    summary:SetText("")
   else
     manage:Hide()
     summary:SetText(tab == "plots" and string.format("Plots of %s", info.name) or SUMMARY[tab] or "")
   end
 
   listed = ListFor(blocked)
-  local top = tab == "manage" and LIST_TOP - 120 or LIST_TOP
+  local top = tab == "manage" and MANAGE_LIST_TOP or LIST_TOP
   local shown = tab == "manage" and ROWS - 4 or ROWS
   local pages = math.max(1, math.ceil(#listed / shown))
   page = math.min(page, pages - 1)
