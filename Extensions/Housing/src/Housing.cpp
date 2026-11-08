@@ -73,6 +73,9 @@ struct PlotInfo {
     std::vector<Part> parts;            // your plot: the house parts you may swap
     struct SpotInfo { float pos[3] = { 0, 0, 0 }; uint8_t accepts = 0, type = 0; };
     std::vector<SpotInfo> spots;        // your plot: the wall and roof spots for dormers, towers and chimneys
+    uint32_t hood = 0, house = 0;       // the neighborhood, and the house on the plot (0 none)
+    uint8_t favorite = 0, canBuy = 0;
+    std::vector<std::pair<uint32_t, std::string>> choices; // your houses you may mirror here
 };
 
 struct LayoutKind { uint32_t id = 0; float size[2] = { 0, 0 }; uint32_t price = 0; std::string name; };
@@ -100,13 +103,42 @@ struct NeighborhoodPlot {
     std::string name;
 };
 
+struct Home {
+    uint32_t house = 0, hood = 0;
+    uint16_t plot = 0, placed = 0, maxDecor = 0;
+    std::string hoodName;
+    uint8_t rooms = 0, access = 0;
+};
+
+struct HoodEntry {
+    uint32_t id = 0;
+    uint8_t kind = 0, role = 0, map = 0;
+    uint16_t free = 0;
+    std::string name;
+};
+
+struct Visit {
+    uint32_t house = 0, hood = 0;
+    uint16_t plot = 0;
+    std::string owner, hoodName;
+    uint8_t ok = 0;
+};
+
 struct Neighborhood {
     bool valid = false;
-    std::string name, message;
+    uint32_t id = 0;
+    uint8_t kind = 0, map = 0, rights = 0, here = 0;
+    std::string name, mapName, message;
     uint32_t price = 0;
-    uint8_t where = 0, rooms = 0, access = 0;
-    uint16_t homePlot = 0, placed = 0, maxDecor = 0;
+    uint8_t where = 0;
     std::vector<NeighborhoodPlot> plots;
+    std::vector<Home> homes;
+    std::vector<HoodEntry> hoods;
+    std::vector<Visit> favorites, recent;
+    std::vector<std::pair<uint32_t, std::string>> members;
+    uint32_t guild = 0, guildPrice = 0, bank = 0;
+    uint8_t leader = 0, canBuyGuild = 0;
+    std::vector<uint8_t> rankRights;
 };
 
 struct PendingEdit {
@@ -269,6 +301,10 @@ public:
         uint8_t raw[sizeof(T)];
         std::memcpy(raw, &value, sizeof(T)); // x86: already little-endian
         m_bytes.insert(m_bytes.end(), raw, raw + sizeof(T));
+        return *this;
+    }
+    Writer& PutString(char const* text) { // NUL-terminated
+        m_bytes.insert(m_bytes.end(), text, text + std::strlen(text) + 1);
         return *this;
     }
     bool Send(uint32_t opcode) { return sExtensionMgr->SendClientMessage(opcode, m_bytes.data(), uint32_t(m_bytes.size())); }
@@ -462,6 +498,13 @@ int32_t ReceivePlot(void*, NETMESSAGE, uint32_t, CDataStore* message) {
         if (!r.Get(spot.pos[0]) || !r.Get(spot.pos[1]) || !r.Get(spot.pos[2]) || !r.Get(spot.accepts) || !r.Get(spot.type)) return 0;
         next.spots.push_back(spot);
     }
+    uint8_t choices;
+    if (!r.Get(next.hood) || !r.Get(next.favorite) || !r.Get(next.house) || !r.Get(next.canBuy) || !r.Get(choices)) return 0;
+    for (uint8_t i = 0; i < choices; ++i) {
+        std::pair<uint32_t, std::string> c;
+        if (!r.Get(c.first) || !r.Get(c.second)) return 0;
+        next.choices.push_back(std::move(c));
+    }
     if (!r.Done()) return 0;
     next.valid = true;
     s_plot = std::move(next);
@@ -473,14 +516,50 @@ int32_t ReceiveNeighborhood(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     Reader r(message);
     Neighborhood next;
     uint16_t plots;
-    if (!r.Get(next.name) || !r.Get(next.price) || !r.Get(next.where) || !r.Get(next.message) || !r.Get(next.homePlot)
-        || !r.Get(next.rooms) || !r.Get(next.placed) || !r.Get(next.maxDecor) || !r.Get(plots)) return 0;
+    if (!r.Get(next.id) || !r.Get(next.kind) || !r.Get(next.map) || !r.Get(next.name) || !r.Get(next.mapName)
+        || !r.Get(next.price) || !r.Get(next.where) || !r.Get(next.message) || !r.Get(next.rights) || !r.Get(next.here)
+        || !r.Get(plots)) return 0;
     for (uint16_t i = 0; i < plots; ++i) {
         NeighborhoodPlot p;
         if (!r.Get(p.plot) || !r.Get(p.status) || !r.Get(p.name)) return 0;
         next.plots.push_back(std::move(p));
     }
-    if (!r.Get(next.access) || !r.Done()) return 0;
+    uint8_t n;
+    if (!r.Get(n)) return 0;
+    for (uint8_t i = 0; i < n; ++i) {
+        Home h;
+        if (!r.Get(h.house) || !r.Get(h.hood) || !r.Get(h.plot) || !r.Get(h.hoodName) || !r.Get(h.rooms) || !r.Get(h.placed)
+            || !r.Get(h.maxDecor) || !r.Get(h.access)) return 0;
+        next.homes.push_back(std::move(h));
+    }
+    if (!r.Get(n)) return 0;
+    for (uint8_t i = 0; i < n; ++i) {
+        HoodEntry h;
+        if (!r.Get(h.id) || !r.Get(h.kind) || !r.Get(h.role) || !r.Get(h.map) || !r.Get(h.free) || !r.Get(h.name)) return 0;
+        next.hoods.push_back(std::move(h));
+    }
+    for (std::vector<Visit>* list : { &next.favorites, &next.recent }) {
+        if (!r.Get(n)) return 0;
+        for (uint8_t i = 0; i < n; ++i) {
+            Visit v;
+            if (!r.Get(v.house) || !r.Get(v.hood) || !r.Get(v.plot) || !r.Get(v.owner) || !r.Get(v.hoodName) || !r.Get(v.ok)) return 0;
+            list->push_back(std::move(v));
+        }
+    }
+    if (!r.Get(n)) return 0;
+    for (uint8_t i = 0; i < n; ++i) {
+        std::pair<uint32_t, std::string> m;
+        if (!r.Get(m.first) || !r.Get(m.second)) return 0;
+        next.members.push_back(std::move(m));
+    }
+    if (!r.Get(next.guild) || !r.Get(next.leader) || !r.Get(next.guildPrice) || !r.Get(next.bank) || !r.Get(next.canBuyGuild)
+        || !r.Get(n)) return 0;
+    for (uint8_t i = 0; i < n; ++i) {
+        uint8_t rights;
+        if (!r.Get(rights)) return 0;
+        next.rankRights.push_back(rights);
+    }
+    if (!r.Done()) return 0;
     next.valid = true;
     s_neighborhood = std::move(next);
     Signal("ESTERIA_HOUSING_NEIGHBORHOOD");
@@ -716,6 +795,19 @@ int32_t GetPlot(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "spots");
+    NumberField(L, "hood", s_plot.hood); NumberField(L, "house", s_plot.house);
+    lua_pushboolean(L, s_plot.favorite); lua_setfield(L, -2, "favorite");
+    lua_pushboolean(L, s_plot.canBuy); lua_setfield(L, -2, "canBuy");
+    // choices = { { house, label } }: your houses not in this neighborhood yet, to mirror here instead of a new one
+    lua_createtable(L, int(s_plot.choices.size()), 0);
+    i = 0;
+    for (auto const& [house, label] : s_plot.choices) {
+        lua_createtable(L, 0, 2);
+        NumberField(L, "house", house);
+        lua_pushstring(L, label.c_str()); lua_setfield(L, -2, "label");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "choices");
     return 1;
 }
 
@@ -761,28 +853,60 @@ int32_t SendAction(lua_State* L, uint8_t action) {
     return 1;
 }
 
-// { name, price (copper), where ("away" "neighborhood" "house"), message, homePlot (0 none), rooms, placed, maxDecor,
-//   plots = { { plot, status (as GetPlot), name } } }. nil until the first answer to RequestNeighborhood.
+void AccessTable(lua_State* L, uint8_t access) {
+    lua_createtable(L, 0, 4);
+    lua_pushboolean(L, access & AccessParty); lua_setfield(L, -2, "party");
+    lua_pushboolean(L, access & AccessFriends); lua_setfield(L, -2, "friends");
+    lua_pushboolean(L, access & AccessGuild); lua_setfield(L, -2, "guild");
+    lua_pushboolean(L, access & AccessEveryone); lua_setfield(L, -2, "everyone");
+}
+
+void RightsTable(lua_State* L, uint8_t rights) {
+    lua_createtable(L, 0, 3);
+    lua_pushboolean(L, rights & RightBuy); lua_setfield(L, -2, "buy");
+    lua_pushboolean(L, rights & RightInvite); lua_setfield(L, -2, "invite");
+    lua_pushboolean(L, rights & RightManage); lua_setfield(L, -2, "manage");
+}
+
+void VisitList(lua_State* L, std::vector<Visit> const& list) {
+    lua_createtable(L, int(list.size()), 0);
+    int i = 0;
+    for (Visit const& v : list) {
+        lua_createtable(L, 0, 6);
+        NumberField(L, "house", v.house); NumberField(L, "hood", v.hood); NumberField(L, "plot", v.plot);
+        lua_pushstring(L, v.owner.c_str()); lua_setfield(L, -2, "owner");
+        lua_pushstring(L, v.hoodName.c_str()); lua_setfield(L, -2, "hoodName");
+        lua_pushboolean(L, v.ok); lua_setfield(L, -2, "ok");
+        lua_rawseti(L, -2, ++i);
+    }
+}
+
+// The Neighborhood window's contents (HousingWire.h SMSG_NEIGHBORHOOD), nil until the first answer:
+// { id, kind ("account" "guild"), map (0 Founder's Point, 1 Razorwind Shores), name, mapName, price, where ("away"
+//   "neighborhood" "house"), message, rights = { buy, invite, manage }, here,
+//   plots = { { plot, status (as GetPlot), name } },
+//   homes = { { house, hood (0 saved), plot, hoodName, rooms, placed, maxDecor, access = { party, friends, guild, everyone } } },
+//   hoods = { { id, kind, role ("own" "member" "guild" "visit"), map, free, name } },
+//   favorites, recent = { { house, hood, plot (0 gone), owner, hoodName, ok } }, members = { { account, name } },
+//   guild = { id, leader, price, bank, canBuy, ranks = { rights tables, rank 1.. } } or nil }
 int32_t GetNeighborhood(lua_State* L) {
     if (!s_available || !s_neighborhood.valid) { lua_pushnil(L); return 1; }
+    Neighborhood const& n = s_neighborhood;
     static char const* const wheres[] = { "away", "neighborhood", "house" };
     static char const* const statuses[] = { "sale", "yours", "visit", "private" };
-    lua_createtable(L, 0, 9);
-    lua_pushstring(L, s_neighborhood.name.c_str()); lua_setfield(L, -2, "name");
-    NumberField(L, "price", s_neighborhood.price);
-    lua_pushstring(L, wheres[s_neighborhood.where < 3 ? s_neighborhood.where : 0]); lua_setfield(L, -2, "where");
-    lua_pushstring(L, s_neighborhood.message.c_str()); lua_setfield(L, -2, "message");
-    NumberField(L, "homePlot", s_neighborhood.homePlot); NumberField(L, "rooms", s_neighborhood.rooms);
-    NumberField(L, "placed", s_neighborhood.placed); NumberField(L, "maxDecor", s_neighborhood.maxDecor);
-    lua_createtable(L, 0, 4); // who may visit your house
-    lua_pushboolean(L, s_neighborhood.access & AccessParty); lua_setfield(L, -2, "party");
-    lua_pushboolean(L, s_neighborhood.access & AccessFriends); lua_setfield(L, -2, "friends");
-    lua_pushboolean(L, s_neighborhood.access & AccessGuild); lua_setfield(L, -2, "guild");
-    lua_pushboolean(L, s_neighborhood.access & AccessEveryone); lua_setfield(L, -2, "everyone");
-    lua_setfield(L, -2, "access");
-    lua_createtable(L, int(s_neighborhood.plots.size()), 0);
+    static char const* const roles[] = { "own", "member", "guild", "visit" };
+    lua_createtable(L, 0, 20);
+    NumberField(L, "id", n.id); NumberField(L, "map", n.map); NumberField(L, "price", n.price);
+    lua_pushstring(L, n.kind ? "guild" : "account"); lua_setfield(L, -2, "kind");
+    lua_pushstring(L, n.name.c_str()); lua_setfield(L, -2, "name");
+    lua_pushstring(L, n.mapName.c_str()); lua_setfield(L, -2, "mapName");
+    lua_pushstring(L, wheres[n.where < 3 ? n.where : 0]); lua_setfield(L, -2, "where");
+    lua_pushstring(L, n.message.c_str()); lua_setfield(L, -2, "message");
+    lua_pushboolean(L, n.here); lua_setfield(L, -2, "here");
+    RightsTable(L, n.rights); lua_setfield(L, -2, "rights");
+    lua_createtable(L, int(n.plots.size()), 0);
     int i = 0;
-    for (NeighborhoodPlot const& p : s_neighborhood.plots) {
+    for (NeighborhoodPlot const& p : n.plots) {
         lua_createtable(L, 0, 3);
         NumberField(L, "plot", p.plot);
         lua_pushstring(L, statuses[p.status < 4 ? p.status : 3]); lua_setfield(L, -2, "status");
@@ -790,30 +914,146 @@ int32_t GetNeighborhood(lua_State* L) {
         lua_rawseti(L, -2, ++i);
     }
     lua_setfield(L, -2, "plots");
+    lua_createtable(L, int(n.homes.size()), 0);
+    i = 0;
+    for (Home const& h : n.homes) {
+        lua_createtable(L, 0, 8);
+        NumberField(L, "house", h.house); NumberField(L, "hood", h.hood); NumberField(L, "plot", h.plot);
+        NumberField(L, "rooms", h.rooms); NumberField(L, "placed", h.placed); NumberField(L, "maxDecor", h.maxDecor);
+        lua_pushstring(L, h.hoodName.c_str()); lua_setfield(L, -2, "hoodName");
+        AccessTable(L, h.access); lua_setfield(L, -2, "access");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "homes");
+    lua_createtable(L, int(n.hoods.size()), 0);
+    i = 0;
+    for (HoodEntry const& h : n.hoods) {
+        lua_createtable(L, 0, 6);
+        NumberField(L, "id", h.id); NumberField(L, "map", h.map); NumberField(L, "free", h.free);
+        lua_pushstring(L, h.kind ? "guild" : "account"); lua_setfield(L, -2, "kind");
+        lua_pushstring(L, roles[h.role < 4 ? h.role : 3]); lua_setfield(L, -2, "role");
+        lua_pushstring(L, h.name.c_str()); lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "hoods");
+    VisitList(L, n.favorites); lua_setfield(L, -2, "favorites");
+    VisitList(L, n.recent); lua_setfield(L, -2, "recent");
+    lua_createtable(L, int(n.members.size()), 0);
+    i = 0;
+    for (auto const& [account, name] : n.members) {
+        lua_createtable(L, 0, 2);
+        NumberField(L, "account", account);
+        lua_pushstring(L, name.c_str()); lua_setfield(L, -2, "name");
+        lua_rawseti(L, -2, ++i);
+    }
+    lua_setfield(L, -2, "members");
+    if (n.guild) {
+        lua_createtable(L, 0, 6);
+        NumberField(L, "id", n.guild); NumberField(L, "price", n.guildPrice); NumberField(L, "bank", n.bank);
+        lua_pushboolean(L, n.leader); lua_setfield(L, -2, "leader");
+        lua_pushboolean(L, n.canBuyGuild); lua_setfield(L, -2, "canBuy");
+        lua_createtable(L, int(n.rankRights.size()), 0);
+        i = 0;
+        for (uint8_t rights : n.rankRights) {
+            RightsTable(L, rights);
+            lua_rawseti(L, -2, ++i);
+        }
+        lua_setfield(L, -2, "ranks");
+        lua_setfield(L, -2, "guild");
+    }
     return 1;
 }
 
-int32_t RequestNeighborhood(lua_State* L) { return SendAction(L, ActionNeighborhood); }
-int32_t TravelNeighborhood(lua_State* L) { return SendAction(L, ActionTravelNeighborhood); }
+uint32_t OptId(lua_State* L, int index) { return lua_isnumber(L, index) ? uint32_t(lua_tonumber(L, index)) : 0; }
+
+// EsteriaHousing_RequestNeighborhood([hood]): the window for that neighborhood (default: the one you are in, else yours).
+int32_t RequestNeighborhood(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionNeighborhood).Put<uint32_t>(OptId(L, 1)).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_TravelNeighborhood([hood]): to its entry (default: your own neighborhood).
+int32_t TravelNeighborhood(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionTravelNeighborhood).Put<uint32_t>(OptId(L, 1)).Send(CMSG_ACTION));
+    return 1;
+}
+
 int32_t TravelBack(lua_State* L) { return SendAction(L, ActionTravelBack); }
 
-// EsteriaHousing_SetHouseAccess(party, friends, guild, everyone): who may visit your house. The answer is another
-// ESTERIA_HOUSING_NEIGHBORHOOD.
+// EsteriaHousing_SetHouseAccess(house, party, friends, guild, everyone): who may visit that house of yours. The answer
+// is another ESTERIA_HOUSING_NEIGHBORHOOD.
 int32_t SetHouseAccess(lua_State* L) {
-    uint8_t const access = (lua_toboolean(L, 1) ? AccessParty : 0) | (lua_toboolean(L, 2) ? AccessFriends : 0)
-        | (lua_toboolean(L, 3) ? AccessGuild : 0) | (lua_toboolean(L, 4) ? AccessEveryone : 0);
-    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionHouseAccess).Put<uint8_t>(access).Send(CMSG_ACTION));
+    uint8_t const access = (lua_toboolean(L, 2) ? AccessParty : 0) | (lua_toboolean(L, 3) ? AccessFriends : 0)
+        | (lua_toboolean(L, 4) ? AccessGuild : 0) | (lua_toboolean(L, 5) ? AccessEveryone : 0);
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionHouseAccess).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Put<uint8_t>(access).Send(CMSG_ACTION));
     return 1;
 }
 
-// EsteriaHousing_TravelPlot(plot): plot as GetNeighborhood gives it. The server refuses what isn't allowed.
+// EsteriaHousing_TravelPlot(hood, plot): plot as GetNeighborhood gives it. The server refuses what isn't allowed.
 int32_t TravelPlot(lua_State* L) {
-    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionTravelPlot).Put<uint16_t>(uint16_t(luaL_checknumber(L, 1)))
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionTravelPlot).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Put<uint16_t>(uint16_t(luaL_checknumber(L, 2))).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_BuyPlot([house]): buy the viewed plot for a new house, or to mirror one of yours (GetPlot().choices).
+int32_t BuyPlot(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionBuyPlot).Put<uint32_t>(OptId(L, 1)).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_SetFavorite(house, hood, on)
+int32_t SetFavorite(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionFavorite).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Put<uint32_t>(uint32_t(luaL_checknumber(L, 2))).Put<uint8_t>(lua_toboolean(L, 3) ? 1 : 0).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_Invite(hood, characterName) / EsteriaHousing_Uninvite(hood, account)
+int32_t Invite(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionInvite).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .PutString(luaL_checkstring(L, 2)).Send(CMSG_ACTION));
+    return 1;
+}
+
+int32_t Uninvite(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionUninvite).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Put<uint32_t>(uint32_t(luaL_checknumber(L, 2))).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_MoveNeighborhood(hood, map): 0 Founder's Point, 1 Razorwind Shores.
+int32_t MoveNeighborhood(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionHoodMap).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Put<uint8_t>(uint8_t(luaL_checknumber(L, 2))).Send(CMSG_ACTION));
+    return 1;
+}
+
+// EsteriaHousing_BuyGuildNeighborhood(map): the Guild Master, from the guild bank.
+int32_t BuyGuildNeighborhood(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionBuyGuildHood).Put<uint8_t>(uint8_t(luaL_checknumber(L, 1)))
         .Send(CMSG_ACTION));
     return 1;
 }
 
-int32_t BuyPlot(lua_State* L) { return SendAction(L, ActionBuyPlot); }
+// EsteriaHousing_SetGuildRankRights(rank, buy, invite, manage): rank 1.. (as GuildControlGetRankName(rank + 1)).
+int32_t SetGuildRankRights(lua_State* L) {
+    uint8_t const rights = (lua_toboolean(L, 2) ? RightBuy : 0) | (lua_toboolean(L, 3) ? RightInvite : 0)
+        | (lua_toboolean(L, 4) ? RightManage : 0);
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionGuildRights).Put<uint8_t>(uint8_t(luaL_checknumber(L, 1)))
+        .Put<uint8_t>(rights).Send(CMSG_ACTION));
+    return 1;
+}
+
+int32_t MoveOut(lua_State* L) { return SendAction(L, ActionMoveOut); }
+
+// EsteriaHousing_EnterHouse(house): into one of your houses, wherever you are (as travel allows).
+int32_t EnterHouse(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionEnterHouse).Put<uint32_t>(uint32_t(luaL_checknumber(L, 1)))
+        .Send(CMSG_ACTION));
+    return 1;
+}
 int32_t EnterPlot(lua_State* L) { return SendAction(L, ActionEnterPlot); }
 int32_t RemoveRoom(lua_State* L) { return SendAction(L, ActionRemoveRoom); }
 
@@ -1264,6 +1504,14 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetSurfaceSnap", SetSurfaceSnap, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelBack", TravelBack, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_TravelPlot", TravelPlot, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetFavorite", SetFavorite, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_Invite", Invite, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_Uninvite", Uninvite, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MoveNeighborhood", MoveNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_BuyGuildNeighborhood", BuyGuildNeighborhood, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGuildRankRights", SetGuildRankRights, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MoveOut", MoveOut, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_EnterHouse", EnterHouse, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetLayout", GetLayout, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_AddRoom", AddRoom, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RemoveRoom", RemoveRoom, FRAMESCRIPT_CONTEXTS_GAME);

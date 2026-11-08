@@ -43,6 +43,23 @@ action:SetSize(160, 26); action:SetPoint("BOTTOM", 0, 16)
 
 local plot, openedAt
 
+-- a neighbor's house: keep it on the Neighborhood window's Favorites
+local favorite = CreateFrame("Button", "EsteriaHousingPlotFavorite", f, "UIPanelButtonTemplate")
+favorite:SetSize(90, 20); favorite:SetPoint("TOPRIGHT", -26, -60)
+favorite:SetScript("OnClick", function()
+  if plot and plot.house > 0 then EsteriaHousing_SetFavorite(plot.house, plot.hood, not plot.favorite) end
+end)
+
+-- your plot: take the house off it (saved, with its rooms and indoor decor, to put on another plot)
+local moveOut = CreateFrame("Button", "EsteriaHousingPlotMoveOut", f, "UIPanelButtonTemplate")
+moveOut:SetSize(80, 20); moveOut:SetPoint("BOTTOMLEFT", 14, 19); moveOut:SetText("Move Out")
+moveOut:SetScript("OnClick", function() StaticPopup_Show("ESTERIA_HOUSING_MOVE_OUT") end)
+StaticPopupDialogs["ESTERIA_HOUSING_MOVE_OUT"] = {
+  text = "Move your house off this plot?\n\nThe house, its rooms and indoor decor are saved, and the decor in its yard goes back to storage. Buy a plot anywhere to put it there again.",
+  button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
+  OnAccept = function() EsteriaHousing_MoveOut() end,
+}
+
 -- ------------------------------------------------------------------------------------------------ your house
 
 -- Your plot: the house's style, and where it stands (moved in yd from its spot, turned in 15 degree steps).
@@ -299,8 +316,16 @@ StaticPopupDialogs["ESTERIA_HOUSING_BUY_PLOT"] = {
   -- StaticPopup_Show formats with two values only, so the whole question arrives as the first
   text = "%s",
   button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
-  OnAccept = function() EsteriaHousing_BuyPlot() end,
+  OnAccept = function(self, house) EsteriaHousing_BuyPlot(house or 0) end,
 }
+local buyMenu = CreateFrame("Frame", "EsteriaHousingBuyMenu", UIParent, "UIDropDownMenuTemplate")
+
+-- house 0 builds a new one; another mirrors that house of yours here (the same rooms and decor in both places)
+local function ConfirmBuy(house, what)
+  local dialog = StaticPopup_Show("ESTERIA_HOUSING_BUY_PLOT", string.format("Buy plot %d in %s for %s?\n\n%s",
+    plot.plot, plot.neighborhood, GetCoinTextureString(plot.price), what))
+  if dialog then dialog.data = house end
+end
 
 local function Redraw()
   if not plot then return f:Hide() end
@@ -308,6 +333,12 @@ local function Redraw()
   place:SetText(plot.neighborhood)
   message:SetText(plot.message or "")
   priceLabel:Hide(); price:Hide(); action:Show(); action:Enable()
+  if plot.status == "visit" and plot.house > 0 then
+    favorite:SetText(plot.favorite and "Unfavorite" or "Favorite"); favorite:Show()
+  else
+    favorite:Hide()
+  end
+  if plot.status == "yours" then moveOut:Show() else moveOut:Hide() end
   local mine = plot.status == "yours" and plot.styles and #plot.styles > 0
   if mine then house:Show() else house:Hide() end
   local parts = mine and plot.parts or {}
@@ -330,9 +361,9 @@ local function Redraw()
     priceLabel:Show(); price:Show()
     local afford = GetMoney() >= plot.price
     price:SetText((afford and "" or "|cffff4040") .. GetCoinTextureString(plot.price))
-    action:SetText("Buy Plot")
-    if not afford or plot.houseElsewhere then action:Disable() end
-    if plot.houseElsewhere and plot.message == "" then message:SetText("Your house already stands on another plot.") end
+    action:SetText(#plot.choices > 0 and "Buy Plot..." or "Buy Plot")
+    if not afford or not plot.canBuy then action:Disable() end
+    if not plot.canBuy and plot.message == "" then message:SetText("Only those who live in this neighborhood may buy here.") end
   elseif plot.status == "yours" then
     status:SetText("|cff40ff40Your Home|r")
     H.Atlas(icon, "housefinder_main-icon")
@@ -354,8 +385,15 @@ end
 action:SetScript("OnClick", function()
   if not plot then return end
   if plot.status == "sale" then
-    StaticPopup_Show("ESTERIA_HOUSING_BUY_PLOT", string.format("Buy plot %d in %s for %s?\n\nA house is built on it right away.",
-      plot.plot, plot.neighborhood, GetCoinTextureString(plot.price)))
+    local fresh = "A new house is built on it right away."
+    if #plot.choices == 0 then return ConfirmBuy(0, fresh) end
+    local items = { { text = "Put on this plot", isTitle = true, notCheckable = true },
+      { text = "A new house", notCheckable = true, func = function() ConfirmBuy(0, fresh) end } }
+    for _, c in ipairs(plot.choices) do
+      items[#items + 1] = { text = c.label, notCheckable = true, func = function()
+        ConfirmBuy(c.house, "Your house stands here too: the same rooms and decor in both places.") end }
+    end
+    EasyMenu(items, buyMenu, action, 0, 0, "MENU")
   else
     EsteriaHousing_EnterPlot()
     f:Hide()
@@ -370,7 +408,7 @@ f:SetScript("OnUpdate", function(self, elapsed)
   if openedAt and x and ((x - openedAt[1]) ^ 2 + (y - openedAt[2]) ^ 2) > REACH * REACH then self:Hide() end
 end)
 f:SetScript("OnHide", function()
-  StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT"); CloseDropDownMenus()
+  StaticPopup_Hide("ESTERIA_HOUSING_BUY_PLOT"); StaticPopup_Hide("ESTERIA_HOUSING_MOVE_OUT"); CloseDropDownMenus()
   if H.markingSpot then H.markingSpot = nil; EsteriaHousing_SetGizmo(0) end
 end)
 
