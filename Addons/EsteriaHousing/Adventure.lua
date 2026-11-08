@@ -12,8 +12,8 @@ local H = EsteriaHousingUI
 
 local DUMMY_FIRST, DUMMY_LAST = 9505000, 9505003 -- creature entries of the four dummies
 local KINDS = { "Training Dummy", "Tank Dummy", "Healing Dummy", "Boss Dummy" }
-local KIND_NOTE = { "Practice damage on a target that never fights back.", "It fights back: practice taking hits.",
-  "It loses health over time: keep it alive.", "Interrupt its heals, dodge its puddles, beat the enrage." }
+local KIND_NOTE = { "Practice your damage.", "It fights back: take its hits.", "It bleeds: keep it alive.",
+  "It heals itself: interrupt it." }
 local LINE_H, BOX_TOP = 24, -116
 
 local function Send(...) EsteriaHousing_Commerce(table.concat({ "adv", ... }, "\t")) end
@@ -39,12 +39,13 @@ local function Window(name, w, h, icon)
   SetPortraitToTexture(f.portrait, icon)
   local ring = H.Atlas(f:CreateTexture(nil, "OVERLAY"), "housing-layout-room-orb-ring-default")
   ring:SetSize(74, 74); ring:SetPoint("CENTER", f.portrait, "CENTER", 0, 0)
+  -- the title sits in the panel's header band, the status and note below it, each one line cut short
   f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  f.title:SetPoint("TOPLEFT", f.portrait, "TOPRIGHT", 14, -4); f.title:SetPoint("RIGHT", -30, 0); f.title:SetJustifyH("LEFT")
+  f.title:SetPoint("TOPLEFT", 86, -14); f.title:SetPoint("RIGHT", -30, 0); f.title:SetJustifyH("LEFT"); f.title:SetHeight(18)
   f.status = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  f.status:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -4); f.status:SetPoint("RIGHT", -20, 0); f.status:SetJustifyH("LEFT")
+  f.status:SetPoint("TOPLEFT", 86, -48); f.status:SetPoint("RIGHT", -16, 0); f.status:SetJustifyH("LEFT"); f.status:SetHeight(12)
   f.note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  f.note:SetPoint("TOPLEFT", f.status, "BOTTOMLEFT", 0, -4); f.note:SetPoint("RIGHT", -20, 0); f.note:SetJustifyH("LEFT")
+  f.note:SetPoint("TOPLEFT", 86, -63); f.note:SetPoint("RIGHT", -16, 0); f.note:SetJustifyH("LEFT"); f.note:SetHeight(12)
   local divider = H.Atlas(f:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
   divider:SetPoint("TOPLEFT", 16, -82); divider:SetPoint("TOPRIGHT", -16, -82); divider:SetHeight(2)
   return f
@@ -98,9 +99,14 @@ local function Button(parent, text, width)
   return b
 end
 
+-- a text field drawn like the dropdowns: a dark box with the housing border
 local function Box(parent, width, numeric)
-  local b = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  b:SetSize(width, 18); b:SetAutoFocus(false)
+  local b = CreateFrame("EditBox", nil, parent)
+  b:SetSize(width, 20); b:SetAutoFocus(false); b:SetFontObject(GameFontHighlightSmall)
+  b:SetTextInsets(6, 6, 0, 0)
+  b:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+  b:SetBackdropColor(0, 0, 0, 0.8); b:SetBackdropBorderColor(0.55, 0.42, 0.25)
   if numeric then b:SetNumeric(true) end
   b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   b:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
@@ -121,9 +127,9 @@ local function List(parent, top, rows, rowH)
   local name = "EsteriaHousingAdventureList" .. listCount
   local l = { items = {}, filter = "" }
   l.search = Box(parent, 180)
-  l.search:SetPoint("TOPLEFT", 14, top)
+  l.search:SetPoint("TOPLEFT", 10, top)
   local hint = l.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-  hint:SetPoint("LEFT", 6, 0); hint:SetText("Search")
+  hint:SetPoint("LEFT", 7, 0); hint:SetText("Search")
   local sf = CreateFrame("ScrollFrame", name, parent, "FauxScrollFrameTemplate")
   sf:SetPoint("TOPLEFT", 6, top - 26); sf:SetPoint("RIGHT", -28, 0); sf:SetHeight(rows * rowH)
   l.buttons = {}
@@ -188,8 +194,8 @@ local tpages = Tabs(T, tbox, { "Session", "Settings" }, function(i) T:PickTab(i,
 
 -- Session: a two-column grid of what it measured
 local STATS = { { "elapsed", "Time" }, { "damage", "Damage" }, { "dps", "DPS" }, { "healing", "Healing" }, { "hps", "HPS" },
-  { "overheal", "Overhealing" }, { "taken", "Damage taken" }, { "kicks", "Interrupts" }, { "puddles", "Seconds in puddles" },
-  { "drops", "Patient dropped" }, { "targets", "Targets" } }
+  { "overheal", "Overhealing" }, { "taken", "Damage taken" }, { "kicks", "Interrupts" }, { "drops", "Patient dropped" },
+  { "targets", "Targets" } }
 local cells = {}
 for i, s in ipairs(STATS) do
   local c = CreateFrame("Frame", nil, tpages[1])
@@ -214,8 +220,7 @@ function H.TrainingButtons(tab) Show(stop, tab == 1); Show(reset, tab == 1) end
 -- Settings (the owner's): striped lines, Save at the foot
 local CONFIG = { { "level", "Level", 50 }, { "armor", "Armor (0: normal for its level)", 70 }, { "resist", "Resistances", 70 },
   { "health", "Health", 90 }, { "killable", "Can be defeated" }, { "duration", "Session length, seconds (0: until stopped)", 60 },
-  { "interrupts", "Boss: interruptible heals" }, { "puddles", "Boss: puddles to dodge" }, { "enrageOn", "Boss: enrage timer" },
-  { "enrage", "Enrage after, seconds", 60 } }
+  { "interrupts", "Boss: heals itself (interrupt them)" }, { "enrageOn", "Boss: enrage timer" }, { "enrage", "Enrage after, seconds", 60 } }
 local fields = {}
 for i, c in ipairs(CONFIG) do
   local line = Line(tpages[2], i, -8, c[2])
@@ -227,7 +232,7 @@ end
 local save = Button(tpages[2], "Save", 90); save:SetPoint("BOTTOMRIGHT", -8, 8)
 save:SetScript("OnClick", function()
   if not dummy then return end
-  local drills = (fields.interrupts:GetChecked() and 1 or 0) + (fields.puddles:GetChecked() and 2 or 0) + (fields.enrageOn:GetChecked() and 4 or 0)
+  local drills = (fields.interrupts:GetChecked() and 1 or 0) + (fields.enrageOn:GetChecked() and 4 or 0)
   Send("dummyset", dummy.placed, fields.level:GetText(), fields.armor:GetText(), fields.resist:GetText(), fields.health:GetText(),
     fields.killable:GetChecked() and 1 or 0, fields.duration:GetText(), drills, fields.enrage:GetText())
   T:PickTab(1, { true, true })
@@ -260,9 +265,9 @@ local function ReadTraining(lines)
   bigLabel:SetText(heal and "Healing per second" or tank and "Damage taken per second" or "Damage per second")
   local values = { elapsed = secs, damage = Short(s.damage), dps = Short(s.dps), healing = Short(s.healing), hps = Short(s.hps),
     overheal = Short(s.overheal), taken = Short(s.taken), kicks = string.format("%d of %d", s.kicks, s.kicks + s.missed),
-    puddles = s.puddles, drops = s.drops, targets = s.targets }
+    drops = s.drops, targets = s.targets }
   local shown = { elapsed = true, targets = true, damage = not heal, dps = not heal, healing = heal, hps = heal, overheal = heal,
-    drops = heal, taken = tank, kicks = kind == 4, puddles = kind == 4 }
+    drops = heal, taken = tank, kicks = kind == 4 }
   local n = 0
   for _, st in ipairs(STATS) do
     local c = cells[st[1]]
@@ -283,9 +288,8 @@ local function ReadTraining(lines)
   end
   fields.killable:SetChecked(c.killable)
   fields.interrupts:SetChecked(c.drills % 2 == 1)
-  fields.puddles:SetChecked(math.floor(c.drills / 2) % 2 == 1)
   fields.enrageOn:SetChecked(math.floor(c.drills / 4) % 2 == 1)
-  for _, k in ipairs({ "interrupts", "puddles", "enrageOn", "enrage" }) do Show(fields[k].line, kind == 4) end
+  for _, k in ipairs({ "interrupts", "enrageOn", "enrage" }) do Show(fields[k].line, kind == 4) end
   if first then T:PickTab(1, { true, d.owner }); H.TrainingButtons(1) end
   T:Show()
 end
@@ -314,7 +318,7 @@ local LOOKS = { "K'areshi Portal", "Portal to Damnation", "Translocation Portal"
 local ACCESS = { { 16, "Party and raid members" }, { 2, "Friends" }, { 4, "Guild members" }, { 1, "Everyone" } }
 local FACTION = { [0] = "", [1] = "|cff4080ffAlliance|r", [2] = "|cffff4040Horde|r" }
 
-local travel = Button(P, "Travel", 100); travel:SetPoint("TOPRIGHT", -18, -50)
+local travel = Button(P, "Travel", 100); travel:SetPoint("BOTTOMRIGHT", -16, 14)
 travel:SetScript("OnClick", function()
   if not portal then return end
   local dialog = StaticPopup_Show("ESTERIA_HOUSING_PORTAL_GO", portal.destName)
@@ -325,7 +329,7 @@ StaticPopupDialogs["ESTERIA_HOUSING_PORTAL_GO"] = {
   OnAccept = function(self, placed) Send("portalgo", placed); P:Hide() end,
 }
 
-local pbox = Inset(P, BOX_TOP, 14)
+local pbox = Inset(P, BOX_TOP, 44)
 local ppages = Tabs(P, pbox, { "Destination", "Appearance", "Access" }, function(i) P:PickTab(i) end)
 
 -- every change saves at once
@@ -339,7 +343,7 @@ end
 local destList = List(ppages[1], -10, 11, 24)
 
 local nameLine = Line(ppages[2], 1, -10, "Name")
-local nameBox = Box(nameLine, 180); nameBox:SetPoint("RIGHT", -8, 0)
+local nameBox = Box(nameLine, 200); nameBox:SetPoint("RIGHT", -4, 0)
 nameBox:SetScript("OnEnterPressed", function(self) self:ClearFocus(); choice.name = self:GetText(); SavePortal() end)
 local lookTitle = ppages[2]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
 lookTitle:SetPoint("TOPLEFT", 12, -46); lookTitle:SetText("Look")
@@ -385,7 +389,6 @@ local function ReadPortal(lines)
   P.title:SetText(portal.name ~= "" and portal.name or "Portal")
   P.status:SetText(portal.destName and ("Leads to |cffffffff" .. portal.destName .. "|r") or "|cff808080Leads nowhere yet|r")
   P.note:SetText(portal.owner and "Your portal. Changes save at once." or "")
-  P.title:SetPoint("RIGHT", -130, 0)
   if portal.destName then travel:Enable() else travel:Disable() end
   -- the owner's tabs
   local items = { { header = true, text = "Cities" } }
@@ -408,7 +411,7 @@ local function ReadPortal(lines)
   for i, line in ipairs(lookLines) do line.check:SetChecked(choice.look == i - 1) end
   for i, a in ipairs(ACCESS) do accessLines[i].check:SetChecked(bit.band(choice.access or 0, a[1]) ~= 0) end
   Show(pbox, portal.owner)
-  P:SetHeight(portal.owner and 470 or 100)
+  P:SetHeight(portal.owner and 470 or 124)
   if not P:IsShown() then P:PickTab(1) end
   for i = 1, 3 do Show(_G["EsteriaHousingPortalTab" .. i], portal.owner) end
   P:Show()
@@ -421,9 +424,9 @@ M:SetPoint("LEFT", 60, 40)
 local stone, stoneOptions = nil, {}
 local EXPANSIONS = { [0] = "Classic", [1] = "Burning Crusade", [2] = "Wrath of the Lich King" }
 
-local go = Button(M, "Travel", 100); go:SetPoint("TOPRIGHT", -18, -46)
+local go = Button(M, "Travel", 100); go:SetPoint("BOTTOMRIGHT", -16, 14)
 go:SetScript("OnClick", function() if stone then Send("stonego", stone.placed); M:Hide() end end)
-local party = Button(M, "Take Party", 100); party:SetPoint("TOP", go, "BOTTOM", 0, -4)
+local party = Button(M, "Take Party", 100); party:SetPoint("RIGHT", go, "LEFT", -6, 0)
 party:SetScript("OnClick", function() if stone then Send("stoneparty", stone.placed); M:Hide() end end)
 party:SetScript("OnEnter", function(self)
   GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine("Take Party")
@@ -432,12 +435,24 @@ party:SetScript("OnEnter", function(self)
 end)
 party:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
-local mbox = Inset(M, BOX_TOP, 14)
-local mpages = Tabs(M, mbox, { "Dungeons" }, function(i) M:PickTab(i) end)
-local dungeonList = List(mpages[1], -10, 11, 24)
+local mbox = Inset(M, BOX_TOP, 44)
+local mpages = Tabs(M, mbox, { "Dungeons", "Appearance" }, function(i) M:PickTab(i) end)
+local dungeonList = List(mpages[1], -10, 10, 24)
+-- its look, as the portal's
+local STONE_LOOKS = { "Harandar Runestone", "Runestone Ring", "Rune Pillar", "Meeting Stone" }
+local stoneLookTitle = mpages[2]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+stoneLookTitle:SetPoint("TOPLEFT", 12, -12); stoneLookTitle:SetText("Look")
+local stoneLookLines = {}
+for i, name in ipairs(STONE_LOOKS) do
+  local line = Line(mpages[2], i, -30, name)
+  local c = Check(line); c:SetPoint("RIGHT", -4, 0)
+  c:SetScript("OnClick", function() if stone then Send("stonelook", stone.placed, i - 1) end end)
+  line.check = c
+  stoneLookLines[i] = line
+end
 local mNote = mpages[1]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 mNote:SetPoint("BOTTOMLEFT", 12, 8); mNote:SetWidth(320); mNote:SetJustifyH("LEFT")
-mNote:SetText("Pick the dungeon this stone leads to. It takes travelers to the entrance, never inside.")
+mNote:SetText("Travelers arrive at the entrance, never inside.")
 
 local function ReadStone(lines)
   stoneOptions = {}
@@ -445,7 +460,7 @@ local function ReadStone(lines)
     local f = Fields(line)
     if f[1] == "stone" then
       stone = { placed = f[2], owner = f[3] == "1", name = f[4], level = Num(f[5]), expansion = Num(f[6]), guid = f[7],
-        grouped = f[8] == "1" }
+        grouped = f[8] == "1", look = Num(f[9]) }
     elseif f[1] == "stoneopt" then
       stoneOptions[#stoneOptions + 1] = { guid = f[2], name = f[3], level = Num(f[4]), expansion = Num(f[5]) }
     end
@@ -455,7 +470,7 @@ local function ReadStone(lines)
   M.status:SetText(bound and string.format("Level %d+  |cffb0b0b0%s|r", stone.level, EXPANSIONS[stone.expansion] or "")
     or "|cff808080Not bound to a dungeon yet|r")
   M.note:SetText(bound and "Travels to the dungeon's entrance." or "")
-  M.title:SetPoint("RIGHT", -130, 0)
+  for i, line in ipairs(stoneLookLines) do line.check:SetChecked(stone.look == i - 1) end
   if bound then go:Enable() else go:Disable() end
   if bound and stone.grouped then party:Enable() else party:Disable() end
   local items = {}
@@ -476,9 +491,9 @@ local function ReadStone(lines)
   dungeonList.items = items
   dungeonList:Update()
   Show(mbox, stone.owner)
-  Show(_G["EsteriaHousingStoneTab1"], stone.owner)
-  M:SetHeight(stone.owner and 470 or 110)
-  if stone.owner then M:PickTab(1) end
+  M:SetHeight(stone.owner and 470 or 124)
+  if stone.owner and not M:IsShown() then M:PickTab(1) end
+  for i = 1, 2 do Show(_G["EsteriaHousingStoneTab" .. i], stone.owner) end
   M:Show()
 end
 
