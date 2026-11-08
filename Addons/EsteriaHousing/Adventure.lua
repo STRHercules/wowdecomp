@@ -2,6 +2,9 @@
 -- decor in the Utility category; this file is their windows. It talks over the commerce channel: commands start with
 -- "adv\t" (EsteriaHousing_Commerce) and the answers are "training", "portal", "stone", "stoneinvite" and "homechoice"
 -- records (ESTERIA_HOUSING_COMMERCE; mod-esteria-housing HousingAdventure.inc writes them).
+--
+-- The windows share one look, after retail's housing panels: a round portrait in a gold ring, a title and status line,
+-- then tabs standing on an inset, striped lines and searchable lists inside it.
 
 if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
@@ -9,7 +12,9 @@ local H = EsteriaHousingUI
 
 local DUMMY_FIRST, DUMMY_LAST = 9505000, 9505003 -- creature entries of the four dummies
 local KINDS = { "Training Dummy", "Tank Dummy", "Healing Dummy", "Boss Dummy" }
-local ROW_H = 22
+local KIND_NOTE = { "Practice damage on a target that never fights back.", "It fights back: practice taking hits.",
+  "It loses health over time: keep it alive.", "Interrupt its heals, dodge its puddles, beat the enrage." }
+local LINE_H, BOX_TOP = 24, -116
 
 local function Send(...) EsteriaHousing_Commerce(table.concat({ "adv", ... }, "\t")) end
 local function Fields(line) local out = {} for f in (line .. "\t"):gmatch("([^\t]*)\t") do out[#out + 1] = f end return out end
@@ -19,36 +24,83 @@ local function Short(n)
   if n >= 1e6 then return string.format("%.2fM", n / 1e6) elseif n >= 1e4 then return string.format("%.1fk", n / 1e3) end
   return tostring(math.floor(n))
 end
+local function Clock(s) s = Num(s) return string.format("%d:%02d", math.floor(s / 60), s % 60) end
+local function Show(w, on) if on then w:Show() else w:Hide() end end
 
-local menu = CreateFrame("Frame", "EsteriaHousingAdventureMenu", UIParent, "UIDropDownMenuTemplate")
+-- ------------------------------------------------------------------------------------------------ the shared look
 
--- a window in the housing style: title, a close button and striped lines with a label on the left
-local function Window(name, w, h, titleText)
+local function Window(name, w, h, icon)
   local f = H.Panel(name, w, h)
   tinsert(UISpecialFrames, name)
-  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
-  f.title:SetPoint("TOP", 0, -9); f.title:SetText(titleText)
-  f.sub = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  f.sub:SetPoint("TOP", f.title, "BOTTOM", 0, -2)
   local close = CreateFrame("Button", nil, f, "UIPanelCloseButton")
   close:SetPoint("TOPRIGHT", 2, 2)
-  f.lines = {}
-  function f:Line(i, top, label)
-    local line = CreateFrame("Frame", nil, self)
-    line:SetSize(w - 28, ROW_H); line:SetPoint("TOPLEFT", 14, top - (i - 1) * (ROW_H + 2))
-    local bg = line:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.03 or 0.07)
-    line.label = line:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    line.label:SetPoint("LEFT", 8, 0); line.label:SetText(label or "")
-    line.value = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    line.value:SetPoint("RIGHT", -8, 0); line.value:SetJustifyH("RIGHT")
-    return line
-  end
+  f.portrait = f:CreateTexture(nil, "ARTWORK")
+  f.portrait:SetSize(54, 54); f.portrait:SetPoint("TOPLEFT", 18, -14)
+  SetPortraitToTexture(f.portrait, icon)
+  local ring = H.Atlas(f:CreateTexture(nil, "OVERLAY"), "housing-layout-room-orb-ring-default")
+  ring:SetSize(74, 74); ring:SetPoint("CENTER", f.portrait, "CENTER", 0, 0)
+  f.title = f:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  f.title:SetPoint("TOPLEFT", f.portrait, "TOPRIGHT", 14, -4); f.title:SetPoint("RIGHT", -30, 0); f.title:SetJustifyH("LEFT")
+  f.status = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  f.status:SetPoint("TOPLEFT", f.title, "BOTTOMLEFT", 0, -4); f.status:SetPoint("RIGHT", -20, 0); f.status:SetJustifyH("LEFT")
+  f.note = f:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  f.note:SetPoint("TOPLEFT", f.status, "BOTTOMLEFT", 0, -4); f.note:SetPoint("RIGHT", -20, 0); f.note:SetJustifyH("LEFT")
+  local divider = H.Atlas(f:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
+  divider:SetPoint("TOPLEFT", 16, -82); divider:SetPoint("TOPRIGHT", -16, -82); divider:SetHeight(2)
   return f
+end
+
+-- the inset the tabs stand on; pages are frames filling it
+local function Inset(f, top, bottom)
+  local box = CreateFrame("Frame", nil, f)
+  box:SetPoint("TOPLEFT", 14, top); box:SetPoint("BOTTOMRIGHT", -14, bottom)
+  box:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+  box:SetBackdropColor(0, 0, 0, 0.45); box:SetBackdropBorderColor(0.55, 0.42, 0.25)
+  return box
+end
+
+local function Tabs(f, box, names, onPick)
+  local tabs, pages = {}, {}
+  for i, name in ipairs(names) do
+    local page = CreateFrame("Frame", nil, box); page:SetAllPoints(); page:Hide()
+    pages[i] = page
+    local b = CreateFrame("Button", f:GetName() .. "Tab" .. i, f, "OptionsFrameTabButtonTemplate")
+    b:SetID(i); b:SetText(name)
+    if i == 1 then b:SetPoint("BOTTOMLEFT", box, "TOPLEFT", 6, -2) else b:SetPoint("LEFT", tabs[i - 1], "RIGHT", -14, 0) end
+    PanelTemplates_TabResize(b, 0)
+    b:SetScript("OnClick", function() PlaySound("igCharacterInfoTab"); onPick(i) end)
+    tabs[i] = b
+  end
+  f.numTabs = #names
+  function f:PickTab(i, shown)
+    for k, page in ipairs(pages) do Show(page, k == i); Show(tabs[k], shown == nil or shown[k]) end
+    PanelTemplates_SetTab(self, i)
+  end
+  return pages, tabs
+end
+
+-- a striped line inside a page: its label on the left, a value or control on the right
+local function Line(parent, i, top, label)
+  local line = CreateFrame("Frame", nil, parent)
+  line:SetHeight(LINE_H); line:SetPoint("TOPLEFT", 6, top - (i - 1) * (LINE_H + 2)); line:SetPoint("RIGHT", -6, 0)
+  local bg = line:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.03 or 0.07)
+  line.label = line:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+  line.label:SetPoint("LEFT", 8, 0); line.label:SetText(label or "")
+  line.value = line:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  line.value:SetPoint("RIGHT", -8, 0); line.value:SetJustifyH("RIGHT")
+  return line
+end
+
+local function Button(parent, text, width)
+  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+  b:SetSize(width or 90, 22); b:SetText(text)
+  return b
 end
 
 local function Box(parent, width, numeric)
   local b = CreateFrame("EditBox", nil, parent, "InputBoxTemplate")
-  b:SetSize(width, 18); b:SetAutoFocus(false); b:SetPoint("RIGHT", -8, 0)
+  b:SetSize(width, 18); b:SetAutoFocus(false)
   if numeric then b:SetNumeric(true) end
   b:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
   b:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
@@ -57,71 +109,128 @@ end
 
 local function Check(parent)
   local c = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate")
-  c:SetSize(22, 22); c:SetPoint("RIGHT", -4, 0)
+  c:SetSize(22, 22)
   return c
 end
 
-local function Button(parent, text, width)
-  local b = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
-  b:SetSize(width or 80, 22); b:SetText(text)
-  return b
+-- A searchable list: header rows (an expansion, "Cities") and pickable rows, the picked one lit as retail's floor list.
+-- items = { { header = true, text } | { text, sub, picked, fn } }
+local listCount = 0
+local function List(parent, top, rows, rowH)
+  listCount = listCount + 1
+  local name = "EsteriaHousingAdventureList" .. listCount
+  local l = { items = {}, filter = "" }
+  l.search = Box(parent, 180)
+  l.search:SetPoint("TOPLEFT", 14, top)
+  local hint = l.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+  hint:SetPoint("LEFT", 6, 0); hint:SetText("Search")
+  local sf = CreateFrame("ScrollFrame", name, parent, "FauxScrollFrameTemplate")
+  sf:SetPoint("TOPLEFT", 6, top - 26); sf:SetPoint("RIGHT", -28, 0); sf:SetHeight(rows * rowH)
+  l.buttons = {}
+  for i = 1, rows do
+    local b = CreateFrame("Button", nil, parent)
+    b:SetHeight(rowH - 2); b:SetPoint("TOPLEFT", 8, top - 26 - (i - 1) * rowH); b:SetPoint("RIGHT", -30, 0)
+    b.picked = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "housing-floor-list-bg-active"); b.picked:SetAllPoints()
+    b.line = H.Atlas(b:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
+    b.line:SetPoint("BOTTOMLEFT", 0, 2); b.line:SetPoint("BOTTOMRIGHT", 0, 2); b.line:SetHeight(2)
+    b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); b.text:SetPoint("LEFT", 10, 0); b.text:SetJustifyH("LEFT")
+    b.sub = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); b.sub:SetPoint("RIGHT", -8, 0)
+    b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    b:SetScript("OnClick", function(self) if self.item and self.item.fn then PlaySound("igMainMenuOptionCheckBoxOn"); self.item.fn() end end)
+    l.buttons[i] = b
+  end
+  function l:Update()
+    local shown, lastHeader = {}, nil
+    local q = self.filter:lower()
+    for _, it in ipairs(self.items) do
+      if it.header then lastHeader = it
+      elseif q == "" or it.text:lower():find(q, 1, true) then
+        if lastHeader then shown[#shown + 1] = lastHeader; lastHeader = nil end
+        shown[#shown + 1] = it
+      end
+    end
+    FauxScrollFrame_Update(sf, #shown, rows, rowH)
+    local offset = FauxScrollFrame_GetOffset(sf)
+    for i, b in ipairs(self.buttons) do
+      local it = shown[offset + i]
+      b.item = it
+      if not it then b:Hide()
+      else
+        b:Show()
+        b.text:SetText(it.text); b.sub:SetText(it.sub or "")
+        b.text:SetFontObject(it.header and GameFontNormal or GameFontHighlight)
+        Show(b.picked, it.picked); Show(b.line, it.header)
+        if it.header then b:Disable() else b:Enable() end
+      end
+    end
+  end
+  sf:SetScript("OnVerticalScroll", function(self, offset) FauxScrollFrame_OnVerticalScroll(self, offset, rowH, function() l:Update() end) end)
+  l.search:SetScript("OnTextChanged", function(self) l.filter = self:GetText(); Show(hint, l.filter == "" and not self:HasFocus()); l:Update() end)
+  l.search:SetScript("OnEditFocusGained", function() hint:Hide() end)
+  l.search:SetScript("OnEditFocusLost", function(self) Show(hint, self:GetText() == "") end)
+  return l
 end
 
 -- ------------------------------------------------------------------------------------------------ training
 
-local T = Window("EsteriaHousingTraining", 300, 470, "Training Hall")
+local T = Window("EsteriaHousingTraining", 340, 470, "Interface\\Icons\\Ability_Warrior_DefensiveStance")
 T:SetPoint("RIGHT", -60, 40)
 local dummy -- the last "training" answer
 
--- the session: what it measured so far
+-- the headline number: what the dummy trains (DPS, HPS, damage taken per second)
+local big = T:CreateFontString(nil, "OVERLAY", "GameFontNormalHuge")
+big:SetPoint("TOP", 0, -92)
+local bigLabel = T:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+bigLabel:SetPoint("TOP", big, "BOTTOM", 0, -2)
+
+local tbox = Inset(T, -150, 46)
+local tpages = Tabs(T, tbox, { "Session", "Settings" }, function(i) T:PickTab(i, { true, dummy and dummy.owner }); H.TrainingButtons(i) end)
+
+-- Session: a two-column grid of what it measured
 local STATS = { { "elapsed", "Time" }, { "damage", "Damage" }, { "dps", "DPS" }, { "healing", "Healing" }, { "hps", "HPS" },
-  { "overheal", "Overhealing" }, { "taken", "Damage taken" }, { "kicks", "Interrupts" }, { "puddles", "Puddle hits" },
-  { "drops", "Patient dropped" }, { "targets", "Targets" }, { "best", "Personal best" } }
-local statLines = {}
-for i, s in ipairs(STATS) do statLines[s[1]] = T:Line(i, -50, s[2]) end
-local result = T:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-result:SetPoint("TOPLEFT", 18, -50 - #STATS * (ROW_H + 2) - 4); result:SetWidth(264); result:SetJustifyH("LEFT")
+  { "overheal", "Overhealing" }, { "taken", "Damage taken" }, { "kicks", "Interrupts" }, { "puddles", "Seconds in puddles" },
+  { "drops", "Patient dropped" }, { "targets", "Targets" } }
+local cells = {}
+for i, s in ipairs(STATS) do
+  local c = CreateFrame("Frame", nil, tpages[1])
+  c:SetSize(146, 34)
+  local bg = c:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(1, 1, 1, 0.05)
+  c.label = c:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); c.label:SetPoint("TOPLEFT", 8, -4); c.label:SetText(s[2])
+  c.value = c:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); c.value:SetPoint("BOTTOMLEFT", 8, 4)
+  cells[s[1]] = c
+end
+local best = tpages[1]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+local trophy = H.Atlas(tpages[1]:CreateTexture(nil, "ARTWORK"), "house-chest-trophy-icon_32")
+trophy:SetSize(16, 16)
+local result = tpages[1]:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+result:SetWidth(290); result:SetJustifyH("LEFT")
 
-local stop = Button(T, "Stop", 80); stop:SetPoint("TOPLEFT", 14, -50 - #STATS * (ROW_H + 2) - 22)
+local stop = Button(T, "Stop", 90); stop:SetPoint("BOTTOMLEFT", 16, 16)
 stop:SetScript("OnClick", function() Send("stop") end)
-local reset = Button(T, "Reset", 80); reset:SetPoint("LEFT", stop, "RIGHT", 6, 0)
+local reset = Button(T, "Reset", 90); reset:SetPoint("LEFT", stop, "RIGHT", 6, 0)
 reset:SetScript("OnClick", function() Send("reset") end)
-local hint = T:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-hint:SetPoint("LEFT", reset, "RIGHT", 8, 0); hint:SetWidth(100); hint:SetJustifyH("LEFT")
-hint:SetText("Attack or heal to start.")
+function H.TrainingButtons(tab) Show(stop, tab == 1); Show(reset, tab == 1) end
 
--- the owner's settings, a second page
-local setup = CreateFrame("Frame", nil, T)
-setup:SetAllPoints()
-setup:Hide()
-local CONFIG = { { "level", "Level", true }, { "armor", "Armor (0: normal)", true }, { "resist", "Resistances", true },
-  { "health", "Health", true }, { "killable", "Can be defeated" }, { "duration", "Session seconds (0: until stopped)", true },
-  { "interrupts", "Boss: interruptible casts" }, { "puddles", "Boss: puddles" }, { "enrageOn", "Boss: enrage timer" },
-  { "enrage", "Enrage after (seconds)", true } }
+-- Settings (the owner's): striped lines, Save at the foot
+local CONFIG = { { "level", "Level", 50 }, { "armor", "Armor (0: normal for its level)", 70 }, { "resist", "Resistances", 70 },
+  { "health", "Health", 90 }, { "killable", "Can be defeated" }, { "duration", "Session length, seconds (0: until stopped)", 60 },
+  { "interrupts", "Boss: interruptible heals" }, { "puddles", "Boss: puddles to dodge" }, { "enrageOn", "Boss: enrage timer" },
+  { "enrage", "Enrage after, seconds", 60 } }
 local fields = {}
 for i, c in ipairs(CONFIG) do
-  local line = setup.Line and setup:Line(i, -50, c[2]) or T.Line(setup, i, -50, c[2])
-  fields[c[1]] = c[3] and Box(line, 80, true) or Check(line)
-  fields[c[1]].line = line
+  local line = Line(tpages[2], i, -8, c[2])
+  local w = c[3] and Box(line, c[3], true) or Check(line)
+  w:SetPoint("RIGHT", c[3] and -8 or -4, 0)
+  w.line = line
+  fields[c[1]] = w
 end
-local save = Button(setup, "Save", 80); save:SetPoint("BOTTOMRIGHT", -14, 14)
-local back = Button(setup, "Back", 80); back:SetPoint("RIGHT", save, "LEFT", -6, 0)
-local settings = Button(T, "Settings", 80); settings:SetPoint("BOTTOMRIGHT", -14, 14)
-
-local function ShowPage(config)
-  if config then setup:Show() else setup:Hide() end
-  for _, l in pairs(statLines) do if config then l:Hide() else l:Show() end end
-  for _, w in ipairs({ result, stop, reset, hint, settings }) do if config then w:Hide() else w:Show() end end
-  if not config and not (dummy and dummy.owner) then settings:Hide() end
-end
-settings:SetScript("OnClick", function() ShowPage(true) end)
-back:SetScript("OnClick", function() ShowPage(false) end)
+local save = Button(tpages[2], "Save", 90); save:SetPoint("BOTTOMRIGHT", -8, 8)
 save:SetScript("OnClick", function()
   if not dummy then return end
   local drills = (fields.interrupts:GetChecked() and 1 or 0) + (fields.puddles:GetChecked() and 2 or 0) + (fields.enrageOn:GetChecked() and 4 or 0)
   Send("dummyset", dummy.placed, fields.level:GetText(), fields.armor:GetText(), fields.resist:GetText(), fields.health:GetText(),
     fields.killable:GetChecked() and 1 or 0, fields.duration:GetText(), drills, fields.enrage:GetText())
-  ShowPage(false)
+  T:PickTab(1, { true, true })
 end)
 
 local function ReadTraining(lines)
@@ -138,34 +247,36 @@ local function ReadTraining(lines)
         duration = Num(f[15]), result = f[16] or "" }
     elseif f[1] == "best" then d.best = f[2] end
   end
+  local first = not T:IsShown() or not dummy or dummy.placed ~= d.placed
   dummy = d
   local s, kind = d.session, d.kind
-  T.title:SetText(d.name or KINDS[kind] or "Training Dummy")
-  T.sub:SetText(s.active and "|cff40ff40Session running|r" or "Training Hall")
-  local secs = s.duration > 0 and string.format("%d / %d s", s.elapsed, s.duration) or string.format("%d s", s.elapsed)
+  T.title:SetText(d.name ~= "" and d.name or KINDS[kind] or "Training Dummy")
+  T.note:SetText(KIND_NOTE[kind] or "")
+  if UnitExists("target") then SetPortraitTexture(T.portrait, "target") end
+  local secs = s.duration > 0 and string.format("%s / %s", Clock(s.elapsed), Clock(s.duration)) or Clock(s.elapsed)
+  T.status:SetText(s.active and ("|cff40ff40Session running|r  " .. secs) or (s.elapsed > 0 and "|cffffd100Session over|r" or "Ready"))
+  local heal, tank = kind == 3, kind == 2
+  big:SetText(Short(heal and s.hps or tank and (s.elapsed > 0 and Num(s.taken) / s.elapsed or 0) or s.dps))
+  bigLabel:SetText(heal and "Healing per second" or tank and "Damage taken per second" or "Damage per second")
   local values = { elapsed = secs, damage = Short(s.damage), dps = Short(s.dps), healing = Short(s.healing), hps = Short(s.hps),
     overheal = Short(s.overheal), taken = Short(s.taken), kicks = string.format("%d of %d", s.kicks, s.kicks + s.missed),
-    puddles = s.puddles, drops = s.drops, targets = s.targets,
-    best = Short(d.best) .. (kind == 3 and " HPS" or " DPS") }
-  -- each kind shows what it trains
-  local shown = { elapsed = true, targets = true, best = true, damage = kind ~= 3, dps = kind ~= 3, healing = kind == 3, hps = kind == 3,
-    overheal = kind == 3, drops = kind == 3, taken = kind == 2 or kind == 4, kicks = kind == 4, puddles = kind == 4 }
-  local row = 0
+    puddles = s.puddles, drops = s.drops, targets = s.targets }
+  local shown = { elapsed = true, targets = true, damage = not heal, dps = not heal, healing = heal, hps = heal, overheal = heal,
+    drops = heal, taken = tank, kicks = kind == 4, puddles = kind == 4 }
+  local n = 0
   for _, st in ipairs(STATS) do
-    local l = statLines[st[1]]
+    local c = cells[st[1]]
     if shown[st[1]] then
-      row = row + 1
-      l:ClearAllPoints(); l:SetPoint("TOPLEFT", 14, -50 - (row - 1) * (ROW_H + 2))
-      l.value:SetText(values[st[1]]); l.show = true
-    else l.show = false; l:Hide() end
+      c:ClearAllPoints(); c:SetPoint("TOPLEFT", 8 + (n % 2) * 150, -8 - math.floor(n / 2) * 38)
+      c.value:SetText(values[st[1]]); c:Show(); n = n + 1
+    else c:Hide() end
   end
-  result:ClearAllPoints(); result:SetPoint("TOPLEFT", 18, -50 - row * (ROW_H + 2) - 4)
-  result:SetText(s.result ~= "" and s.result or (s.active and "" or "Attack the dummy to start a session."))
-  stop:ClearAllPoints(); stop:SetPoint("TOPLEFT", 14, -50 - row * (ROW_H + 2) - 24)
-  if not setup:IsShown() then
-    for _, st in ipairs(STATS) do if statLines[st[1]].show then statLines[st[1]]:Show() end end
-    if d.owner then settings:Show() else settings:Hide() end
-  end
+  local below = -8 - math.ceil(n / 2) * 38 - 6
+  trophy:ClearAllPoints(); trophy:SetPoint("TOPLEFT", 10, below)
+  best:ClearAllPoints(); best:SetPoint("LEFT", trophy, "RIGHT", 6, 0)
+  best:SetText("Personal best: |cffffffff" .. Short(d.best) .. (heal and " HPS" or " DPS") .. "|r")
+  result:ClearAllPoints(); result:SetPoint("TOPLEFT", 10, below - 24)
+  result:SetText(s.result ~= "" and s.result or (s.active and "" or (heal and "Heal it to start a session." or "Attack it to start a session.")))
   local c = d.config
   for _, k in ipairs({ "level", "armor", "resist", "health", "duration", "enrage" }) do
     if not fields[k]:HasFocus() then fields[k]:SetText(c[k]) end
@@ -174,13 +285,12 @@ local function ReadTraining(lines)
   fields.interrupts:SetChecked(c.drills % 2 == 1)
   fields.puddles:SetChecked(math.floor(c.drills / 2) % 2 == 1)
   fields.enrageOn:SetChecked(math.floor(c.drills / 4) % 2 == 1)
-  for _, k in ipairs({ "interrupts", "puddles", "enrageOn", "enrage" }) do
-    if kind == 4 then fields[k].line:Show() else fields[k].line:Hide() end
-  end
-  if not T:IsShown() then ShowPage(false); T:Show() end
+  for _, k in ipairs({ "interrupts", "puddles", "enrageOn", "enrage" }) do Show(fields[k].line, kind == 4) end
+  if first then T:PickTab(1, { true, d.owner }); H.TrainingButtons(1) end
+  T:Show()
 end
 
--- targeting one of the dummies opens its panel; the server keeps it live while a session runs
+-- targeting one of the dummies opens its window; the server keeps it live while a session runs
 local function DummyGuid()
   local guid = UnitGUID("target")
   if not guid or #guid < 12 then return end
@@ -193,15 +303,18 @@ watcher:SetScript("OnEvent", function()
   local guid = DummyGuid()
   if guid then Send("dummy", guid) end
 end)
-T:SetScript("OnHide", function() Send("close"); ShowPage(false) end)
+T:SetScript("OnHide", function() Send("close") end)
 
 -- ------------------------------------------------------------------------------------------------ portals
 
-local P = Window("EsteriaHousingPortal", 300, 230, "Portal")
+local P = Window("EsteriaHousingPortal", 380, 470, "Interface\\Icons\\Spell_Arcane_PortalDalaran")
 P:SetPoint("LEFT", 60, 40)
-local portal, destinations = nil, {}
-local pDest = P:Line(1, -50, "Leads to")
-local travel = Button(P, "Travel", 100); travel:SetPoint("TOP", 0, -86)
+local portal, destinations, choice = nil, {}, {}
+local LOOKS = { "K'areshi Portal", "Portal to Damnation", "Translocation Portal", "Mage Portal" }
+local ACCESS = { { 16, "Party and raid members" }, { 2, "Friends" }, { 4, "Guild members" }, { 1, "Everyone" } }
+local FACTION = { [0] = "", [1] = "|cff4080ffAlliance|r", [2] = "|cffff4040Horde|r" }
+
+local travel = Button(P, "Travel", 100); travel:SetPoint("TOPRIGHT", -18, -50)
 travel:SetScript("OnClick", function()
   if not portal then return end
   local dialog = StaticPopup_Show("ESTERIA_HOUSING_PORTAL_GO", portal.destName)
@@ -211,61 +324,51 @@ StaticPopupDialogs["ESTERIA_HOUSING_PORTAL_GO"] = {
   text = "Step through the portal to %s?", button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
   OnAccept = function(self, placed) Send("portalgo", placed); P:Hide() end,
 }
-local pName = P:Line(2, -118, "Name")
-local nameBox = Box(pName, 150)
-local pTo = P:Line(3, -118, "Destination")
-local pLook = P:Line(4, -118, "Look")
-local pAccess = P:Line(5, -118, "Who may use it")
-local LOOKS = { "K'areshi Portal", "Portal to Damnation", "Translocation Portal", "Mage Portal" }
-local ACCESS = { { 16, "Party members" }, { 2, "Friends" }, { 4, "Guild members" }, { 1, "Everyone" } }
-local choice = {}
-local function Small(line, text, fn)
-  local b = Button(line, text, 76); b:SetPoint("RIGHT", -4, 0); b:SetScript("OnClick", fn)
-  return b
-end
-Small(pTo, "Choose", function(self)
-  local items = { { text = "Destination", isTitle = true, notCheckable = true } }
-  local cities, homes = {}, {}
-  for _, d in ipairs(destinations) do
-    local item = { text = d.name, checked = choice.kind == d.kind and choice.dest == d.id and choice.hood == d.hood,
-      func = function() choice.kind, choice.dest, choice.hood, choice.name = d.kind, d.id, d.hood, d.name; H.RedrawPortal() end }
-    table.insert(d.kind == 1 and homes or cities, item)
-  end
-  items[#items + 1] = { text = "Cities", notCheckable = true, hasArrow = true, menuList = cities }
-  if #homes > 0 then items[#items + 1] = { text = "My Homes", notCheckable = true, hasArrow = true, menuList = homes } end
-  EasyMenu(items, menu, self, 0, 0, "MENU")
-end)
-Small(pLook, "Choose", function(self)
-  local items = { { text = "Look", isTitle = true, notCheckable = true } }
-  for i, name in ipairs(LOOKS) do
-    items[#items + 1] = { text = name, checked = choice.look == i - 1, func = function() choice.look = i - 1; H.RedrawPortal() end }
-  end
-  EasyMenu(items, menu, self, 0, 0, "MENU")
-end)
-Small(pAccess, "Choose", function(self)
-  local items = { { text = "Who may use it", isTitle = true, notCheckable = true } }
-  for _, a in ipairs(ACCESS) do
-    items[#items + 1] = { text = a[2], checked = bit.band(choice.access or 0, a[1]) ~= 0, keepShownOnClick = true, func = function()
-      choice.access = bit.bxor(choice.access or 0, a[1]); H.RedrawPortal() end }
-  end
-  EasyMenu(items, menu, self, 0, 0, "MENU")
-end)
-local pSave = Button(P, "Save", 80); pSave:SetPoint("BOTTOMRIGHT", -14, 14)
-pSave:SetScript("OnClick", function()
+
+local pbox = Inset(P, BOX_TOP, 14)
+local ppages = Tabs(P, pbox, { "Destination", "Appearance", "Access" }, function(i) P:PickTab(i) end)
+
+-- every change saves at once
+local function SavePortal()
   if portal then
     Send("portalset", portal.placed, choice.kind or 0, choice.dest or 0, choice.hood or 0, choice.look or 0, choice.access or 0,
-      (nameBox:GetText():gsub("[\t\n]", " ")))
+      ((choice.name or ""):gsub("[\t\n]", " ")))
   end
-end)
-
-function H.RedrawPortal()
-  if not portal then return end
-  pTo.label:SetText("Destination: |cffffffff" .. (choice.name ~= "" and choice.name or "none") .. "|r")
-  pLook.label:SetText("Look: |cffffffff" .. (LOOKS[(choice.look or 0) + 1] or "") .. "|r")
-  local who = { "you" }
-  for _, a in ipairs(ACCESS) do if bit.band(choice.access or 0, a[1]) ~= 0 then who[#who + 1] = a[2]:lower() end end
-  pAccess.label:SetText("Who: |cffffffff" .. table.concat(who, ", ") .. "|r")
 end
+
+local destList = List(ppages[1], -10, 11, 24)
+
+local nameLine = Line(ppages[2], 1, -10, "Name")
+local nameBox = Box(nameLine, 180); nameBox:SetPoint("RIGHT", -8, 0)
+nameBox:SetScript("OnEnterPressed", function(self) self:ClearFocus(); choice.name = self:GetText(); SavePortal() end)
+local lookTitle = ppages[2]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+lookTitle:SetPoint("TOPLEFT", 12, -46); lookTitle:SetText("Look")
+local lookLines = {}
+for i, name in ipairs(LOOKS) do
+  local line = Line(ppages[2], i, -64, name)
+  local c = Check(line); c:SetPoint("RIGHT", -4, 0)
+  c:SetScript("OnClick", function() choice.look = i - 1; SavePortal() end)
+  line.check = c
+  lookLines[i] = line
+end
+
+local accessTitle = ppages[3]:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+accessTitle:SetPoint("TOPLEFT", 12, -12); accessTitle:SetText("Who may step through")
+local accessLines = {}
+for i, a in ipairs(ACCESS) do
+  local line = Line(ppages[3], i, -30, a[2])
+  local c = Check(line); c:SetPoint("RIGHT", -4, 0)
+  c:SetScript("OnClick", function(self)
+    local on = bit.band(choice.access or 0, a[1]) ~= 0
+    if on ~= (self:GetChecked() and true or false) then choice.access = bit.bxor(choice.access or 0, a[1]) end
+    SavePortal()
+  end)
+  line.check = c
+  accessLines[i] = line
+end
+local accessNote = ppages[3]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+accessNote:SetPoint("TOPLEFT", 12, -30 - 4 * (LINE_H + 2) - 8); accessNote:SetWidth(320); accessNote:SetJustifyH("LEFT")
+accessNote:SetText("You can always use your own portals. A city also checks the traveler's faction and level.")
 
 local function ReadPortal(lines)
   destinations = {}
@@ -273,53 +376,68 @@ local function ReadPortal(lines)
     local f = Fields(line)
     if f[1] == "portal" then
       portal = { placed = f[2], owner = f[3] == "1", name = f[4], destName = f[5] ~= "" and f[5] or nil }
-      choice = { kind = Num(f[6]), dest = Num(f[7]), hood = Num(f[8]), look = Num(f[9]), access = Num(f[10]), name = f[5] }
+      choice = { kind = Num(f[6]), dest = Num(f[7]), hood = Num(f[8]), look = Num(f[9]), access = Num(f[10]), name = f[4] }
     elseif f[1] == "dest" then
-      destinations[#destinations + 1] = { kind = Num(f[2]), id = Num(f[3]), hood = Num(f[4]), name = f[5] }
+      destinations[#destinations + 1] = { kind = Num(f[2]), id = Num(f[3]), hood = Num(f[4]), name = f[5], faction = Num(f[6]),
+        level = Num(f[7]) }
     end
   end
   P.title:SetText(portal.name ~= "" and portal.name or "Portal")
-  P.sub:SetText(portal.owner and "Your portal" or "")
-  pDest.value:SetText(portal.destName or "|cff808080Nowhere yet|r")
+  P.status:SetText(portal.destName and ("Leads to |cffffffff" .. portal.destName .. "|r") or "|cff808080Leads nowhere yet|r")
+  P.note:SetText(portal.owner and "Your portal. Changes save at once." or "")
+  P.title:SetPoint("RIGHT", -130, 0)
   if portal.destName then travel:Enable() else travel:Disable() end
-  for _, w in ipairs({ pName, pTo, pLook, pAccess, pSave }) do if portal.owner then w:Show() else w:Hide() end end
+  -- the owner's tabs
+  local items = { { header = true, text = "Cities" } }
+  for _, d in ipairs(destinations) do
+    if d.kind == 0 then
+      items[#items + 1] = { text = d.name, sub = FACTION[d.faction] .. (d.level > 1 and ("  level " .. d.level) or ""),
+        picked = choice.kind == 0 and choice.dest == d.id, fn = function() choice.kind, choice.dest, choice.hood = 0, d.id, 0; SavePortal() end }
+    end
+  end
+  items[#items + 1] = { header = true, text = "My Homes" }
+  for _, d in ipairs(destinations) do
+    if d.kind == 1 then
+      items[#items + 1] = { text = d.name, picked = choice.kind == 1 and choice.dest == d.id and choice.hood == d.hood,
+        fn = function() choice.kind, choice.dest, choice.hood = 1, d.id, d.hood; SavePortal() end }
+    end
+  end
+  destList.items = items
+  destList:Update()
   if not nameBox:HasFocus() then nameBox:SetText(portal.name) end
-  P:SetHeight(portal.owner and 290 or 130)
-  H.RedrawPortal()
+  for i, line in ipairs(lookLines) do line.check:SetChecked(choice.look == i - 1) end
+  for i, a in ipairs(ACCESS) do accessLines[i].check:SetChecked(bit.band(choice.access or 0, a[1]) ~= 0) end
+  Show(pbox, portal.owner)
+  P:SetHeight(portal.owner and 470 or 100)
+  if not P:IsShown() then P:PickTab(1) end
+  for i = 1, 3 do Show(_G["EsteriaHousingPortalTab" .. i], portal.owner) end
   P:Show()
 end
 
 -- ------------------------------------------------------------------------------------------------ meeting stones
 
-local M = Window("EsteriaHousingStone", 300, 200, "Meeting Stone")
+local M = Window("EsteriaHousingStone", 380, 470, "Interface\\Icons\\Spell_Shadow_Twilight")
 M:SetPoint("LEFT", 60, 40)
 local stone, stoneOptions = nil, {}
 local EXPANSIONS = { [0] = "Classic", [1] = "Burning Crusade", [2] = "Wrath of the Lich King" }
-local sDungeon = M:Line(1, -50, "Dungeon")
-local sLevel = M:Line(2, -50, "Requires")
-local sNote = M:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
-sNote:SetPoint("TOPLEFT", 18, -102); sNote:SetWidth(264); sNote:SetJustifyH("LEFT")
-sNote:SetText("Takes you to the dungeon's entrance, not inside. Each party member goes only if they qualify.")
-local go = Button(M, "Travel", 90); go:SetPoint("TOPLEFT", 14, -134)
+
+local go = Button(M, "Travel", 100); go:SetPoint("TOPRIGHT", -18, -46)
 go:SetScript("OnClick", function() if stone then Send("stonego", stone.placed); M:Hide() end end)
-local party = Button(M, "Take Party", 100); party:SetPoint("LEFT", go, "RIGHT", 6, 0)
+local party = Button(M, "Take Party", 100); party:SetPoint("TOP", go, "BOTTOM", 0, -4)
 party:SetScript("OnClick", function() if stone then Send("stoneparty", stone.placed); M:Hide() end end)
-local bind = Button(M, "Bind", 80); bind:SetPoint("LEFT", party, "RIGHT", 6, 0)
-bind:SetScript("OnClick", function(self)
-  local items = { { text = "Bind to a dungeon", isTitle = true, notCheckable = true } }
-  for x = 0, 2 do
-    local sub = {}
-    for _, o in ipairs(stoneOptions) do
-      if o.expansion == x then
-        sub[#sub + 1] = { text = string.format("%s (%d+)", o.name, o.level), checked = stone and stone.guid == o.guid,
-          func = function() Send("stoneset", stone.placed, o.guid); CloseDropDownMenus() end }
-      end
-    end
-    table.sort(sub, function(a, b) return a.text < b.text end)
-    if #sub > 0 then items[#items + 1] = { text = EXPANSIONS[x], notCheckable = true, hasArrow = true, menuList = sub } end
-  end
-  EasyMenu(items, menu, self, 0, 0, "MENU")
+party:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT"); GameTooltip:AddLine("Take Party")
+  GameTooltip:AddLine("You go, and each party member beside you is asked to come along. Each goes only if they qualify.", 1, 1, 1, true)
+  GameTooltip:Show()
 end)
+party:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+local mbox = Inset(M, BOX_TOP, 14)
+local mpages = Tabs(M, mbox, { "Dungeons" }, function(i) M:PickTab(i) end)
+local dungeonList = List(mpages[1], -10, 11, 24)
+local mNote = mpages[1]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+mNote:SetPoint("BOTTOMLEFT", 12, 8); mNote:SetWidth(320); mNote:SetJustifyH("LEFT")
+mNote:SetText("Pick the dungeon this stone leads to. It takes travelers to the entrance, never inside.")
 
 local function ReadStone(lines)
   stoneOptions = {}
@@ -333,11 +451,34 @@ local function ReadStone(lines)
     end
   end
   local bound = stone.name ~= ""
-  sDungeon.value:SetText(bound and stone.name or "|cff808080Not bound yet|r")
-  sLevel.value:SetText(bound and string.format("Level %d (%s)", stone.level, EXPANSIONS[stone.expansion] or "") or "")
+  M.title:SetText(bound and stone.name or "Meeting Stone")
+  M.status:SetText(bound and string.format("Level %d+  |cffb0b0b0%s|r", stone.level, EXPANSIONS[stone.expansion] or "")
+    or "|cff808080Not bound to a dungeon yet|r")
+  M.note:SetText(bound and "Travels to the dungeon's entrance." or "")
+  M.title:SetPoint("RIGHT", -130, 0)
   if bound then go:Enable() else go:Disable() end
   if bound and stone.grouped then party:Enable() else party:Disable() end
-  if stone.owner then bind:Show() else bind:Hide() end
+  local items = {}
+  for x = 0, 2 do
+    local group = {}
+    for _, o in ipairs(stoneOptions) do
+      if o.expansion == x then
+        group[#group + 1] = { text = o.name, sub = "level " .. o.level, picked = stone.guid == o.guid,
+          fn = function() Send("stoneset", stone.placed, o.guid) end }
+      end
+    end
+    table.sort(group, function(a, b) return a.text < b.text end)
+    if #group > 0 then
+      items[#items + 1] = { header = true, text = EXPANSIONS[x] }
+      for _, it in ipairs(group) do items[#items + 1] = it end
+    end
+  end
+  dungeonList.items = items
+  dungeonList:Update()
+  Show(mbox, stone.owner)
+  Show(_G["EsteriaHousingStoneTab1"], stone.owner)
+  M:SetHeight(stone.owner and 470 or 110)
+  if stone.owner then M:PickTab(1) end
   M:Show()
 end
 
