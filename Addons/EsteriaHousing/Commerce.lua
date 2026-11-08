@@ -190,6 +190,10 @@ local function Cycler(y, text, key, count, labelOf)
 end
 local customize = H.Button(setup, "Customize Appearance", 170, 22); customize:SetPoint("TOPLEFT", FIELD_X, -152)
 customize:SetScript("OnClick", function() Send("appearance") end)
+-- a case, shelf, rack, counter or sign: how high its name floats over it, in yards
+local heightLabel = Label(setup, "Name height"); heightLabel:SetPoint("TOPLEFT", 0, -156)
+local heightBox = Input(setup, nil, 60, 4); heightBox:SetPoint("TOPLEFT", FIELD_X, -152)
+local heightHint = Label(setup, "yards above its base (0 to 10)", "GameFontDisableSmall"); heightHint:SetPoint("LEFT", heightBox, "RIGHT", 8, 0)
 Section(-184, "Sign")
 local signBox = SetupLine(-206, "Sign text", 220, 40)
 local BORDERS = { [0] = "Plain", "Gold", "Silver", "Bronze" }
@@ -199,7 +203,8 @@ local paints = {
 }
 local save = H.Button(setup, "Save Changes", 120, 24); save:SetPoint("BOTTOMRIGHT", 0, -2)
 save:SetScript("OnClick", function()
-  Send("setup", nameBox:GetText(), themeBox:GetText(), 0, hiBox:GetText(), thanksBox:GetText(), byeBox:GetText(), signBox:GetText(), choice.symbol, choice.border)
+  Send("setup", nameBox:GetText(), themeBox:GetText(), 0, hiBox:GetText(), thanksBox:GetText(), byeBox:GetText(), signBox:GetText(), choice.symbol, choice.border,
+    tonumber(heightBox:GetText()) or (shop and shop.labelHeight) or 2.4)
 end)
 
 local function PaintSign(symbol, border)
@@ -261,6 +266,7 @@ function s.Redraw()
   if s.tab == "setup" then
     s.HideRows(); setup:Show()
     if shop.kind == 1 then customize:Show() else customize:Hide() end
+for _, w in ipairs({ heightLabel, heightBox, heightHint }) do if shop.kind == 1 then w:Hide() else w:Show() end end
     for _, p in ipairs(paints) do p() end
   elseif s.tab == "bags" then s.Fill(StockRows())
   elseif s.tab == "gear" then
@@ -303,7 +309,7 @@ local function ReadShop(lines)
   local keep = shop and shop.name
   shop = { owner = a[2] == "1", name = a[3], theme = a[4], greeting = a[5], message = a[6], treasury = tonumber(a[7]) or 0, kind = tonumber(a[8]) or 1,
     thanks = a[10], farewell = a[11], sign = a[12], symbol = tonumber(a[13]) or 0, border = tonumber(a[14]) or 0,
-    bank = a[15] == "1", bankPrice = tonumber(a[16]) or 0 }
+    bank = a[15] == "1", bankPrice = tonumber(a[16]) or 0, labelHeight = tonumber(a[17]) or 2.4 }
   listings = {}
   for i = 2, #lines do
     local f = Fields(lines[i])
@@ -315,6 +321,7 @@ local function ReadShop(lines)
     s.page = 0; s.tab = "shop"; stockable = {}
     nameBox:SetText(shop.name); themeBox:SetText(shop.theme); hiBox:SetText(shop.greeting); thanksBox:SetText(shop.thanks); byeBox:SetText(shop.farewell); signBox:SetText(shop.sign)
     choice.symbol, choice.border = shop.symbol, shop.border
+    heightBox:SetText(string.format("%.1f", shop.labelHeight))
     s:Show()
   end
   s.status:SetText(shop.message or "")
