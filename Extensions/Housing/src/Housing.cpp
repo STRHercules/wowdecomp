@@ -127,7 +127,7 @@ struct Visit {
 struct Neighborhood {
     bool valid = false;
     uint32_t id = 0;
-    uint8_t kind = 0, map = 0, rights = 0, here = 0;
+    uint8_t kind = 0, map = 0, rights = 0, here = 0, choose = 0;
     std::string name, mapName, message;
     uint32_t price = 0;
     uint8_t where = 0;
@@ -518,7 +518,7 @@ int32_t ReceiveNeighborhood(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     uint16_t plots;
     if (!r.Get(next.id) || !r.Get(next.kind) || !r.Get(next.map) || !r.Get(next.name) || !r.Get(next.mapName)
         || !r.Get(next.price) || !r.Get(next.where) || !r.Get(next.message) || !r.Get(next.rights) || !r.Get(next.here)
-        || !r.Get(plots)) return 0;
+        || !r.Get(next.choose) || !r.Get(plots)) return 0;
     for (uint16_t i = 0; i < plots; ++i) {
         NeighborhoodPlot p;
         if (!r.Get(p.plot) || !r.Get(p.status) || !r.Get(p.name)) return 0;
@@ -903,6 +903,7 @@ int32_t GetNeighborhood(lua_State* L) {
     lua_pushstring(L, wheres[n.where < 3 ? n.where : 0]); lua_setfield(L, -2, "where");
     lua_pushstring(L, n.message.c_str()); lua_setfield(L, -2, "message");
     lua_pushboolean(L, n.here); lua_setfield(L, -2, "here");
+    lua_pushboolean(L, n.choose); lua_setfield(L, -2, "choose"); // pick your account's neighborhood first
     RightsTable(L, n.rights); lua_setfield(L, -2, "rights");
     lua_createtable(L, int(n.plots.size()), 0);
     int i = 0;

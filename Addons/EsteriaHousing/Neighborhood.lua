@@ -9,7 +9,7 @@ if not EsteriaHousing_IsAvailable then return end
 EsteriaHousingUI = EsteriaHousingUI or {}
 local H = EsteriaHousingUI
 
-local W, HEIGHT, ROWS, ROW_H, LIST_TOP = 430, 520, 8, 34, -210
+local W, HEIGHT, ROWS, ROW_H, LIST_TOP = 460, 500, 8, 34, -186
 local MAPS = { [0] = "Founder's Point", [1] = "Razorwind Shores" }
 
 local f = H.Panel("EsteriaHousingNeighborhoodFrame", W, HEIGHT)
@@ -37,15 +37,15 @@ travel:SetSize(240, 26); travel:SetPoint("TOP", 0, -114)
 local reason = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 reason:SetPoint("TOP", travel, "BOTTOM", 0, -3); reason:SetWidth(W - 40); reason:SetTextColor(1, 0.3, 0.3)
 
--- tabs
+-- tabs: the client's own, hanging under the window as the Character frame's do
 local TABS = { { "plots", "Plots" }, { "homes", "My Homes" }, { "hoods", "Neighborhoods" }, { "favorites", "Favorites" },
   { "recent", "Recent" }, { "manage", "Manage" } }
 local tab = "plots"
 local tabButtons = {}
 local divider = H.Atlas(f:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
-divider:SetPoint("TOPLEFT", 16, -176); divider:SetPoint("TOPRIGHT", -16, -176); divider:SetHeight(2)
-local summary = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-summary:SetPoint("TOPLEFT", 20, -186); summary:SetWidth(W - 40); summary:SetJustifyH("LEFT")
+divider:SetPoint("TOPLEFT", 16, -152); divider:SetPoint("TOPRIGHT", -16, -152); divider:SetHeight(2)
+local summary = f:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+summary:SetPoint("TOPLEFT", 20, -160); summary:SetWidth(W - 40); summary:SetJustifyH("LEFT"); summary:SetTextColor(0.75, 0.75, 0.75)
 
 local info      -- the server's last answer
 local listed = {}
@@ -54,21 +54,25 @@ local rows = {}
 local Redraw
 
 for i, t in ipairs(TABS) do
-  local b = CreateFrame("Button", "EsteriaHousingNeighborhoodTab" .. i, f, "UIPanelButtonTemplate")
-  b:SetSize((W - 32) / #TABS, 20); b:SetPoint("TOPLEFT", 16 + (i - 1) * (W - 32) / #TABS, -152)
-  b:SetText(t[2]); b:GetFontString():SetFontObject(GameFontNormalSmall)
-  b:SetScript("OnClick", function() tab = t[1]; page = 0; Redraw() end)
+  local b = CreateFrame("Button", "EsteriaHousingNeighborhoodFrameTab" .. i, f, "CharacterFrameTabButtonTemplate")
+  b:SetID(i); b:SetText(t[2])
+  if i == 1 then b:SetPoint("TOPLEFT", f, "BOTTOMLEFT", 10, 4)
+  else b:SetPoint("LEFT", tabButtons[TABS[i - 1][1]], "RIGHT", -16, 0) end
+  PanelTemplates_TabResize(b, 0)
+  b:SetScript("OnClick", function() tab = t[1]; page = 0; PlaySound("igCharacterInfoTab"); Redraw() end)
   tabButtons[t[1]] = b
 end
+f.numTabs = #TABS
 
 for i = 1, ROWS do
   local row = CreateFrame("Frame", nil, f)
-  row:SetSize(W - 40, ROW_H - 2); row:SetPoint("TOP", 0, LIST_TOP - (i - 1) * ROW_H)
-  row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 2, 0)
+  row:SetSize(W - 32, ROW_H - 2); row:SetPoint("TOP", 0, LIST_TOP - (i - 1) * ROW_H)
+  row.bg = row:CreateTexture(nil, "BACKGROUND"); row.bg:SetAllPoints(); row.bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.04 or 0.08)
+  row.icon = row:CreateTexture(nil, "ARTWORK"); row.icon:SetSize(24, 24); row.icon:SetPoint("LEFT", 4, 0)
   row.label = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-  row.label:SetPoint("LEFT", row.icon, "RIGHT", 8, 0); row.label:SetWidth(W - 210); row.label:SetJustifyH("LEFT")
+  row.label:SetPoint("LEFT", row.icon, "RIGHT", 8, 0); row.label:SetWidth(W - 200); row.label:SetJustifyH("LEFT")
   row.go = CreateFrame("Button", "EsteriaHousingNeighborhoodGo" .. i, row, "UIPanelButtonTemplate")
-  row.go:SetSize(52, 22); row.go:SetPoint("RIGHT", 0, 0)
+  row.go:SetSize(56, 22); row.go:SetPoint("RIGHT", -4, 0)
   row.go:SetScript("OnClick", function() if row.onGo then row.onGo(row.go) end end)
   row.extra = CreateFrame("Button", "EsteriaHousingNeighborhoodExtra" .. i, row, "UIPanelButtonTemplate")
   row.extra:SetSize(72, 22); row.extra:SetPoint("RIGHT", row.go, "LEFT", -4, 0)
@@ -85,7 +89,7 @@ pageText:SetPoint("BOTTOM", 0, 20)
 
 -- Manage: invite by name, move to the other map, and the guild's neighborhoods
 local manage = CreateFrame("Frame", nil, f)
-manage:SetSize(W - 32, 120); manage:SetPoint("TOP", 0, -204)
+manage:SetSize(W - 32, 120); manage:SetPoint("TOP", 0, LIST_TOP + 6)
 local inviteBox = CreateFrame("EditBox", "EsteriaHousingInviteName", manage, "InputBoxTemplate")
 inviteBox:SetSize(150, 20); inviteBox:SetPoint("TOPLEFT", 10, -4); inviteBox:SetAutoFocus(false); inviteBox:SetMaxLetters(12)
 local inviteButton = CreateFrame("Button", "EsteriaHousingInvite", manage, "UIPanelButtonTemplate")
@@ -103,6 +107,53 @@ local guildText = manage:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmal
 guildText:SetPoint("TOPLEFT", 12, -88); guildText:SetWidth(W - 56); guildText:SetJustifyH("LEFT")
 local membersTitle = manage:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 membersTitle:SetPoint("TOPLEFT", 10, -110); membersTitle:SetText("Invited")
+
+-- The first time (until the account picks): where the account's neighborhood is. Either can be changed later
+-- from Manage.
+local chooser = CreateFrame("Frame", nil, f)
+chooser:SetPoint("TOPLEFT", 12, -50); chooser:SetPoint("BOTTOMRIGHT", -12, 12)
+chooser:Hide()
+local chooseTitle = chooser:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+chooseTitle:SetPoint("TOP", 0, -6); chooseTitle:SetText("Choose Your Neighborhood")
+local chooseText = chooser:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+chooseText:SetPoint("TOP", chooseTitle, "BOTTOM", 0, -8); chooseText:SetWidth(W - 60)
+chooseText:SetText("Your account gets a neighborhood of its own, and every one of your characters lives there. " ..
+  "Pick where it is. You can move it later from the Manage tab.")
+local CHOICES = {
+  { map = 0, name = "Founder's Point", art = "Interface\\Glues\\LoadingScreens\\LoadScreenFoundersPoint",
+    text = "Green hills, oak groves and a lighthouse coast on the Alliance side of the sea." },
+  { map = 1, name = "Razorwind Shores", art = "Interface\\Glues\\LoadingScreens\\LoadScreenRazorwindShores",
+    text = "Red canyons, hot springs and a windswept shore on the Horde side of the sea." },
+}
+StaticPopupDialogs["ESTERIA_HOUSING_CHOOSE_HOOD"] = {
+  text = "%s", button1 = YES, button2 = NO, timeout = 0, whileDead = false, hideOnEscape = true,
+  OnAccept = function(self, map) if info then EsteriaHousing_MoveNeighborhood(info.id, map) end end,
+}
+for i, c in ipairs(CHOICES) do
+  local card = CreateFrame("Button", "EsteriaHousingChoose" .. i, chooser)
+  card:SetSize((W - 60) / 2, 300); card:SetPoint("TOP", (i == 1 and -1 or 1) * ((W - 60) / 4 + 6), -70)
+  card:SetBackdrop({ edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 14,
+    insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+  card:SetBackdropBorderColor(0.55, 0.42, 0.25)
+  local art = card:CreateTexture(nil, "ARTWORK")
+  art:SetPoint("TOPLEFT", 4, -4); art:SetPoint("TOPRIGHT", -4, -4); art:SetHeight(((W - 60) / 2 - 8) * 3 / 4)
+  art:SetTexture(c.art)
+  local name = card:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
+  name:SetPoint("TOP", art, "BOTTOM", 0, -10); name:SetText(c.name)
+  local text = card:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  text:SetPoint("TOP", name, "BOTTOM", 0, -6); text:SetWidth((W - 60) / 2 - 20); text:SetText(c.text)
+  local pick = CreateFrame("Button", "EsteriaHousingChoosePick" .. i, card, "UIPanelButtonTemplate")
+  pick:SetSize(120, 24); pick:SetPoint("BOTTOM", 0, 12); pick:SetText("Live Here")
+  local function Choose()
+    local dialog = StaticPopup_Show("ESTERIA_HOUSING_CHOOSE_HOOD", "Make " .. c.name .. " your account's neighborhood?")
+    if dialog then dialog.data = c.map end
+  end
+  pick:SetScript("OnClick", Choose)
+  card:SetScript("OnClick", Choose)
+  card:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+end
+function H.ShowChooser() chooser:Show(); place:SetText("") end
+function H.HideChooser() chooser:Hide(); StaticPopup_Hide("ESTERIA_HOUSING_CHOOSE_HOOD") end
 
 -- Why the server would refuse travel right now (TravelBlock in mod_esteria_housing.cpp), so the buttons can say so first.
 local function Blocked()
@@ -122,16 +173,18 @@ local menu = CreateFrame("Frame", "EsteriaHousingAccessMenu", UIParent, "UIDropD
 
 -- ------------------------------------------------------------------------------------------------ who may visit
 
-local ACCESS = { { "party", "Party and raid members" }, { "friends", "Friends" }, { "guild", "Guild members" },
-  { "everyone", "Everyone" } }
+local ACCESS = { { "party", "Party and raid members", "party" }, { "friends", "Friends", "friends" },
+  { "guild", "Guild members", "guild" }, { "everyone", "Everyone", "everyone" } }
 local accessWanted -- { anchor, house } to open once the server says what the setting is
 
 local function VisitorText(access)
-  local who = {}
-  for _, a in ipairs(ACCESS) do if access and access[a[1]] then who[#who + 1] = a[2]:lower() end end
   if access and access.everyone then return "everyone" end
+  local who = {}
+  for _, a in ipairs(ACCESS) do if access and access[a[1]] then who[#who + 1] = a[3] end end
   return #who > 0 and table.concat(who, ", ") or "only you"
 end
+
+local function Plural(n, word) return n .. " " .. word .. (n == 1 and "" or "s") end
 
 local function HomeOf(house)
   for _, h in ipairs(info and info.homes or {}) do if h.house == house then return h end end
@@ -257,10 +310,10 @@ local function ListFor(blocked)
     end
   elseif tab == "homes" then
     for _, h in ipairs(info.homes) do
-      local where = h.hood > 0 and string.format("Plot %d, %s", h.plot, h.hoodName) or "|cffc0c0c0Saved: on no plot|r"
+      local where = h.hood > 0 and string.format("Plot %d, %s", h.plot, h.hoodName) or "|cffc0c0c0Saved, on no plot|r"
       out[#out + 1] = { icon = "housefinder_main-icon",
-        text = string.format("|cff40ff40House %d|r  %s\n%d rooms, %d/%d decor, visitors: %s", h.house, where, h.rooms, h.placed,
-          h.maxDecor, VisitorText(h.access)),
+        text = string.format("|cff40ff40House %d|r  |cffffd100%s|r\n|cffb0b0b0%s, %d/%d decor, visitors: %s|r", h.house, where,
+          Plural(h.rooms, "room"), h.placed, h.maxDecor, VisitorText(h.access)),
         go = h.hood > 0 and { "Go", GoPlot(h.hood, h.plot), not blocked }
           or { "Enter", function() EsteriaHousing_EnterHouse(h.house) end, not blocked },
         extra = { "Visitors", function(b) H.ShowAccessMenu(b, h.house) end } }
@@ -268,7 +321,8 @@ local function ListFor(blocked)
   elseif tab == "hoods" then
     for _, n in ipairs(info.hoods) do
       out[#out + 1] = { icon = n.kind == "guild" and "housefinder_friend-icon-circle" or "housefinder_main-icon",
-        text = string.format("%s\n%s, %s, %d plots free", n.name, MAPS[n.map] or "", ROLE_TEXT[n.role] or "", n.free),
+        text = string.format("%s\n|cffb0b0b0%s, %s free|r  %s", n.name, MAPS[n.map] or "", Plural(n.free, "plot"),
+          ROLE_TEXT[n.role] or ""),
         go = { "Go", function() EsteriaHousing_TravelNeighborhood(n.id) end, not blocked },
         extra = { "View", function() tab = "plots"; page = 0; EsteriaHousing_RequestNeighborhood(n.id) end } }
     end
@@ -295,17 +349,28 @@ local function ListFor(blocked)
 end
 
 local SUMMARY = {
-  homes = "Every house your account owns, on every plot it stands on. A house on several plots is the same house in each.",
-  hoods = "Your own neighborhood, those you were invited to, your guild's, and any where a house lets you in.",
-  favorites = "Houses you marked as favorites, shared by all your characters.",
-  recent = "This character's last visits to other players' houses.",
+  homes = "Your account's houses. A mirrored house is the same house on each plot.",
+  hoods = "Neighborhoods you can go to: yours, invited, your guild's and friends'.",
+  favorites = "Favorite houses, shared by all your characters.",
+  recent = "Houses this character visited lately.",
 }
 
 function Redraw()
   local blocked = Blocked()
   reason:SetText(blocked or (info and info.message) or "")
   SetEnabled(travel, info and not blocked)
-  for key, b in pairs(tabButtons) do if key == tab then b:LockHighlight() else b:UnlockHighlight() end end
+  for i, t in ipairs(TABS) do if t[1] == tab then PanelTemplates_SetTab(f, i) end end
+  -- until the account picks its neighborhood, the window is only the choice
+  local choosing = info and info.choose
+  if choosing then H.ShowChooser() else H.HideChooser() end
+  for _, b in pairs(tabButtons) do if choosing then b:Hide() else b:Show() end end
+  if choosing then
+    for _, w in ipairs({ hoodIcon, hoodTitle, hoodBody, travel, reason, divider, summary, manage, prev, nextPage }) do w:Hide() end
+    for _, row in ipairs(rows) do row:Hide() end
+    pageText:SetText("")
+    return
+  end
+  for _, w in ipairs({ hoodIcon, hoodTitle, hoodBody, travel, reason, divider, summary }) do w:Show() end
   if not info then
     place:SetText(""); hoodTitle:SetText(""); hoodBody:SetText(""); summary:SetText(""); manage:Hide()
     for _, row in ipairs(rows) do row:Hide() end
@@ -320,8 +385,8 @@ function Redraw()
   end
   local who = info.rights.manage and (info.kind == "guild" and "You manage it." or "It is yours.")
     or info.rights.buy and "You may buy plots here." or "You are visiting."
-  hoodBody:SetText(string.format("%s, %d of %d plots free at %s.\n%s%s", info.mapName, free, #info.plots,
-    GetCoinTextureString(info.price), who, yours > 0 and string.format(" You have %d home%s here.", yours, yours > 1 and "s" or "") or ""))
+  hoodBody:SetText(string.format("%s  |cffb0b0b0%d of %d plots free, %s each|r\n%s%s", info.mapName, free, #info.plots,
+    GetCoinTextureString(info.price), who, yours > 0 and " You have " .. Plural(yours, "home") .. " here." or ""))
   H.Atlas(hoodIcon, info.kind == "guild" and "housefinder_friend-icon-circle" or "housefinder_main-icon")
   travel:SetText(info.here and "Leave " .. info.name or "Teleport to " .. info.name)
 
