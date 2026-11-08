@@ -441,59 +441,104 @@ end
 -- It edits the real merchant in the world, with the character creator's option tables, so the NPC is the preview. Others see
 -- the result when it is saved.
 
-local CUST_ROWS = 11
-local c = H.Panel("EsteriaHousingCustomizer", 340, 520)
+local CUST_ROWS, CROW_H, CBOX_TOP = 10, 28, -132
+local c = H.Panel("EsteriaHousingCustomizer", 360, 560)
 c:SetPoint("RIGHT", -40, 20)
-local cTitle = c:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); cTitle:SetPoint("TOP", 0, -9); cTitle:SetText("Merchant Appearance")
-local cHint = Label(c, "Waiting for the merchant to load...", "GameFontNormalSmall"); cHint:SetPoint("TOPLEFT", 16, -36); cHint:SetWidth(308)
+tinsert(UISpecialFrames, "EsteriaHousingCustomizer")
+local cTitle = c:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); cTitle:SetPoint("TOP", 0, -12); cTitle:SetText("Merchant Appearance")
+CreateFrame("Button", nil, c, "UIPanelCloseButton"):SetPoint("TOPRIGHT", 2, 2)
 local cRaces, cRace, cSex, cTab, cPage, cSaved = {}, 1, 0, "looks", 0, false
 
-local function StepButton(parent, text) return H.Button(parent, text, 26, 20) end
-local raceText = Label(c, "", "GameFontHighlight"); raceText:SetPoint("TOP", 0, -56); raceText:SetJustifyH("CENTER"); raceText:SetWidth(200)
-local racePrev, raceNext = StepButton(c, "<"), StepButton(c, ">")
-racePrev:SetPoint("TOPLEFT", 16, -52); raceNext:SetPoint("TOPRIGHT", -16, -52)
+-- the page-turn arrows of the spellbook: round, and the same size everywhere
+local function Arrow(parent, dir)
+  local b = CreateFrame("Button", nil, parent)
+  b:SetSize(24, 24)
+  local base = "Interface\\Buttons\\UI-SpellbookIcon-" .. (dir < 0 and "Prev" or "Next") .. "Page-"
+  b:SetNormalTexture(base .. "Up"); b:SetPushedTexture(base .. "Down"); b:SetDisabledTexture(base .. "Disabled")
+  b:SetHighlightTexture("Interface\\Buttons\\UI-Common-MouseHilight", "ADD")
+  return b
+end
+
+-- a dark bar with a value between two arrows
+local function Stepper(parent, width)
+  local bar = CreateFrame("Frame", nil, parent)
+  bar:SetSize(width, 26)
+  bar:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+    edgeSize = 10, insets = { left = 2, right = 2, top = 2, bottom = 2 } })
+  bar:SetBackdropColor(0, 0, 0, 0.6); bar:SetBackdropBorderColor(0.55, 0.42, 0.25)
+  bar.prev = Arrow(bar, -1); bar.prev:SetPoint("LEFT", 1, 0)
+  bar.next = Arrow(bar, 1); bar.next:SetPoint("RIGHT", -1, 0)
+  bar.text = bar:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+  bar.text:SetPoint("LEFT", 26, 0); bar.text:SetPoint("RIGHT", -26, 0); bar.text:SetHeight(14)
+  return bar
+end
+
+-- race, and sex as two toggles
+local raceBar = Stepper(c, 240); raceBar:SetPoint("TOP", 0, -48)
+raceBar.text:SetFontObject(GameFontNormal)
 local function ChangeRace(d)
   local at = 1
   for i, r in ipairs(cRaces) do if r.id == cRace then at = i end end
   Send("race", cRaces[(at - 1 + d) % #cRaces + 1].id, cSex)
 end
-racePrev:SetScript("OnClick", function() ChangeRace(-1) end); raceNext:SetScript("OnClick", function() ChangeRace(1) end)
-local sexButton = H.Button(c, "Male", 90, 22); sexButton:SetPoint("TOP", 0, -78)
-sexButton:SetScript("OnClick", function() Send("race", cRace, cSex == 0 and 1 or 0) end)
+raceBar.prev:SetScript("OnClick", function() ChangeRace(-1) end); raceBar.next:SetScript("OnClick", function() ChangeRace(1) end)
+local male = H.Button(c, "Male", 90, 22); male:SetPoint("TOPRIGHT", c, "TOP", -3, -82)
+local female = H.Button(c, "Female", 90, 22); female:SetPoint("TOPLEFT", c, "TOP", 3, -82)
+male:SetScript("OnClick", function() if cSex ~= 0 then Send("race", cRace, 0) end end)
+female:SetScript("OnClick", function() if cSex ~= 1 then Send("race", cRace, 1) end end)
 
-local looksTab = H.Button(c, "Appearance", 100, 22); looksTab:SetPoint("TOPLEFT", 16, -106)
-local bodyTab = H.Button(c, "Body", 100, 22); bodyTab:SetPoint("LEFT", looksTab, "RIGHT", 4, 0)
+-- Appearance and Body, as tabs on an inset
+local cbox = CreateFrame("Frame", nil, c)
+cbox:SetPoint("TOPLEFT", 14, CBOX_TOP); cbox:SetPoint("BOTTOMRIGHT", -14, 46)
+cbox:SetBackdrop({ bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
+  edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } })
+cbox:SetBackdropColor(0, 0, 0, 0.45); cbox:SetBackdropBorderColor(0.55, 0.42, 0.25)
+local CTABS = { { "looks", "Appearance" }, { "body", "Body" } }
+local ctabs = {}
+for i, t in ipairs(CTABS) do
+  local b = CreateFrame("Button", "EsteriaHousingCustomizerTab" .. i, c, "OptionsFrameTabButtonTemplate")
+  b:SetID(i); b:SetText(t[2])
+  if i == 1 then b:SetPoint("BOTTOMLEFT", cbox, "TOPLEFT", 6, -2) else b:SetPoint("LEFT", ctabs[i - 1], "RIGHT", -14, 0) end
+  PanelTemplates_TabResize(b, 0)
+  ctabs[i] = b
+end
+c.numTabs = #CTABS
+local cHint = Label(cbox, "Waiting for the merchant to load...", "GameFontNormalSmall"); cHint:SetPoint("TOPLEFT", 12, -12)
 
+-- each option a striped line: its name, then its value between arrows (or a slider for the body)
 local cRowsList = {}
 for i = 1, CUST_ROWS do
-  local row = CreateFrame("Frame", nil, c); row:SetSize(308, 30); row:SetPoint("TOPLEFT", 16, -132 - (i - 1) * 30)
-  row.label = Label(row); row.label:SetPoint("LEFT", 0, 0); row.label:SetWidth(112)
-  row.value = Label(row); row.value:SetPoint("LEFT", 142, 0); row.value:SetWidth(134); row.value:SetJustifyH("CENTER")
-  row.prev = StepButton(row, "<"); row.prev:SetPoint("LEFT", 114, 0)
-  row.next = StepButton(row, ">"); row.next:SetPoint("RIGHT", 0, 0)
+  local row = CreateFrame("Frame", nil, cbox)
+  row:SetHeight(CROW_H - 2); row:SetPoint("TOPLEFT", 6, -8 - (i - 1) * CROW_H); row:SetPoint("RIGHT", -6, 0)
+  local bg = row:CreateTexture(nil, "BACKGROUND"); bg:SetAllPoints(); bg:SetTexture(1, 1, 1, i % 2 == 0 and 0.03 or 0.07)
+  row.label = Label(row, "", "GameFontNormalSmall"); row.label:SetPoint("LEFT", 8, 0); row.label:SetWidth(112)
+  row.step = Stepper(row, 176); row.step:SetPoint("RIGHT", -4, 0)
   row.slider = CreateFrame("Slider", "EsteriaHousingCustomizerSlider" .. i, row, "OptionsSliderTemplate")
-  row.slider:SetWidth(180); row.slider:SetPoint("LEFT", 118, 0); row.slider:SetValueStep(0.01)
-  _G[row.slider:GetName() .. "Low"]:SetText(""); _G[row.slider:GetName() .. "High"]:SetText("")
+  row.slider:SetWidth(170); row.slider:SetHeight(16); row.slider:SetPoint("RIGHT", -10, 0); row.slider:SetValueStep(0.01)
+  for _, part in ipairs({ "Low", "High", "Text" }) do _G[row.slider:GetName() .. part]:SetText("") end
   row.slider:SetScript("OnValueChanged", function(self, v) if self.name and not self.filling then EsteriaHousing_MerchantSlider(self.name, v) end end)
   cRowsList[i] = row
 end
 
+-- under the lines: the page, and (Body) the creator's saved presets
+local pageBar = Stepper(cbox, 140); pageBar:SetPoint("TOP", 0, -8 - CUST_ROWS * CROW_H - 4)
+local presetLine = CreateFrame("Frame", nil, cbox)
+presetLine:SetHeight(CROW_H - 2); presetLine:SetPoint("BOTTOMLEFT", 6, 8); presetLine:SetPoint("RIGHT", -6, 0)
+local presetBg = presetLine:CreateTexture(nil, "BACKGROUND"); presetBg:SetAllPoints(); presetBg:SetTexture(1, 1, 1, 0.07)
+local presetTitle = Label(presetLine, "Preset", "GameFontNormalSmall"); presetTitle:SetPoint("LEFT", 8, 0)
+local presetBar = Stepper(presetLine, 170); presetBar:SetPoint("LEFT", 60, 0)
+local presetApply = H.Button(presetLine, "Use", 60, 20); presetApply:SetPoint("RIGHT", -4, 0)
 local presets, presetAt = {}, 0
-local presetLabel = Label(c); presetLabel:SetPoint("BOTTOMLEFT", 46, 70); presetLabel:SetWidth(170)
-local presetPrev, presetNext = StepButton(c, "<"), StepButton(c, ">")
-presetPrev:SetPoint("BOTTOMLEFT", 16, 66); presetNext:SetPoint("LEFT", presetLabel, "RIGHT", 2, 0)
-local presetApply = H.Button(c, "Use", 60, 20); presetApply:SetPoint("BOTTOMRIGHT", -16, 66)
 
-local pagePrev, pageNext = StepButton(c, "<"), StepButton(c, ">")
-pagePrev:SetPoint("BOTTOM", -60, 40); pageNext:SetPoint("BOTTOM", 60, 40)
-local random = H.Button(c, "Random", 80, 22); random:SetPoint("BOTTOMLEFT", 16, 12)
-local cancel = H.Button(c, "Cancel", 80, 22); cancel:SetPoint("BOTTOM", 0, 12)
-local saveLook = H.Button(c, "Save", 80, 22); saveLook:SetPoint("BOTTOMRIGHT", -16, 12)
+local random = H.Button(c, "Random", 90, 22); random:SetPoint("BOTTOMLEFT", 16, 14)
+local cancel = H.Button(c, "Cancel", 90, 22); cancel:SetPoint("BOTTOMRIGHT", -112, 14)
+local saveLook = H.Button(c, "Save", 90, 22); saveLook:SetPoint("BOTTOMRIGHT", -16, 14)
 
 local function PaintPreset()
   local p = presets[presetAt + 1]
-  presetLabel:SetText(p and ("Preset: " .. p.name) or "No saved presets")
+  presetBar.text:SetText(p and p.name or "|cff808080None saved|r")
   if p then presetApply:Enable() else presetApply:Disable() end
+  if #presets > 1 then presetBar.prev:Enable(); presetBar.next:Enable() else presetBar.prev:Disable(); presetBar.next:Disable() end
 end
 
 local function SliderNames() return { GetBodyShapeNames() } end
@@ -501,7 +546,9 @@ local function SliderNames() return { GetBodyShapeNames() } end
 local function DrawCustomizer()
   local race = "?"
   for _, r in ipairs(cRaces) do if r.id == cRace then race = r.name end end
-  raceText:SetText(race); sexButton:SetText(cSex == 0 and "Male" or "Female")
+  raceBar.text:SetText(race)
+  if cSex == 0 then male:LockHighlight(); female:UnlockHighlight() else female:LockHighlight(); male:UnlockHighlight() end
+  for i, t in ipairs(CTABS) do if t[1] == cTab then PanelTemplates_SetTab(c, i) end end
   local names = cTab == "body" and SliderNames() or nil
   local count = names and #names or tonumber((EsteriaHousing_MerchantEA("EA_COUNT"))) or 0
   local pages = math.max(1, math.ceil(count / CUST_ROWS))
@@ -514,8 +561,8 @@ local function DrawCustomizer()
       row:Show()
       if names then
         local name = names[index]
-        row.prev:Hide(); row.next:Hide(); row.value:Hide(); row.slider:Show()
-        row.label:SetText(name:gsub("(%l)(%u)", "%1 %2"))
+        row.step:Hide(); row.slider:Show()
+        row.label:SetText((name:gsub("(%l)(%u)", "%1 %2")))
         local low, high = GetBodyShapeRange(name)
         row.slider.filling = true
         row.slider.name = name
@@ -523,29 +570,32 @@ local function DrawCustomizer()
         row.slider:SetValue(EsteriaHousing_MerchantSlider(name) or 0)
         row.slider.filling = false
       else
-        row.slider:Hide(); row.prev:Show(); row.next:Show(); row.value:Show()
+        row.slider:Hide(); row.step:Show()
         local current, total, label = EsteriaHousing_MerchantEA("EA_GET", index)
         current, total = tonumber(current) or 0, tonumber(total) or 1
         row.label:SetText(label or ("Option " .. index))
         local choice = EsteriaHousing_MerchantEA("EA_CHOICE_NAME", index, current - 1)
-        row.value:SetText((choice and choice ~= "") and choice or (current .. " / " .. total))
-        row.prev:SetScript("OnClick", function() EsteriaHousing_MerchantEA("EA_CYCLE", index, -1); DrawCustomizer() end)
-        row.next:SetScript("OnClick", function() EsteriaHousing_MerchantEA("EA_CYCLE", index, 1); DrawCustomizer() end)
+        row.step.text:SetText((choice and choice ~= "") and choice or (current .. " / " .. total))
+        row.step.prev:SetScript("OnClick", function() EsteriaHousing_MerchantEA("EA_CYCLE", index, -1); DrawCustomizer() end)
+        row.step.next:SetScript("OnClick", function() EsteriaHousing_MerchantEA("EA_CYCLE", index, 1); DrawCustomizer() end)
       end
     end
   end
-  for _, w in ipairs({ presetLabel, presetPrev, presetNext, presetApply }) do if cTab == "body" then w:Show() else w:Hide() end end
-  if cPage > 0 then pagePrev:Enable() else pagePrev:Disable() end
-  if cPage < pages - 1 then pageNext:Enable() else pageNext:Disable() end
+  if cTab == "body" then presetLine:Show() else presetLine:Hide() end
+  if pages > 1 then pageBar:Show() else pageBar:Hide() end
+  pageBar.text:SetText(string.format("Page %d of %d", cPage + 1, pages))
+  if cPage > 0 then pageBar.prev:Enable() else pageBar.prev:Disable() end
+  if cPage < pages - 1 then pageBar.next:Enable() else pageBar.next:Disable() end
   PaintPreset()
 end
 
-looksTab:SetScript("OnClick", function() cTab = "looks"; cPage = 0; DrawCustomizer() end)
-bodyTab:SetScript("OnClick", function() cTab = "body"; cPage = 0; DrawCustomizer() end)
-pagePrev:SetScript("OnClick", function() cPage = cPage - 1; DrawCustomizer() end)
-pageNext:SetScript("OnClick", function() cPage = cPage + 1; DrawCustomizer() end)
-presetPrev:SetScript("OnClick", function() if #presets > 0 then presetAt = (presetAt - 1) % #presets; PaintPreset() end end)
-presetNext:SetScript("OnClick", function() if #presets > 0 then presetAt = (presetAt + 1) % #presets; PaintPreset() end end)
+for i, t in ipairs(CTABS) do
+  ctabs[i]:SetScript("OnClick", function() PlaySound("igCharacterInfoTab"); cTab = t[1]; cPage = 0; DrawCustomizer() end)
+end
+pageBar.prev:SetScript("OnClick", function() cPage = cPage - 1; DrawCustomizer() end)
+pageBar.next:SetScript("OnClick", function() cPage = cPage + 1; DrawCustomizer() end)
+presetBar.prev:SetScript("OnClick", function() if #presets > 0 then presetAt = (presetAt - 1) % #presets; PaintPreset() end end)
+presetBar.next:SetScript("OnClick", function() if #presets > 0 then presetAt = (presetAt + 1) % #presets; PaintPreset() end end)
 presetApply:SetScript("OnClick", function() local p = presets[presetAt + 1]; if p then EsteriaHousing_MerchantBody(p.code); DrawCustomizer() end end)
 random:SetScript("OnClick", function() EsteriaHousing_MerchantEA("EA_RANDOM"); DrawCustomizer() end)
 cancel:SetScript("OnClick", function() c:Hide() end)
