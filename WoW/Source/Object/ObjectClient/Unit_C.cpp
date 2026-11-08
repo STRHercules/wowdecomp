@@ -1711,8 +1711,8 @@ void CGUnit_C::PreAnimate(CGWorldFrame* frame) {
     if (this->m_worldModel) {
         if (this->m_obj->m_guid == ClntObjMgrGetActivePlayer()) {
             BodyShape::ApplyEdited(this->m_worldModel, twistSet, twistBase);
-        } else if (this->m_obj->m_type & TYPEMASK_PLAYER) {
-            // Other players: the sliders the server sent for them. Past MeshRange yards only the bone sliders apply.
+        } else if ((this->m_obj->m_type & TYPEMASK_PLAYER) || (this->m_unit->m_unitFieldFlags2 & 0x10)) {
+            // Other players (and housing merchants): the sliders the server sent for them. Past MeshRange yards only the bone sliders apply.
             const BodyShape::UnitShape* shape = BodyShape::UnitFor(this->m_obj->m_guid.m_guid);
 
             if (shape || BodyShape::HasApplier(this->m_worldModel)) {
@@ -9132,7 +9132,9 @@ int32_t CGUnit_C::GetModelFileName(const char** name) const {
         effectiveDisplay = this->m_unit->m_unitFieldDisplayid;
     }
 
-    if ((this->m_obj->m_type & TYPEMASK_PLAYER) && effectiveDisplay == static_cast<int32_t>(this->m_unit->m_unitFieldNativedisplayid)) {
+    // Esteria: a housing merchant is a creature with the mirror-image flag and a player race.
+    bool const playerBody = (this->m_obj->m_type & TYPEMASK_PLAYER) || ((this->m_unit->m_unitFieldFlags2 & 0x10) && this->m_unit->m_unitFieldBytes0[0]);
+    if (playerBody && effectiveDisplay == static_cast<int32_t>(this->m_unit->m_unitFieldNativedisplayid)) {
         static thread_local char retailPath[260];
 
         if (RetailRaceModelPath(this->m_unit->m_unitFieldBytes0[0], this->m_unit->m_unitFieldBytes0[2], retailPath, sizeof(retailPath),
@@ -25160,8 +25162,11 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
         data.m_model = this->m_worldModel;
         data.m_flags ^= (data.m_flags ^ (static_cast<uint32_t>(this->m_obj->m_guid == ClntObjMgrGetActivePlayer()) << 1)) & 0x2;
         data.m_model->m_refCount++;
-        CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_1);
+        if (!RetailRaceMapped(data.m_preferences.m_raceID)) { // Esteria: retail options go beyond the stock ranges
+            CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_1);
+        }
         this->m_characterComponent->Init(&data, nullptr);
+        RetailRaceBindOwner(this->m_characterComponent, this);
 
         uint32_t itemDisplayId;
 

@@ -6,6 +6,9 @@
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Extensions/Housing/src/HousingWire.h"
+#include "Engine/Source/Retail/BodyShape.h"
+#include "Engine/Source/Retail/RetailLookWire.h"
+#include "WoW/Common/ComponentCore/RetailRace.h"
 #include "WoW/Source/Extension/ExtensionMgr.h"
 #include "WoW/Source/LoadingScreen.h"
 #include "WoW/Source/Object/ObjectClient/Player_C.h"
@@ -613,11 +616,110 @@ int32_t ReceiveLayout(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     return 1;
 }
 
+// A shop or commission answer, held for Commerce.lua: the server and the addon are the only ones who read it.
+std::string s_commerce;
+
+int32_t ReceiveCommerce(void*, NETMESSAGE, uint32_t, CDataStore* message) {
+    Reader r(message);
+    if (r.Get(s_commerce)) Signal("ESTERIA_HOUSING_COMMERCE");
+    return 1;
+}
+
 // ------------------------------------------------------------------------------------------------ Lua
 
 void NumberField(lua_State* L, char const* key, double value) { lua_pushnumber(L, value); lua_setfield(L, -2, key); }
 
 int32_t IsAvailable(lua_State* L) { lua_pushboolean(L, s_available); return 1; }
+
+int32_t Commerce(lua_State* L) {
+    lua_pushboolean(L, s_available && Writer().Put<uint8_t>(ActionCommerce).PutString(luaL_checkstring(L, 1)).Send(CMSG_ACTION));
+    return 1;
+}
+
+int32_t GetCommerce(lua_State* L) { lua_pushstring(L, s_commerce.c_str()); return 1; }
+
+// ---- the merchant being customized: the real NPC in the world is the preview
+uint64_t s_merchant = 0;
+BodyShape::Values s_merchantBody;
+
+CCharacterComponent* MerchantComponent() {
+    WOWGUID guid;
+    guid.m_guid = s_merchant;
+    auto* unit = s_merchant ? static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_UNIT, __FILE__, __LINE__)) : nullptr;
+    return unit ? unit->m_characterComponent : nullptr;
+}
+
+std::string ToHex(uint8_t const* bytes, size_t size) {
+    static char const digits[] = "0123456789abcdef";
+    std::string out;
+    for (size_t i = 0; i < size; ++i) { out += digits[bytes[i] >> 4]; out += digits[bytes[i] & 15]; }
+    return out;
+}
+
+bool FromHex(char const* text, uint8_t* out, size_t size) {
+    if (!text || std::strlen(text) != size * 2) return false;
+    for (size_t i = 0; i < size; ++i) {
+        char pair[3] = { text[2 * i], text[2 * i + 1], 0 };
+        if (!std::isxdigit(uint8_t(pair[0])) || !std::isxdigit(uint8_t(pair[1]))) return false;
+        out[i] = uint8_t(std::strtoul(pair, nullptr, 16));
+    }
+    return true;
+}
+
+// EsteriaHousing_SetMerchant("hex guid")
+int32_t SetMerchant(lua_State* L) {
+    s_merchant = std::strtoull(luaL_checkstring(L, 1), nullptr, 16);
+    s_merchantBody = BodyShape::Values();
+    return 0;
+}
+
+// EsteriaHousing_MerchantEA("EA_GET", option, ...): the character creator's option commands, on the merchant.
+int32_t MerchantEA(lua_State* L) {
+    int const results = RetailRaceCycleCommand(L, MerchantComponent(), luaL_checkstring(L, 1));
+    return results < 0 ? 0 : results;
+}
+
+// EsteriaHousing_MerchantBody(["BS:hex"]) -> the body code; with one, applies it. The code is the sliders' own preset format.
+int32_t MerchantBody(lua_State* L) {
+    if (lua_isstring(L, 1)) {
+        char const* code = lua_tostring(L, 1);
+        uint8_t payload[CharacterBodyShape::PayloadSize];
+        CharacterBodyShape::Values wire{};
+        if (std::strlen(code) > 3 && FromHex(code + 3, payload, sizeof(payload)) && CharacterBodyShape::ReadPayload(payload, sizeof(payload), wire)) {
+            s_merchantBody = BodyShape::FromWire(wire);
+            BodyShape::SetUnit(s_merchant, s_merchantBody);
+        }
+    }
+    uint8_t payload[CharacterBodyShape::PayloadSize];
+    CharacterBodyShape::WritePayload(payload, BodyShape::ToWire(s_merchantBody));
+    lua_pushstring(L, ("BS:" + ToHex(payload, sizeof(payload))).c_str());
+    return 1;
+}
+
+// EsteriaHousing_MerchantSlider("Height"[, value]) -> value
+int32_t MerchantSlider(lua_State* L) {
+    char const* name = luaL_checkstring(L, 1);
+    int32_t const found = BodyShape::FindSlider(name);
+    if (found < 0) return 0;
+    if (lua_isnumber(L, 2)) {
+        s_merchantBody.v[name] = std::max(BodyShape::Sliders()[found].minValue, std::min(1.0f, float(lua_tonumber(L, 2))));
+        BodyShape::SetUnit(s_merchant, s_merchantBody);
+    }
+    lua_pushnumber(L, s_merchantBody.Get(name));
+    return 1;
+}
+
+// EsteriaHousing_MerchantLook() -> hex of the look to save, nil until the merchant has finished loading
+int32_t MerchantLook(lua_State* L) {
+    CharacterRetailLook::Look look;
+    if (!RetailRaceCaptureLook(MerchantComponent(), look)) return 0;
+    uint8_t payload[CharacterRetailLook::PayloadSize];
+    CharacterRetailLook::WritePayload(payload, look);
+    lua_pushstring(L, ToHex(payload, sizeof(payload)).c_str());
+    return 1;
+}
+
+int32_t RaceSupported(lua_State* L) { lua_pushboolean(L, RetailRaceMapped(uint32_t(luaL_checknumber(L, 1)))); return 1; }
 
 // { inHouse, isOwner, houseId, revision, placed, maxDecor, minX..maxZ, decor = { { placedId, decorId, x, y, z, yaw } } }
 // yaw in degrees. nil before the server has said anything.
@@ -1484,6 +1586,16 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterMessageHandler(SMSG_PLOT, ReceivePlot, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_LAYOUT, ReceiveLayout, nullptr);
     sExtensionMgr->RegisterMessageHandler(SMSG_NEIGHBORHOOD, ReceiveNeighborhood, nullptr);
+    sExtensionMgr->RegisterMessageHandler(SMSG_COMMERCE, ReceiveCommerce, nullptr);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_Commerce", Commerce, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCommerce", GetCommerce, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetMerchant", SetMerchant, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MerchantEA", MerchantEA, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MerchantBody", MerchantBody, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MerchantSlider", MerchantSlider, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_MerchantLook", MerchantLook, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_RaceSupported", RaceSupported, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterFrameScriptEvent("ESTERIA_HOUSING_COMMERCE", FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_IsAvailable", IsAvailable, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetState", GetState, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCatalog", GetCatalog, FRAMESCRIPT_CONTEXTS_GAME);

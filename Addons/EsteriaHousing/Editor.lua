@@ -20,8 +20,10 @@ local RESULT = {
 }
 -- our categories and the retail category icon for each
 local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, { 2, "Accents", "accents" },
-  { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" } }
+  { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" }, { 6, "Shops", "interactive" } }
 
+-- shop decor shows the picture of the retail piece it borrows its model from
+H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 15061, [40006] = 26483, [40007] = 3985 }
 local catalog, state, names, fdids = {}, nil, {}, {}
 local editing         -- decorate mode on
 local ability = 1     -- 1 basic, 2 expert, 3 customize, 4 cleanup, 5 layout
@@ -376,7 +378,7 @@ local catalogTab = TabButton("Catalog", "catalog", 170)
 local function Filtered()
   local list = {}
   for _, e in ipairs(catalog) do
-    if (tab == "catalog" or e.available > 0 or e.placed > 0) and (category == nil or e.category == category)
+    if (tab == "catalog" and e.category ~= 6 or tab ~= "catalog" and (e.available > 0 or e.placed > 0)) and (category == nil or e.category == category) -- shops are free: storage only
       and (search == "" or e.name:lower():find(search, 1, true)) then
       list[#list + 1] = e
     end
@@ -398,7 +400,7 @@ function H.RedrawDecor()
       else
         t.count:SetText(e.available); t:SetAlpha(e.available > 0 and 1 or 0.45)
       end
-      local thumb = H.THUMBNAILS and H.THUMBNAILS[e.decorId]
+      local thumb = H.THUMBNAILS and H.THUMBNAILS[H.SHOP_MODEL[e.decorId] or e.decorId]
       if thumb then
         t.thumb:SetTexture("retail/" .. thumb[1] .. ".blp"); t.thumb:SetTexCoord(0, thumb[2], 0, thumb[2])
         t.thumb:Show(); t.model:Hide()

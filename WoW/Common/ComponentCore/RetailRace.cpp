@@ -1957,6 +1957,8 @@ bool ApplyLook(CCharacterComponent* character, const CharacterRetailLook::Look& 
 
 }  // namespace
 
+bool RetailRaceCaptureLook(CCharacterComponent* character, CharacterRetailLook::Look& look) { return CaptureLook(character, look); }
+
 void RetailLookCreateFooter(CDataStore* packet) {
     CharacterRetailLook::Look look;
     if (!packet || !CaptureLook(CCharacterCreation::m_character, look)) return;
@@ -2133,6 +2135,7 @@ void RetailRaceEyeLightning(CCharacterComponent*, bool) {}
 void RetailRaceCreateEyeEffects(CDataStore*) {}
 void BodyShapeCreateFooter(CDataStore*, bool) {}
 void RetailLookCreateFooter(CDataStore*) {}
+bool RetailRaceCaptureLook(CCharacterComponent*, CharacterRetailLook::Look&) { return false; }
 void RetailRaceSetLook(uint64_t, const CharacterRetailLook::Look&) {}
 void RetailRaceClearLooks() {}
 void RetailRaceSetParkedLook(uint64_t, const CharacterRetailLook::Look&) {}

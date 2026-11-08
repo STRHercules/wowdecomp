@@ -38,6 +38,11 @@
 > - `SMSG_PLOT` ends with your plot's swappable parts (walls, roof, door, windows, chimney) and their options.
 >   `ActionPlotFixture` picks one; 0 goes back to the style's default.
 
+> **Shops and commissions (2026-11-08): protocol 17.** One more opcode, so `NUM_MSG_TYPES` is now 0x544.
+> - `CMSG_ACTION` `ActionCommerce`: one tab-separated text command (`place`, `deposit`, `buy`, `post`, `complete`, ...).
+> - `0x543 SMSG_COMMERCE`: one text answer, read by `Addons/EsteriaHousing/Commerce.lua`. The server side is
+>   `mod-esteria-housing/src/HousingCommerce.inc`, which re-checks range, ownership, stock and money on every command.
+
 ## Opcode range: 0x537–0x540
 
 Evidence that these are unused:
