@@ -141,8 +141,18 @@ local function List(parent, top, rows, rowH)
     b.line:SetPoint("BOTTOMLEFT", 0, 2); b.line:SetPoint("BOTTOMRIGHT", 0, 2); b.line:SetHeight(2)
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); b.text:SetPoint("LEFT", 10, 0); b.text:SetJustifyH("LEFT")
     b.sub = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); b.sub:SetPoint("RIGHT", -8, 0)
+    b.text:SetPoint("RIGHT", b.sub, "LEFT", -6, 0); b.text:SetHeight(14) -- one line, cut short before the detail
     b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     b:SetScript("OnClick", function(self) if self.item and self.item.fn then PlaySound("igMainMenuOptionCheckBoxOn"); self.item.fn() end end)
+    -- an item's tooltip (link) or a line of detail (tip)
+    b:SetScript("OnEnter", function(self)
+      local it = self.item
+      if not it or not (it.link or it.tip) then return end
+      GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+      if it.link then GameTooltip:SetHyperlink(it.link) else GameTooltip:AddLine(it.text); GameTooltip:AddLine(it.tip, 1, 1, 1, true) end
+      GameTooltip:Show()
+    end)
+    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
     l.buttons[i] = b
   end
   function l:Update()
@@ -164,7 +174,7 @@ local function List(parent, top, rows, rowH)
       else
         b:Show()
         b.text:SetText(it.text); b.sub:SetText(it.sub or "")
-        b.text:SetFontObject(it.header and GameFontNormal or GameFontHighlight)
+        b.text:SetFontObject(it.header and GameFontNormal or it.dim and GameFontDisable or GameFontHighlight)
         Show(b.picked, it.picked); Show(b.line, it.header)
         if it.header then b:Disable() else b:Enable() end
       end
@@ -501,6 +511,10 @@ StaticPopupDialogs["ESTERIA_HOUSING_STONE_INVITE"] = {
   text = "%s", button1 = ACCEPT, button2 = DECLINE, timeout = 60, whileDead = false, hideOnEscape = true,
   OnAccept = function(self, placed) Send("stonego", placed) end,
 }
+
+-- the shared look, for the collections windows (Collections.lua)
+H.Kit = { Window = Window, Inset = Inset, Tabs = Tabs, Line = Line, Button = Button, Box = Box, Check = Check, List = List,
+  Fields = Fields, Num = Num, Show = Show, LINE_H = LINE_H, BOX_TOP = BOX_TOP }
 
 -- ------------------------------------------------------------------------------------------------ answers
 

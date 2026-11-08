@@ -455,6 +455,11 @@ tinsert(UISpecialFrames, "EsteriaHousingCustomizer")
 local cTitle = c:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge"); cTitle:SetPoint("TOP", 0, -12); cTitle:SetText("Merchant Appearance")
 CreateFrame("Button", nil, c, "UIPanelCloseButton"):SetPoint("TOPRIGHT", 2, 2)
 local cRaces, cRace, cSex, cTab, cPage, cSaved = {}, 1, 0, "looks", 0, false
+-- the customizer edits a merchant (its shop is open) or a mannequin (cTarget: its placed id, over the collections channel)
+local cTarget
+local function CSend(verb, ...)
+  if cTarget then EsteriaHousing_Commerce(strjoin("\t", "col", "mq" .. verb, cTarget, ...)) else Send(verb, ...) end
+end
 
 -- the page-turn arrows of the spellbook: round, and the same size everywhere
 local function Arrow(parent, dir)
@@ -486,13 +491,13 @@ raceBar.text:SetFontObject(GameFontNormal)
 local function ChangeRace(d)
   local at = 1
   for i, r in ipairs(cRaces) do if r.id == cRace then at = i end end
-  Send("race", cRaces[(at - 1 + d) % #cRaces + 1].id, cSex)
+  CSend("race", cRaces[(at - 1 + d) % #cRaces + 1].id, cSex)
 end
 raceBar.prev:SetScript("OnClick", function() ChangeRace(-1) end); raceBar.next:SetScript("OnClick", function() ChangeRace(1) end)
 local male = H.Button(c, "Male", 90, 22); male:SetPoint("TOPRIGHT", c, "TOP", -3, -82)
 local female = H.Button(c, "Female", 90, 22); female:SetPoint("TOPLEFT", c, "TOP", 3, -82)
-male:SetScript("OnClick", function() if cSex ~= 0 then Send("race", cRace, 0) end end)
-female:SetScript("OnClick", function() if cSex ~= 1 then Send("race", cRace, 1) end end)
+male:SetScript("OnClick", function() if cSex ~= 0 then CSend("race", cRace, 0) end end)
+female:SetScript("OnClick", function() if cSex ~= 1 then CSend("race", cRace, 1) end end)
 
 -- Appearance and Body, as tabs on an inset
 local cbox = CreateFrame("Frame", nil, c)
@@ -610,10 +615,10 @@ saveLook:SetScript("OnClick", function()
   local look = EsteriaHousing_MerchantLook()
   if not look then return UIErrorsFrame:AddMessage("The merchant is still loading.", 1, 0.3, 0.3) end
   cSaved = true
-  Send("look", look, (EsteriaHousing_MerchantBody():gsub("^BS:", "")))
+  CSend("look", look, (EsteriaHousing_MerchantBody():gsub("^BS:", "")))
   c:Hide()
 end)
-c:SetScript("OnHide", function() if not cSaved then Send("lookreset") end end)
+c:SetScript("OnHide", function() if not cSaved then CSend("lookreset") end end)
 
 -- the merchant's character takes a moment to build after a race change
 local waited = 0
@@ -635,6 +640,8 @@ function H.OpenCustomizer(lines)
     if f[1] == "R" and EsteriaHousing_RaceSupported(tonumber(f[2])) then cRaces[#cRaces + 1] = { id = tonumber(f[2]), name = f[3] } end
   end
   EsteriaHousing_SetMerchant(a[2])
+  cTarget = (a[6] and a[6] ~= "") and a[6] or nil
+  cTitle:SetText(cTarget and "Mannequin Appearance" or "Merchant Appearance")
   cRace, cSex, cPage = tonumber(a[3]) or 1, tonumber(a[4]) or 0, 0
   if a[5] and a[5] ~= "" then EsteriaHousing_MerchantBody("BS:" .. a[5]) end
   presets, presetAt = {}, 0
