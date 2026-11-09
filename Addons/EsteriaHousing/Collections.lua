@@ -321,11 +321,22 @@ local MQ = K.Window("EsteriaHousingMannequin", 380, 560, "Interface\\Icons\\INV_
 MQ:SetPoint("LEFT", 60, 30)
 local mq, mqSlots, pickSlot = nil, {}, nil
 local qbox = K.Inset(MQ, BOX_TOP, 16)
-local qpages = K.Tabs(MQ, qbox, { "Outfit", "Style", "Label", "Outfits" }, function(i) MQ:PickTab(i) end)
+-- One window for every character: a mannequin, and the service NPCs the owner dresses (the innkeeper, banker, smith,
+-- auctioneer, trainers), whose Service tab Household.lua fills (H.FigureServicePage, H.ShowFigure).
+local qtabs = { false, true, true, true, true }
+local qpages = K.Tabs(MQ, qbox, { "Service", "Outfit", "Style", "Settings", "Outfits" }, function(i) MQ:PickTab(i, qtabs) end)
+H.FigureServicePage = qpages[1]
+local figure, figureIcon, figureFresh -- the service the window shows (its owner's), its icon, a first open
+function H.ShowFigure(svc, icon)
+  figureFresh = not (MQ:IsShown() and figure and figure.placed == svc.placed)
+  figure, figureIcon = svc, icon
+  Send("mqopen", svc.placed)
+end
+function H.HideFigure() MQ:Hide() end
 
 -- Outfit: a line per slot (click to change it, right-click to clear it); the pick list replaces them while choosing
-local slotFrame = CreateFrame("Frame", nil, qpages[1]); slotFrame:SetAllPoints()
-local pickFrame = CreateFrame("Frame", nil, qpages[1]); pickFrame:SetAllPoints(); pickFrame:Hide()
+local slotFrame = CreateFrame("Frame", nil, qpages[2]); slotFrame:SetAllPoints()
+local pickFrame = CreateFrame("Frame", nil, qpages[2]); pickFrame:SetAllPoints(); pickFrame:Hide()
 local slotLines = {}
 for i, s in ipairs(SLOTS) do
   local line = K.Line(slotFrame, i, -6, s[2])
@@ -356,30 +367,30 @@ pickBack:SetScript("OnClick", function() pickFrame:Hide(); slotFrame:Show() end)
 local pickList = K.List(pickFrame, -30, 13, 24)
 
 -- Style: what it is made of, and how it stands
-Title(qpages[2], "Mannequin", -10)
-local typeFill = Choices(qpages[2], -26, TYPES, function(i) if mq then Send("mqstyle", mq.placed, i, mq.pose) end end)
-Title(qpages[2], "Pose", -26 - 4 * (LINE_H + 2) - 8)
-local poseFill = Choices(qpages[2], -26 - 4 * (LINE_H + 2) - 24, POSES, function(i) if mq then Send("mqstyle", mq.placed, mq.type, i) end end)
+Title(qpages[3], "Mannequin", -10)
+local typeFill = Choices(qpages[3], -26, TYPES, function(i) if mq then Send("mqstyle", mq.placed, i, mq.pose) end end)
+Title(qpages[3], "Pose", -26 - 4 * (LINE_H + 2) - 8)
+local poseFill = Choices(qpages[3], -26 - 4 * (LINE_H + 2) - 24, POSES, function(i) if mq then Send("mqstyle", mq.placed, mq.type, i) end end)
 
 -- Label: its name and title, and the character creator for its race and features
-local mqLabelFill, mqHint = LabelPage(qpages[3], -10, function(name, sub) if mq then Send("label", mq.placed, name, sub) end end)
+local mqLabelFill, mqHint = LabelPage(qpages[4], -10, function(name, sub) if mq then Send("label", mq.placed, name, sub) end end)
 mqHint:SetText("Its nameplate: a name, and a title under it.")
-local customize = K.Button(qpages[3], "Customize Appearance", 170); customize:SetPoint("TOPLEFT", 12, -130)
+local customize = K.Button(qpages[4], "Customize Appearance", 170); customize:SetPoint("TOPLEFT", 12, -130)
 customize:SetScript("OnClick", function() if mq then Send("mqappearance", mq.placed) end end)
-local customizeNote = qpages[3]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+local customizeNote = qpages[4]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 customizeNote:SetPoint("TOPLEFT", 12, -160); customizeNote:SetWidth(320); customizeNote:SetJustifyH("LEFT")
 customizeNote:SetText("Race, body type, face, hair and the body sliders, as in character creation.")
 
 -- Outfits: named sets of gear to put on again
-local outfitLine = K.Line(qpages[4], 1, -10, "Name")
+local outfitLine = K.Line(qpages[5], 1, -10, "Name")
 local outfitBox = K.Box(outfitLine, 150); outfitBox:SetPoint("RIGHT", -84, 0)
 local outfitSave = K.Button(outfitLine, "Save", 74); outfitSave:SetPoint("RIGHT", -4, 0)
 outfitSave:SetScript("OnClick", function() if mq then Send("mqsave", mq.placed, Clean(outfitBox:GetText())); outfitBox:ClearFocus() end end)
 local outfitPicked
-local outfitList = K.List(qpages[4], -44, 11, 24)
-local outfitLoad = K.Button(qpages[4], "Wear", 90); outfitLoad:SetPoint("BOTTOMRIGHT", -8, 8)
+local outfitList = K.List(qpages[5], -44, 11, 24)
+local outfitLoad = K.Button(qpages[5], "Wear", 90); outfitLoad:SetPoint("BOTTOMRIGHT", -8, 8)
 outfitLoad:SetScript("OnClick", function() if mq and outfitPicked then Send("mqload", mq.placed, outfitPicked) end end)
-local outfitDelete = K.Button(qpages[4], "Delete", 90); outfitDelete:SetPoint("RIGHT", outfitLoad, "LEFT", -6, 0)
+local outfitDelete = K.Button(qpages[5], "Delete", 90); outfitDelete:SetPoint("RIGHT", outfitLoad, "LEFT", -6, 0)
 outfitDelete:SetScript("OnClick", function() if mq and outfitPicked then Send("mqdel", mq.placed, outfitPicked); outfitPicked = nil end end)
 
 local function DrawOutfits(names)
@@ -411,9 +422,11 @@ local function ReadMannequin(lines)
   end
   -- a service NPC wears an outfit too; the type and pose (statues, poses) stay a mannequin's
   local mannequin = mq.kind == 0 or mq.kind == 8
+  local service = not mannequin and figure ~= nil and figure.placed == mq.placed
+  SetPortraitToTexture(MQ.portrait, service and figureIcon or "Interface\\Icons\\INV_Chest_Plate16")
   MQ.title:SetText(mq.label ~= "" and mq.label or "Mannequin")
   MQ.status:SetText(mannequin and string.format("%s, %s  |cffb0b0b0%d %s|r", TYPES[mq.type + 1] or "", POSES[mq.pose + 1] or "", n,
-    n == 1 and "piece" or "pieces") or string.format("Outfit  |cffb0b0b0%d %s|r", n, n == 1 and "piece" or "pieces"))
+    n == 1 and "piece" or "pieces") or string.format("%s  |cffb0b0b0%d %s|r", mq.sub ~= "" and mq.sub or "Outfit", n, n == 1 and "piece" or "pieces"))
   MQ.note:SetText(mq.owner and "Gear here is a copy of its look; your items stay yours." or (mq.sub ~= "" and mq.sub or ""))
   typeFill(mq.type); poseFill(mq.pose)
   mqLabelFill(mq.label, mq.sub)
@@ -423,10 +436,17 @@ local function ReadMannequin(lines)
   -- visitors inspect the outfit only
   local first = not MQ:IsShown()
   MQ:SetHeight(560)
-  if first then pickFrame:Hide(); slotFrame:Show(); MQ:PickTab(1) end
-  local tabs = { true, mq.owner and mannequin, mq.owner, mq.owner }
-  for i = 1, 4 do Show(_G["EsteriaHousingMannequinTab" .. i], tabs[i]) end
-  if not mq.owner then MQ:PickTab(1, tabs) elseif not mannequin and MQ.selectedTab == 2 then MQ:PickTab(1, tabs) end
+  qtabs = { service, true, mq.owner and mannequin, mq.owner, mq.owner }
+  if first or (service and figureFresh) then
+    pickFrame:Hide(); slotFrame:Show()
+    MQ:PickTab(service and 1 or 2, qtabs)
+  elseif not qtabs[MQ.selectedTab or 2] then
+    MQ:PickTab(2, qtabs)
+  else
+    for i = 1, 5 do Show(_G["EsteriaHousingMannequinTab" .. i], qtabs[i]) end
+  end
+  figureFresh = false
+  if not mq.owner then MQ:PickTab(2, qtabs) end
   MQ:Show()
 end
 
@@ -606,12 +626,15 @@ local radiusBox = K.Box(radiusLine, 50, true); radiusBox:SetPoint("RIGHT", -4, 0
 local areaNote = hpages[2]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 areaNote:SetPoint("TOPLEFT", 12, -46); areaNote:SetWidth(330); areaNote:SetJustifyH("LEFT")
 areaNote:SetText("Pets wander within this distance of the habitat. Place a Pet Bed, Pet Toy or Feeding Station nearby and they will sleep, play and eat there.")
-local areaSave = K.Button(hpages[2], "Save", 90); areaSave:SetPoint("TOPRIGHT", -8, -100)
+-- the rug itself: shown, or hidden so only the pets show
+local rugLine = K.Line(hpages[2], 1, -130, "Hide the rug (only the pets show)")
+local rugCheck = K.Check(rugLine); rugCheck:SetPoint("RIGHT", -4, 0)
+local areaSave = K.Button(hpages[2], "Save", 90); areaSave:SetPoint("TOPRIGHT", -8, -162)
 
 local function SaveHabitat()
   local list = {}
   for spell in pairs(chosen) do list[#list + 1] = spell end
-  Send("habset", hab.placed, Num(radiusBox:GetText()), table.concat(list, ","))
+  Send("habset", hab.placed, Num(radiusBox:GetText()), table.concat(list, ","), rugCheck:GetChecked() and 1 or 0)
 end
 petSave:SetScript("OnClick", function() if hab then SaveHabitat() end end)
 areaSave:SetScript("OnClick", function() if hab then radiusBox:ClearFocus(); SaveHabitat() end end)
@@ -639,7 +662,7 @@ local function ReadHabitat(lines)
   pets, chosen = {}, {}
   for _, line in ipairs(lines) do
     local f = Fields(line)
-    if f[1] == "hab" then hab = { placed = f[2], owner = f[3] == "1", radius = f[4], max = Num(f[5]) }
+    if f[1] == "hab" then hab = { placed = f[2], owner = f[3] == "1", radius = f[4], max = Num(f[5]), hideRug = f[6] == "1" }
     elseif f[1] == "pet" then
       pets[#pets + 1] = { spell = Num(f[2]), name = f[3] }
       if f[4] == "1" then chosen[Num(f[2])] = true end
@@ -649,6 +672,7 @@ local function ReadHabitat(lines)
   HB.title:SetText("Pet Habitat")
   HB.note:SetText(hab.owner and "Choose who lives here; they stay in your collection." or "")
   if not radiusBox:HasFocus() then radiusBox:SetText(hab.radius) end
+  rugCheck:SetChecked(hab.hideRug)
   DrawPets()
   Show(petSave, hab.owner)
   if not HB:IsShown() then HB:PickTab(1) end

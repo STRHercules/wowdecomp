@@ -39,52 +39,116 @@ local KIND_NAME = { [17] = "Innkeeper", [18] = "Banker", [19] = "Bank", [20] = "
   [23] = "Repairs", [24] = "Auctioneer", [25] = "Storage", [26] = "Crafting Station", [27] = "Trainer" }
 local INNKEEPER, AUCTIONEER = 17, 24
 
-local S = K.Window("EsteriaHousingService", 380, 470, "Interface\\Icons\\INV_Misc_Rune_01")
-S:SetPoint("LEFT", 60, 40)
-local svc
-local sbox = K.Inset(S, BOX_TOP, 16)
-local spages = K.Tabs(S, sbox, { "Service", "Settings" }, function(i) S:PickTab(i, { true, svc and svc.owner }) end)
-
--- Service: what it is, its costs (repairs), and its actions as buttons
-local about = spages[1]:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-about:SetPoint("TOPLEFT", 14, -14); about:SetPoint("RIGHT", -14, 0); about:SetJustifyH("LEFT"); about:SetSpacing(3)
-local costLines = {}
-for i = 1, 3 do costLines[i] = K.Line(spages[1], i, -110, "") end
-local actionButtons = {}
-for i = 1, 3 do
-  local b = K.Button(spages[1], "", 240); b:SetHeight(26)
-  b:SetPoint("BOTTOM", 0, 14 + (3 - i) * 32)
-  actionButtons[i] = b
-end
-
 StaticPopupDialogs["ESTERIA_HOUSING_SERVICE_CONFIRM"] = {
   text = "%s", button1 = ACCEPT, button2 = CANCEL, timeout = 0, whileDead = false, hideOnEscape = true, hasMoneyFrame = 1,
   OnAccept = function(self) if self.data then Send(self.data.verb, self.data.placed) end end,
 }
 
--- Settings (the owner's): name and title (characters), who may use it, guests (innkeeper), greeting (auctioneer), look
-local nameLine = K.Line(spages[2], 1, -10, "Name"); local nameBox = K.Box(nameLine, 180); nameBox:SetPoint("RIGHT", -4, 0)
-local titleLine = K.Line(spages[2], 2, -10, "Title"); local titleBox = K.Box(titleLine, 180); titleBox:SetPoint("RIGHT", -4, 0)
-local accessLine = K.Line(spages[2], 3, -10, "Who may use it"); local accessButton = Cycler(accessLine)
-local guestLine = K.Line(spages[2], 4, -10, "Guests may bind their hearthstone here")
-local guestCheck = K.Check(guestLine); guestCheck:SetPoint("RIGHT", -4, 0)
-local greetLine = K.Line(spages[2], 5, -10, "Greeting"); local greetBox = K.Box(greetLine, 220); greetBox:SetPoint("RIGHT", -4, 0)
-local look = K.Button(spages[2], "Change Appearance", 150); look:SetPoint("BOTTOMLEFT", 8, 8)
-look:SetScript("OnClick", function() if svc then Send("mqappearance", svc.placed) end end)
--- the mannequin's outfit window: gear from your own or your collected looks, saved outfits
-local dress = K.Button(spages[2], "Outfit", 90); dress:SetPoint("LEFT", look, "RIGHT", 6, 0)
-dress:SetScript("OnClick", function() if svc then Send("mqopen", svc.placed) end end)
-local ssave = K.Button(spages[2], "Save", 90); ssave:SetPoint("BOTTOMRIGHT", -8, 8)
-ssave:SetScript("OnClick", function()
-  if not svc then return end
-  nameBox:ClearFocus(); titleBox:ClearFocus(); greetBox:ClearFocus()
-  Send("svset", svc.placed, Clean(nameBox:GetText()), Clean(titleBox:GetText()), accessButton.value or 0,
-    guestCheck:GetChecked() and 1 or 0, Clean(greetBox:GetText()))
-end)
+-- What a service is, its costs (repairs) and its actions as buttons, on any page. onUse: the game's own window took over.
+local function ServiceBody(page, onUse)
+  local about = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+  about:SetPoint("TOPLEFT", 14, -14); about:SetPoint("RIGHT", -14, 0); about:SetJustifyH("LEFT"); about:SetSpacing(3)
+  local costLines, buttons = {}, {}
+  for i = 1, 3 do costLines[i] = K.Line(page, i, -104, "") end
+  for i = 1, 3 do
+    local b = K.Button(page, "", 240); b:SetHeight(26)
+    b:SetPoint("TOP", 0, -104 - 3 * (LINE_H + 2) - 10 - (i - 1) * 32)
+    buttons[i] = b
+  end
+  return function(svc, info, costs, actions)
+    about:SetText(table.concat(info, "\n\n"))
+    for i, line in ipairs(costLines) do
+      local c = costs[i]
+      Show(line, c ~= nil)
+      if c then line.label:SetText(c[1]); line.value:SetText(Coins(c[2])) end
+    end
+    -- with no costs, the buttons move up under the text
+    local top = #costs > 0 and (-104 - 3 * (LINE_H + 2) - 10) or -104
+    for i, b in ipairs(buttons) do
+      local a = actions[i]
+      Show(b, a ~= nil)
+      b:ClearAllPoints(); b:SetPoint("TOP", 0, top - (i - 1) * 32)
+      if a then
+        b:SetText(a.money > 0 and (a.label .. "  " .. Coins(a.money)) or a.label)
+        b:SetScript("OnClick", function()
+          if a.confirm ~= "" then
+            local d = StaticPopup_Show("ESTERIA_HOUSING_SERVICE_CONFIRM", a.confirm)
+            if d then
+              d.data = { verb = "sv" .. a.verb, placed = svc.placed }
+              if a.money > 0 then MoneyFrame_Update(d.moneyFrame, a.money) else d.moneyFrame:Hide() end
+            end
+          else
+            Send("sv" .. a.verb, svc.placed)
+            if a.verb == "use" and onUse then onUse() end
+          end
+        end)
+      end
+    end
+  end
+end
+
+-- The owner's settings, rows from `top` down: name and title (withNames), who may use it, guests (innkeeper), greeting
+-- (auctioneer), and Save. A character's name and title live on its own Settings tab, so it passes them through unchanged.
+local function ServiceSettings(page, top, withNames)
+  local row, rows = 0, {}
+  local function Row(label)
+    row = row + 1
+    local line = K.Line(page, row, top, label)
+    rows[#rows + 1] = line
+    return line
+  end
+  local nameLine, nameBox, titleLine, titleBox
+  if withNames then
+    nameLine = Row("Name"); nameBox = K.Box(nameLine, 180); nameBox:SetPoint("RIGHT", -4, 0)
+    titleLine = Row("Title"); titleBox = K.Box(titleLine, 180); titleBox:SetPoint("RIGHT", -4, 0)
+  end
+  local accessLine = Row("Who may use it"); local accessButton = Cycler(accessLine)
+  local guestLine = Row("Guests may bind their hearthstone here")
+  local guestCheck = K.Check(guestLine); guestCheck:SetPoint("RIGHT", -4, 0)
+  local greetLine = Row("Greeting"); local greetBox = K.Box(greetLine, 220); greetBox:SetPoint("RIGHT", -4, 0)
+  local save = K.Button(page, "Save", 90); save:SetPoint("TOPRIGHT", -8, top - row * (LINE_H + 2) - 8)
+  local svc
+  save:SetScript("OnClick", function()
+    if not svc then return end
+    greetBox:ClearFocus()
+    local name, title = svc.figure and svc.name or "", svc.title
+    if withNames then nameBox:ClearFocus(); titleBox:ClearFocus(); name, title = Clean(nameBox:GetText()), Clean(titleBox:GetText()) end
+    Send("svset", svc.placed, name, title, accessButton.value or 0, guestCheck:GetChecked() and 1 or 0, Clean(greetBox:GetText()))
+  end)
+  return function(s)
+    svc = s
+    if withNames then
+      Show(nameLine, s.figure); Show(titleLine, s.figure)
+      if not nameBox:HasFocus() then nameBox:SetText(s.figure and s.name or "") end
+      if not titleBox:HasFocus() then titleBox:SetText(s.title) end
+    end
+    Show(guestLine, s.kind == INNKEEPER); Show(greetLine, s.kind == AUCTIONEER)
+    if not greetBox:HasFocus() then greetBox:SetText(s.greeting) end
+    accessButton:Set(s.access)
+    guestCheck:SetChecked(s.flags % 2 == 1)
+  end, save
+end
+
+-- The service window: what a visitor sees, and the owner's for the services that are no character (a vault, a mailbox,
+-- a repair bench, a station). A character the owner dresses opens the character window instead (Collections.lua).
+local S = K.Window("EsteriaHousingService", 380, 470, "Interface\\Icons\\INV_Misc_Rune_01")
+S:SetPoint("LEFT", 60, 40)
+local current
+local sbox = K.Inset(S, BOX_TOP, 16)
+local spages = K.Tabs(S, sbox, { "Service", "Settings" }, function(i) S:PickTab(i, { true, current and current.owner }) end)
+local fillBody = ServiceBody(spages[1], function() S:Hide() end)
+local fillSettings = ServiceSettings(spages[2], -10, true)
+
+-- The character window's Service tab (its page is Collections.lua's): the same parts, the settings under the actions.
+local fillFigureBody, fillFigureSettings
+if H.FigureServicePage then
+  fillFigureBody = ServiceBody(H.FigureServicePage, function() if H.HideFigure then H.HideFigure() end end)
+  fillFigureSettings = ServiceSettings(H.FigureServicePage, -104 - 6 * (LINE_H + 2) - 30, false)
+end
 
 local function ReadService(lines)
   local f = Fields(lines[1])
-  svc = { placed = f[2], kind = Num(f[3]), owner = f[4] == "1", name = f[5], title = f[6], access = Num(f[7]), flags = Num(f[8]),
+  local svc = { placed = f[2], kind = Num(f[3]), owner = f[4] == "1", name = f[5], title = f[6], access = Num(f[7]), flags = Num(f[8]),
     greeting = f[9], figure = f[10] == "1", message = f[12] or "" }
   local info, costs, actions = {}, {}, {}
   for i = 2, #lines do
@@ -93,43 +157,21 @@ local function ReadService(lines)
     elseif r[1] == "C" then costs[#costs + 1] = { r[2], Num(r[3]) }
     elseif r[1] == "A" then actions[#actions + 1] = { verb = r[2], label = r[3], confirm = r[4], money = Num(r[5]) } end
   end
+  -- the owner's character: one window with its service, outfit and settings
+  if svc.figure and svc.owner and fillFigureBody and H.ShowFigure then
+    fillFigureBody(svc, info, costs, actions)
+    fillFigureSettings(svc)
+    S:Hide()
+    H.ShowFigure(svc, ICONS[svc.kind])
+    return
+  end
+  current = svc
   SetPortraitToTexture(S.portrait, ICONS[svc.kind] or "Interface\\Icons\\INV_Misc_QuestionMark")
   S.title:SetText(svc.name)
   S.status:SetText(svc.title ~= "" and svc.title or (KIND_NAME[svc.kind] or ""))
   S.note:SetText(svc.message ~= "" and svc.message or (svc.owner and "Yours. Settings are on the second tab." or ""))
-  about:SetText(table.concat(info, "\n\n"))
-  for i, line in ipairs(costLines) do
-    local c = costs[i]
-    Show(line, c ~= nil)
-    if c then line.label:SetText(c[1]); line.value:SetText(Coins(c[2])) end
-  end
-  for i, b in ipairs(actionButtons) do
-    local a = actions[i]
-    Show(b, a ~= nil)
-    if a then
-      b:SetText(a.money > 0 and (a.label .. "  " .. Coins(a.money)) or a.label)
-      b:SetScript("OnClick", function()
-        if a.confirm ~= "" then
-          local d = StaticPopup_Show("ESTERIA_HOUSING_SERVICE_CONFIRM", a.confirm)
-          if d then
-            d.data = { verb = "sv" .. a.verb, placed = svc.placed }
-            if a.money > 0 then MoneyFrame_Update(d.moneyFrame, a.money) else d.moneyFrame:Hide() end
-          end
-        else
-          Send("sv" .. a.verb, svc.placed)
-          if a.verb == "use" then S:Hide() end -- the game's own window takes over
-        end
-      end)
-    end
-  end
-  -- settings
-  Show(nameLine, svc.figure); Show(titleLine, svc.figure); Show(look, svc.figure); Show(dress, svc.figure)
-  Show(guestLine, svc.kind == INNKEEPER); Show(greetLine, svc.kind == AUCTIONEER)
-  if not nameBox:HasFocus() then nameBox:SetText(svc.figure and svc.name or "") end
-  if not titleBox:HasFocus() then titleBox:SetText(svc.title) end
-  if not greetBox:HasFocus() then greetBox:SetText(svc.greeting) end
-  accessButton:Set(svc.access)
-  guestCheck:SetChecked(svc.flags % 2 == 1)
+  fillBody(svc, info, costs, actions)
+  fillSettings(svc)
   if not S:IsShown() then S:PickTab(1, { true, svc.owner }) else Show(_G["EsteriaHousingServiceTab2"], svc.owner) end
   S:Show()
 end
