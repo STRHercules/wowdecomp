@@ -2,6 +2,9 @@
 
 A C++ reconstruction of the 3.3.5a client (build 12340, June 2010), maintained for the Esteria private realm.
 
+**Esteria is classless.** Every character is a single Hero class that can learn all of the Conquest of Azeroth abilities and talents,
+on top of [more than 30 races](#races), [player housing](#player-housing) and [speedflying](#flight-and-loot).
+
 Every upstream function is reconstructed from the original binary and keeps the address it came from in an
 `// OFFSET:` tag, so each one can be compared against the original. The source tree follows the layout of the
 original client (`Engine/Source/<Module>`, the game modules, original file names). Everything this fork
@@ -18,10 +21,11 @@ Join the `Custom Race` discord for other clients and to show off what you build:
 - [Getting started](#getting-started): [requirements](#requirements), [building](#building), [build options](#options), [running](#running), [extensions and Vulkan](#extensions-and-vulkan)
 
 **Features**
+- [Classless play](#classless-play)
 - [Player housing](#player-housing)
 - [Retail races and character creation](#retail-races-and-character-creation)
 - [Races](#races): [on Retail models](#races-on-retail-models), [Esteria's own](#esterias-own-races)
-- [Interface and gameplay](#interface-and-gameplay)
+- [Interface and gameplay](#interface-and-gameplay): [flight, loot and outlines](#flight-and-loot)
 - [Graphics](#graphics): [Lumenveil](#lumenveil-vulkan), [Azeroth Remastered](#azeroth-remastered-visuals-vulkan), [Living Azeroth](#living-azeroth-wind-grass-and-snow)
 - [Retail content](#retail-content-optional)
 - [Stability and fixes](#stability-and-fixes)
@@ -38,10 +42,11 @@ the client never modifies your original MPQs.
 
 | Area | What you get | Needs |
 |---|---|---|
+| [Classless play](#classless-play) | One Hero class with all of the Conquest of Azeroth abilities and talents, built from the Character Advancement panel | Esteria realm |
 | [Player housing](#player-housing) | Buy a plot, build a house room by room, decorate it with Retail decor, run shops, train on dummies and show off your collections | Esteria realm, Retail assets |
 | [Characters](#retail-races-and-character-creation) | Retail appearance customization, a restyled creator with Body, Fate and Zone pages, two-form races | Esteria realm |
 | [Races](#races) | More than 30 playable races beyond the stock ten | Esteria realm |
-| [Interface and gameplay](#interface-and-gameplay) | Character hot-swap wheel, Paths of Fate, searchable inventory, Conquest of Azeroth spell support, speedflying, transmog, radio, GM tools | Esteria realm for most server-backed features |
+| [Interface and gameplay](#interface-and-gameplay) | Character hot-swap wheel, Paths of Fate, searchable inventory, Conquest of Azeroth spell support, speedflying, loot beams, unit outlines, transmog, radio, GM tools | Esteria realm for most server-backed features |
 | [Graphics](#graphics) | Vulkan renderer, three visual sets, world wind, grass and weathering snow | Vulkan for most |
 | [Retail content](#retail-content-optional) | Retail models, WMOs and terrain loaded natively from a local install, the CDN or packed MPQs | Retail assets build option |
 
@@ -135,6 +140,17 @@ bundled headers and requires a C++20 compiler, without requiring the Vulkan SDK.
 For world and model shaders, follow the [offline Vulkan shader translation instructions](Tools/VulkanShaders/README.md)
 using your own client data. Vulkan remains work in progress; build success does not establish
 rendering or gameplay correctness.
+
+## Classless play
+
+Esteria drops the stock class system. Character creation offers a single Hero class, and every character can learn all of the
+Conquest of Azeroth abilities and talents. The abilities, talents and their rules live on the server, so this needs an Esteria realm.
+
+| Feature | What it does |
+|---|---|
+| Hero class | The class picker is removed from the character creator, so a character is defined by its race, its [Fate](#interface-and-gameplay) and what it learns |
+| Character Advancement | Replaces the talent window. The Talents button on the micro strip opens this panel, and DragonUI's talent window is switched off |
+| Conquest of Azeroth spell support | Native client support for spell charges, live aura amounts in tooltips, spell text markup and spell visual overrides. [Details](#interface-and-gameplay) |
 
 ## Player housing
 
@@ -296,15 +312,23 @@ appearance data for them.
 | DigitalInventory | Searchable five-column carried inventory with a server-side item index, via the [DigitalInventory](Extensions/DigitalInventory/README.md) extension and the `EsteriaInventory` addon in `Addons/`. With auto sort off, items stay where you put them in a saved free layout; the stock bags are held back until the realm answers, so they never flash before the replacement opens |
 | Extended limits | Optional 1000-quest and 254-class layouts and larger containers ([details](docs/uncaps.md)) |
 | Video and cursor options | Extra video controls and a native cursor selector, see [Running](#running). The Video options also hold the Esteria pages (view distance, horizon, distance fog and field of view; unit outline; loot beam; performance overlay) and, on Vulkan, [Lumenveil's settings](#lumenveil-vulkan). Each control is a CVar, so Okay, Cancel and Defaults treat the pages like any stock panel |
-| Unit outline and loot beam | A coloured outline on your target, pet target, mouseover, quest givers and interactive objects (with a Vulkan outline pass), and a beam of light over lootable corpses tinted by the best item. Both are markers only and send nothing to the server |
 | Performance overlay | A small movable overlay with frame rate, frame time, draw calls, triangles and CPU use (`showPerformance`) |
-| Manastorm speedflying and transmog | The Manastorm speedflying controller, HUD, talent panel and flight camera effects, and the transmog addon with Vulkan-backed model snapshots (`Addons/Manastorm_Speedflying`, `Addons/Manastorm_Transmog`; [integration notes](docs/MANASTORM_INTEGRATION.md)). Replaces the earlier retail-style Skyriding, whose documents are archived in `docs/archive/` |
 | Everlook Broadcasting radio | Internet radio in the DragonUI micro strip. The [Everlook Broadcasting](Addons/EverlookBroadcasting) addon by Bset runs on a native stream player ([EverlookRadio](Extensions/EverlookRadio)) built on the client's FMOD, so it needs no external DLLs. MP3 and Ogg streams only |
 | Character hot-swap | Hold a key for a radial wheel of favorite characters (`/swap`, or **Key Bindings → Esteria**) and become one without character select or a loading screen: the camera climbs into drifting clouds and comes down on the new character. Only at safe moments, with a cooldown ([extension](Extensions/CharacterSwap/README.md), [plan](docs/character-hot-swap-plan.md)). Needs the server's `Esteria.Swap.Enable` |
 | Paths of Fate | The Perk Codex (`/fate`, a micro-strip button or a key binding): cards across six paths (Combat, Survival, Exploration, Industry, Influence, Companions) that you buy with earned points and can respec. The server holds the state ([extension](Extensions/EsteriaPerks/README.md)). Needs the server's `Esteria.Perks.Enable` |
 | Conquest of Azeroth spell support | Spell charges with action-bar counts and recharge, live aura amounts in tooltips, spell text markup (per-level math, spell references, Shift-dependent text) and server-driven spell visual overrides |
 | GM Tool Chest | In-client building tools for GM accounts (`/tc`). The panel opens only after the server answers, and it answers GM accounts alone |
 | Bundled addons | The body shape and view distance addons in `Addons/` |
+
+### Flight and loot
+
+| Feature | What it does |
+|---|---|
+| Speedflying | The Manastorm controller, with a flight camera, a talent panel and a Retail-style HUD whose vigor pips show your boost stacks. Replaces the earlier Skyriding, whose documents are archived in `docs/archive/` ([integration notes](docs/MANASTORM_INTEGRATION.md), `Addons/Manastorm_Speedflying`). Needs the server module |
+| Flight abilities | Surge Forward, plus four action-bar spells on a flying mount: **Lift Off**, **Skyward Ascent**, **Whirling Surge** and **Flap**, on keys 1-4. Diving shows a wind tunnel and turns lean the mount |
+| Loot beams | A beam of light with drifting sparkles over lootable corpses, tinted by the best item. Set the lowest loot tier, maximum distance, height, width, opacity, pulse and fades, or show it through walls, under **Esc → Video**. A marker only: it sends nothing to the server (`lootBeam`) |
+| Unit outlines | A coloured line around your target, pet target, mouseover, interactive objects, quest givers and flight masters, with a Vulkan outline pass. Hostile, neutral and friendly colours, width, opacity and fading are in the same Video pages. A marker only (`unitOutline`) |
+| Transmog | The Manastorm transmog addon, with Vulkan-backed model snapshots (`Addons/Manastorm_Transmog`) |
 
 ## Graphics
 
