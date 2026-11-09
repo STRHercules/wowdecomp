@@ -393,7 +393,15 @@ int32_t ReceiveCatalog(void*, NETMESSAGE, uint32_t, CDataStore* message) {
     uint32_t page, pageCount;
     uint16_t n;
     if (!r.Get(page) || !r.Get(pageCount) || !r.Get(n)) return 0;
-    if (page == 0) s_catalogNext.clear();
+    // A page 0 (the server's push after a purchase, or our own request) starts a fresh pass; a page from an older pass
+    // still arriving is dropped, so overlapping passes (a cart of purchases) cannot splice the list together.
+    static uint32_t expected = 0;
+    if (page == 0) {
+        s_catalogNext.clear();
+        expected = 0;
+    }
+    if (page != expected) return 1;
+    ++expected;
     for (uint16_t i = 0; i < n; ++i) {
         CatalogEntry e;
         if (!r.Get(e.decorId) || !r.Get(e.goEntry) || !r.Get(e.fdid) || !r.Get(e.available) || !r.Get(e.placed)
