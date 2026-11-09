@@ -155,7 +155,7 @@ function G.Update()
       drag.now = { pos = pos, q = q, scale = scale }
       if target.fdid then -- a preview where there is a model for one
         EsteriaHousing_PinGhost(pos[1], pos[2], pos[3])
-        EsteriaHousing_SetGhost(target.fdid, q[1], q[2], q[3], q[4], scale)
+        EsteriaHousing_SetGhost(target.fdid, q[1], q[2], q[3], q[4], scale * ((H.BASE_SCALE or {})[target.decorId] or 1))
       end
     else
       hover = Pick(o, d)

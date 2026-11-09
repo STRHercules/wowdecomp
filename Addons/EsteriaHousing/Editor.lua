@@ -27,14 +27,33 @@ local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, {
 -- shop decor shows the picture of the retail piece it borrows its model from
 H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 15061, [40006] = 26483, [40007] = 3985,
   -- collections (housing_collections_world.sql)
-  [40201] = 15490, [40202] = 3836, [40203] = 27617, [40204] = 21106, [40205] = 2537, [40206] = 14346, [40207] = 7607,
-  [40209] = 11895, [40210] = 3832, [40211] = 11881, [40212] = 15064, [40213] = 15290, [40214] = 12246, [40215] = 26202,
-  [40216] = 23549,
+  [40202] = 3836, [40203] = 27617, [40204] = 21106, [40205] = 2537, [40206] = 14346, [40207] = 7607,
+  [40209] = 11895, [40210] = 3832, [40211] = 11881, [40212] = 15064, [40213] = 15290, [40214] = 12246, [40215] = 23548,
+  [40216] = 23549, [40265] = 2094, [40266] = 2094, [40267] = 1698, [40268] = 12194, [40269] = 14839, [40270] = 14838,
+  [40271] = 26479,
+  -- characters (merchant, mannequin, service NPCs) show a statue: a bare character model draws white
+  [40001] = 5564, [40208] = 5564, [40217] = 5564, [40218] = 5564, [40224] = 5564, [40226] = 5564, [40251] = 5564, [40252] = 5564, [40253] = 5564, [40254] = 5564, [40255] = 5564, [40256] = 5564, [40257] = 5564, [40258] = 5564, [40259] = 5564, [40260] = 5564, [40261] = 5564, [40262] = 5564, [40263] = 5564, [40264] = 5564,
   -- household services (housing_household_world.sql)
   [40219] = 1322, [40220] = 4482, [40221] = 15460, [40222] = 15741, [40223] = 26374, [40225] = 2226, [40227] = 1280,
   [40228] = 9243, [40229] = 2437, [40230] = 11371, [40231] = 11375, [40232] = 11274, [40233] = 11374, [40234] = 4450,
   [40235] = 8236, [40236] = 11378, [40237] = 14590, [40238] = 14631, [40239] = 5888 }
+-- pieces drawn at a share of their placed size (gameobject_template.size, the server's BaseScale); the ghost matches.
+-- The mount mat (0.01 in the world) keeps its full-size rug as the ghost, so there is something to place.
+H.BASE_SCALE = { [40205] = 0.4, [40266] = 0.6, [40267] = 0.7, [40268] = 0.45 }
 local catalog, state, names, fdids = {}, nil, {}, {}
+
+-- the placement ghost for a decor, turned to yaw degrees and at the piece's base scale
+local function Ghost(decorId, yaw)
+  if not EsteriaHousing_SetGhost then return end
+  local fdid = decorId and fdids[decorId] or nil
+  local base = decorId and H.BASE_SCALE[decorId]
+  if fdid and base then
+    local half = math.rad(yaw or 0) / 2
+    EsteriaHousing_SetGhost(fdid, 0, 0, math.sin(half), math.cos(half), base)
+  else
+    EsteriaHousing_SetGhost(fdid, yaw)
+  end
+end
 local editing         -- decorate mode on
 local ability = 1     -- 1 basic, 2 expert, 3 customize, 4 cleanup, 5 layout
 local tool            -- nil, "place" (holding storage decor), "move" (holding a placed one), "select" or "cleanup"
@@ -801,7 +820,7 @@ function H.Hold(what, which)
     what.yaw = math.floor(((facing or 0) + 180) / TURN + 0.5) * TURN -- face the player, on the server's 15 degree snap
   end
   -- the ghost: a see-through copy under the cursor that the click drops in place
-  if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(what and fdids[what.decorId] or nil, what and what.yaw) end
+  Ghost(what and what.decorId, what and what.yaw)
   if tool then catcher:Show() else catcher:Hide() end
   H.RedrawDecor()
 end
@@ -852,7 +871,7 @@ end)
 catcher:SetScript("OnMouseWheel", function(self, delta)
   if holding then
     holding.yaw = holding.yaw + delta * TURN
-    if EsteriaHousing_SetGhost then EsteriaHousing_SetGhost(fdids[holding.decorId], holding.yaw) end
+    Ghost(holding.decorId, holding.yaw)
   elseif tool == "select" and not H.Gizmo.Dragging() then
     if (Placed(selected) or selected == "house") and not H.Gizmo.Turn(delta * TURN) then Toast("You can only edit your own house.") end
   end

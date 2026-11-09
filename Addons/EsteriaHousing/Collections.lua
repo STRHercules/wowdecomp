@@ -51,20 +51,22 @@ end
 
 -- Size, height, forward and turn for a replica or mount: what stands on the object, and where.
 local function PlacementLines(page, top)
-  local rows = { { "size", "Size" }, { "height", "Height (yd above the object)" }, { "forward", "Ahead (yd)" }, { "turn", "Turn (degrees)" } }
+  local rows = { { "size", "Size" }, { "height", "Height (yd above the object)" }, { "forward", "Ahead (yd)" },
+    { "side", "Right (yd, negative: left)" }, { "turn", "Turn (degrees)" } }
   local boxes = {}
   for i, r in ipairs(rows) do
     local line = K.Line(page, i, top, r[2])
     local b = K.Box(line, 60); b:SetPoint("RIGHT", -4, 0)
     boxes[r[1]] = b
   end
-  local function Fill(size, height, forward, turn)
-    for k, v in pairs({ size = size, height = height, forward = forward, turn = turn }) do
+  local function Fill(size, height, forward, turn, side)
+    for k, v in pairs({ size = size, height = height, forward = forward, turn = turn, side = side }) do
       if not boxes[k]:HasFocus() then boxes[k]:SetText(v or "0") end
     end
   end
   local function Read()
-    return Clean(boxes.size:GetText()), Clean(boxes.height:GetText()), Clean(boxes.forward:GetText()), Clean(boxes.turn:GetText())
+    return Clean(boxes.size:GetText()), Clean(boxes.height:GetText()), Clean(boxes.forward:GetText()), Clean(boxes.turn:GetText()),
+      Clean(boxes.side:GetText())
   end
   return Fill, Read
 end
@@ -113,11 +115,11 @@ local tplace = CreateFrame("Frame", nil, tpages[3]); tplace:SetPoint("TOPLEFT", 
 Title(tpages[3], "Placement", -110)
 local trophyPlaceFill, trophyPlaceRead = PlacementLines(tplace, -18)
 local trophyLabelFill = LabelPage(tpages[3], -10, function(name, sub) if trophy then Send("label", trophy.placed, name, sub) end end)
-local tplaceSave = K.Button(tplace, "Save Placement", 120); tplaceSave:SetPoint("TOPRIGHT", -8, -18 - 4 * (LINE_H + 2) - 6)
+local tplaceSave = K.Button(tplace, "Save Placement", 120); tplaceSave:SetPoint("TOPRIGHT", -8, -18 - 5 * (LINE_H + 2) - 6)
 
 function H.SaveTrophyStyle()
-  local size, height, forward, turn = trophyPlaceRead()
-  Send("trophystyle", trophy.placed, trophy.style, trophy.effect, size, height, forward, turn)
+  local size, height, forward, turn, side = trophyPlaceRead()
+  Send("trophystyle", trophy.placed, trophy.style, trophy.effect, size, height, forward, turn, side)
 end
 tplaceSave:SetScript("OnClick", function() if trophy then H.SaveTrophyStyle() end end)
 
@@ -128,7 +130,7 @@ local function ReadTrophy(lines)
     if f[1] == "trophy" then
       trophy = { placed = f[2], owner = f[3] == "1", kind = Num(f[4]), source = Num(f[5]), id = Num(f[6]), date = f[7], name = f[8],
         style = Num(f[9]), effect = Num(f[10]), size = f[11], height = f[12], forward = f[13], turn = f[14], label = f[15], sub = f[16],
-        link = f[17] or "", hasStatue = f[18] == "1" }
+        link = f[17] or "", hasStatue = f[18] == "1", side = f[19] or "0" }
     elseif f[1] == "ta" then achievements[#achievements + 1] = { id = Num(f[2]), date = f[3], name = f[4], root = Num(f[5]), statue = f[6] == "1" }
     elseif f[1] == "ti" then items[#items + 1] = { entry = Num(f[2]), name = f[3], quality = f[4], link = f[5] } end
   end
@@ -171,7 +173,7 @@ local function ReadTrophy(lines)
   trophyList:Update()
   styleFill(t.style)
   effectText:SetText(EFFECTS[t.effect + 1] or "None")
-  trophyPlaceFill(t.size, t.height, t.forward, t.turn)
+  trophyPlaceFill(t.size, t.height, t.forward, t.turn, t.side)
   trophyLabelFill(t.label, t.sub)
   Show(tbox, t.owner)
   T:SetHeight(t.owner and 500 or 124)
@@ -183,25 +185,34 @@ end
 -- ------------------------------------------------------------------------------------------------ mounts
 
 local MOUNT_KINDS = { [5] = { "Mount Stall", "Your mount stands at its stall." }, [6] = { "Mount Paddock", "Your mount roams the paddock." },
-  [7] = { "Mount Pedestal", "A statue of your mount." } }
+  [7] = { "Mount Pedestal", "A statue of your mount." }, [28] = { "Mount Mat", "Your mount stands on an unseen mat." } }
+local MOTIONS = { "Still (a statue)", "Idle in place", "Wander around" }
 local MO = K.Window("EsteriaHousingMountDisplay", 380, 480, "Interface\\Icons\\Ability_Mount_RidingHorse")
 MO:SetPoint("LEFT", 60, 40)
 local mount
 local mbox = K.Inset(MO, BOX_TOP, 16)
-local mpages = K.Tabs(MO, mbox, { "Mount", "Display" }, function(i) MO:PickTab(i) end)
+local mpages = K.Tabs(MO, mbox, { "Mount", "Display", "Motion" }, function(i) MO:PickTab(i) end)
 local mountList = K.List(mpages[1], -10, 12, 24)
-local finishTitle = Title(mpages[2], "Statue finish", -12)
-local finishFill, finishLines = Choices(mpages[2], -28, { "Natural", "Stone", "Spectral" }, function(i) if mount then mount.finish = i; H.SaveMountStyle() end end)
-local mplace = CreateFrame("Frame", nil, mpages[2]); mplace:SetPoint("TOPLEFT", 0, -112); mplace:SetPoint("RIGHT"); mplace:SetHeight(140)
+-- Motion: still, idle or wandering; a wanderer's radius; a still mount's finish
+Title(mpages[3], "How it stands", -12)
+local motionFill = Choices(mpages[3], -28, MOTIONS, function(i) if mount then mount.motion = i; H.SaveMountStyle() end end)
+local radiusLine = K.Line(mpages[3], 1, -28 - 3 * (LINE_H + 2) - 10, "Wander radius (2 to 10 yd)")
+local radiusBox = K.Box(radiusLine, 50, true); radiusBox:SetPoint("RIGHT", -4, 0)
+local radiusSave = K.Button(mpages[3], "Save", 90); radiusSave:SetPoint("TOPRIGHT", -8, -28 - 4 * (LINE_H + 2) - 16)
+radiusSave:SetScript("OnClick", function() if mount then radiusBox:ClearFocus(); H.SaveMountStyle() end end)
+local finishTitle = Title(mpages[3], "Statue finish", -28 - 4 * (LINE_H + 2) - 56)
+local finishFill, finishLines = Choices(mpages[3], -28 - 4 * (LINE_H + 2) - 72, { "Natural", "Stone", "Spectral" },
+  function(i) if mount then mount.finish = i; H.SaveMountStyle() end end)
+local mplace = CreateFrame("Frame", nil, mpages[2]); mplace:SetPoint("TOPLEFT", 0, -12); mplace:SetPoint("RIGHT"); mplace:SetHeight(170)
 local mountPlaceFill, mountPlaceRead = PlacementLines(mplace, 0)
-local mplaceSave = K.Button(mplace, "Save Placement", 120); mplaceSave:SetPoint("TOPRIGHT", -8, -4 * (LINE_H + 2) - 4)
-local mlabel = CreateFrame("Frame", nil, mpages[2]); mlabel:SetPoint("TOPLEFT", 0, -250); mlabel:SetPoint("BOTTOMRIGHT")
+local mplaceSave = K.Button(mplace, "Save Placement", 120); mplaceSave:SetPoint("TOPRIGHT", -8, -5 * (LINE_H + 2) - 4)
+local mlabel = CreateFrame("Frame", nil, mpages[2]); mlabel:SetPoint("TOPLEFT", 0, -200); mlabel:SetPoint("BOTTOMRIGHT")
 local mountLabelFill, mountHint = LabelPage(mlabel, 0, function(name, sub) if mount then Send("label", mount.placed, name, sub) end end)
 mountHint:SetText("Leave the name empty to show the mount's own.")
 
 function H.SaveMountStyle()
-  local size, height, forward, turn = mountPlaceRead()
-  Send("mountstyle", mount.placed, mount.finish, size, height, forward, turn)
+  local size, height, forward, turn, side = mountPlaceRead()
+  Send("mountstyle", mount.placed, mount.finish, size, height, forward, turn, side, mount.motion or 1, Num(radiusBox:GetText()))
 end
 mplaceSave:SetScript("OnClick", function() if mount then H.SaveMountStyle() end end)
 
@@ -211,7 +222,8 @@ local function ReadMount(lines)
     local f = Fields(line)
     if f[1] == "mount" then
       mount = { placed = f[2], owner = f[3] == "1", kind = Num(f[4]), spell = Num(f[5]), name = f[6], finish = Num(f[7]), size = f[8],
-        height = f[9], forward = f[10], turn = f[11], label = f[12], sub = f[13] }
+        height = f[9], forward = f[10], turn = f[11], label = f[12], sub = f[13], side = f[14] or "0", motion = Num(f[15]),
+        radius = f[16] or "5" }
     elseif f[1] == "mo" then known[#known + 1] = { spell = Num(f[2]), name = f[3] } end
   end
   local m, info = mount, MOUNT_KINDS[mount.kind] or { "Mount Display", "" }
@@ -229,16 +241,19 @@ local function ReadMount(lines)
   end
   mountList.items = items
   mountList:Update()
-  local statue = m.kind == 7
-  Show(finishTitle, statue)
-  for _, l in ipairs(finishLines) do Show(l, statue) end
+  local still = m.motion == 0
+  Show(finishTitle, still)
+  for _, l in ipairs(finishLines) do Show(l, still) end
   finishFill(m.finish)
-  mountPlaceFill(m.size, m.height, m.forward, m.turn)
+  motionFill(m.motion)
+  Show(radiusLine, m.motion == 2); Show(radiusSave, m.motion == 2)
+  if not radiusBox:HasFocus() then radiusBox:SetText(m.radius) end
+  mountPlaceFill(m.size, m.height, m.forward, m.turn, m.side)
   mountLabelFill(m.label, m.sub)
   Show(mbox, m.owner)
   MO:SetHeight(m.owner and 480 or 124)
   if not MO:IsShown() then MO:PickTab(1) end
-  for i = 1, 2 do Show(_G["EsteriaHousingMountDisplayTab" .. i], m.owner) end
+  for i = 1, 3 do Show(_G["EsteriaHousingMountDisplayTab" .. i], m.owner) end
   MO:Show()
 end
 
