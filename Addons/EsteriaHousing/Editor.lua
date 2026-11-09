@@ -22,14 +22,18 @@ local RESULT = {
 -- our categories and the retail category icon for each
 local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, { 2, "Accents", "accents" },
   { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" }, { 6, "Shops", "interactive" },
-  { 7, "Utility", "utility" }, { 8, "Collections", "featured" } }
+  { 7, "Utility", "utility" }, { 8, "Collections", "featured" }, { 9, "Services", "storage" } }
 
 -- shop decor shows the picture of the retail piece it borrows its model from
 H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 15061, [40006] = 26483, [40007] = 3985,
   -- collections (housing_collections_world.sql)
   [40201] = 15490, [40202] = 3836, [40203] = 27617, [40204] = 21106, [40205] = 2537, [40206] = 14346, [40207] = 7607,
   [40209] = 11895, [40210] = 3832, [40211] = 11881, [40212] = 15064, [40213] = 15290, [40214] = 12246, [40215] = 26202,
-  [40216] = 23549 }
+  [40216] = 23549,
+  -- household services (housing_household_world.sql)
+  [40219] = 1322, [40220] = 4482, [40221] = 15460, [40222] = 15741, [40223] = 26374, [40225] = 2226, [40227] = 1280,
+  [40228] = 9243, [40229] = 2437, [40230] = 11371, [40231] = 11375, [40232] = 11274, [40233] = 11374, [40234] = 4450,
+  [40235] = 8236, [40236] = 11378, [40237] = 14590, [40238] = 14631, [40239] = 5888 }
 local catalog, state, names, fdids = {}, nil, {}, {}
 local editing         -- decorate mode on
 local ability = 1     -- 1 basic, 2 expert, 3 customize, 4 cleanup, 5 layout
@@ -293,8 +297,8 @@ countText:SetPoint("LEFT", searchBox, "RIGHT", 10, 0)
 local tabs = {}
 for i, c in ipairs(CATEGORIES) do
   local icon = "category-icons_" .. c[3]
-  local b = AtlasButton(chest, nil, 44, 44, icon .. "_inactive", icon .. "_active", icon .. "_pressed")
-  b:SetPoint("TOP", chest, "TOPLEFT", 27, -50 - (i - 1) * 45) -- ten categories fit the chest's height at 45
+  local b = AtlasButton(chest, nil, 40, 40, icon .. "_inactive", icon .. "_active", icon .. "_pressed")
+  b:SetPoint("TOP", chest, "TOPLEFT", 27, -48 - (i - 1) * 41) -- eleven categories fit the chest's height at 41
   b.category = c[1]
   b:SetScript("OnClick", function() category = c[1]; page = 0; H.RedrawDecor() end)
   b:SetScript("OnEnter", function(self)

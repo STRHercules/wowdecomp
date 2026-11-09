@@ -13,3 +13,4 @@ Neighborhood.lua
 Commerce.lua
 Adventure.lua
 Collections.lua
+Household.lua
