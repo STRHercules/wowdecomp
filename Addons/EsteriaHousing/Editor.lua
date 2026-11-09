@@ -30,7 +30,7 @@ H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 1506
   [40202] = 3836, [40203] = 27617, [40204] = 21106, [40205] = 2537, [40206] = 14346, [40207] = 7607,
   [40209] = 11895, [40210] = 3832, [40211] = 11881, [40212] = 15064, [40213] = 15290, [40214] = 12246, [40215] = 23548,
   [40216] = 23549, [40265] = 2094, [40266] = 2094, [40267] = 1698, [40268] = 12194, [40269] = 14839, [40270] = 14838,
-  [40271] = 26479,
+  [40271] = 26479, [40272] = 498,
   -- characters (merchant, mannequin, service NPCs) show a statue: a bare character model draws white
   [40001] = 5564, [40208] = 5564, [40217] = 5564, [40218] = 5564, [40224] = 5564, [40226] = 5564, [40251] = 5564, [40252] = 5564, [40253] = 5564, [40254] = 5564, [40255] = 5564, [40256] = 5564, [40257] = 5564, [40258] = 5564, [40259] = 5564, [40260] = 5564, [40261] = 5564, [40262] = 5564, [40263] = 5564, [40264] = 5564,
   -- household services (housing_household_world.sql)
@@ -38,8 +38,9 @@ H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 1506
   [40228] = 9243, [40229] = 2437, [40230] = 11371, [40231] = 11375, [40232] = 11274, [40233] = 11374, [40234] = 4450,
   [40235] = 8236, [40236] = 11378, [40237] = 14590, [40238] = 14631, [40239] = 5888 }
 -- pieces drawn at a share of their placed size (gameobject_template.size, the server's BaseScale); the ghost matches.
--- The mount mat (0.01 in the world) keeps its full-size rug as the ghost, so there is something to place.
 H.BASE_SCALE = { [40205] = 0.4, [40266] = 0.6, [40267] = 0.7, [40268] = 0.45 }
+-- characters preview as the statue; it is 11.9 yd tall, so draw it at about a person's height
+for decor, model in pairs(H.SHOP_MODEL) do if model == 5564 then H.BASE_SCALE[decor] = 0.17 end end
 local catalog, state, names, fdids = {}, nil, {}, {}
 
 -- the placement ghost for a decor, turned to yaw degrees and at the piece's base scale

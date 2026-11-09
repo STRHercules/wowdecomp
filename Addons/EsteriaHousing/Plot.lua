@@ -241,6 +241,7 @@ local function Key(name, parent, icon, onClick, tip, mirror)
   b:SetScript("OnLeave", function() GameTooltip:Hide() end)
   return b
 end
+H.PlotKey = Key -- the mount window's placement uses the same keys
 
 -- a line: its label, its keys after it, and its value at the right
 local values = {}
