@@ -148,9 +148,9 @@ local takeButton = Cycler(K.Line(pages[4], 2, -10, "Who may take things out"))
 local putButton = Cycler(K.Line(pages[4], 3, -10, "Who may put things in"))
 local rules = pages[4]:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
 rules:SetPoint("TOPLEFT", 12, -10 - 3 * (LINE_H + 2) - 12); rules:SetWidth(330); rules:SetJustifyH("LEFT")
-rules:SetText("You can always use your own chest. Soulbound things go back only to the character who stored them, "
-  .. "account-bound things only to that account. Conjured, timed and refundable items stay out. Pick up a chest and its "
-  .. "contents go with it: they come back when you place a chest of the same kind again.")
+rules:SetText("You can always use your own chest. You can store soulbound and account-bound things too; only you can take "
+  .. "them out again. Conjured, timed and refundable items stay out. Pick up a chest and its contents go with it: they come "
+  .. "back when you place a chest of the same kind again.")
 local save = K.Button(pages[4], "Save", 90); save:SetPoint("BOTTOMRIGHT", -8, 8)
 save:SetScript("OnClick", function()
   if not chest then return end
@@ -175,13 +175,14 @@ local function ReadStorage(lines)
     if r[1] == "S" then
       -- S, item guid, entry, count, link, bound to, name, quality
       local guid, bound = r[2], r[6] ~= "" and r[6] or nil
-      held[#held + 1] = { text = Quality(Counted(r[7] or "?", r[4]), r[8]), link = r[5], dim = bound ~= nil or not chest.canTake,
+      held[#held + 1] = { text = Quality(Counted(r[7] or "?", r[4]), r[8]), link = r[5], icon = GetItemIcon(Num(r[3])),
+        dim = bound ~= nil or not chest.canTake,
         sub = bound or (chest.canTake and "take" or ""), fn = chest.canTake and not bound and function() Send("sttake", chest.placed, guid) end or nil }
     elseif r[1] == "D" then
-      -- D, item guid, entry, count, link, name, quality
-      local guid = r[2]
-      add[#add + 1] = { text = Quality(Counted(r[6] or "?", r[4]), r[7]), sort = r[6] or "", link = r[5], sub = "put in",
-        fn = function() Send("stput", chest.placed, guid) end }
+      -- D, item guid, entry, count, link, name, quality, where (0 bags, 1 Esteria Inventory)
+      local guid, from = r[2], r[8] or "0"
+      add[#add + 1] = { text = Quality(Counted(r[6] or "?", r[4]), r[7]), sort = r[6] or "", link = r[5], icon = GetItemIcon(Num(r[3])),
+        sub = from == "1" and "inventory" or "bags", fn = function() Send("stput", chest.placed, from, guid) end }
     elseif r[1] == "L" then
       -- L, time, character, action, entry, count, item name
       logged[#logged + 1] = { text = string.format("%s %s %s", r[3], r[4], Counted(r[7] ~= "" and r[7] or ("item " .. r[5]), r[6])),

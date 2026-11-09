@@ -139,6 +139,7 @@ local function List(parent, top, rows, rowH)
     b.picked = H.Atlas(b:CreateTexture(nil, "BACKGROUND"), "housing-floor-list-bg-active"); b.picked:SetAllPoints()
     b.line = H.Atlas(b:CreateTexture(nil, "ARTWORK"), "housing-floor-list-divider-active")
     b.line:SetPoint("BOTTOMLEFT", 0, 2); b.line:SetPoint("BOTTOMRIGHT", 0, 2); b.line:SetHeight(2)
+    b.icon = b:CreateTexture(nil, "ARTWORK"); b.icon:SetSize(rowH - 6, rowH - 6); b.icon:SetPoint("LEFT", 6, 0)
     b.text = b:CreateFontString(nil, "OVERLAY", "GameFontHighlight"); b.text:SetPoint("LEFT", 10, 0); b.text:SetJustifyH("LEFT")
     b.sub = b:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall"); b.sub:SetPoint("RIGHT", -8, 0)
     b.text:SetPoint("RIGHT", b.sub, "LEFT", -6, 0); b.text:SetHeight(14) -- one line, cut short before the detail
@@ -174,6 +175,8 @@ local function List(parent, top, rows, rowH)
       else
         b:Show()
         b.text:SetText(it.text); b.sub:SetText(it.sub or "")
+        b.icon:SetTexture(it.icon); Show(b.icon, it.icon ~= nil)
+        b.text:SetPoint("LEFT", it.icon and (rowH + 6) or 10, 0)
         b.text:SetFontObject(it.header and GameFontNormal or it.dim and GameFontDisable or GameFontHighlight)
         Show(b.picked, it.picked); Show(b.line, it.header)
         if it.header then b:Disable() else b:Enable() end
