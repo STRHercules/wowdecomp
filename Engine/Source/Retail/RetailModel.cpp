@@ -1212,11 +1212,13 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
         } else if (shader == 0x8003 || shader == 0x4014) {
             shader = shader == 0x8003 ? 0x8010 : 0x8011;
             b[p] = uint8_t(shader); b[p + 1] = uint8_t(shader >> 8);
-        } else if (shader == 0x8012) {
-            // Retail's 0x8012 is Diffuse_T1 / Combiners_Mod_Dual_Crossfade (two textures blended by a weight); the client's
-            // own 0x8012 is Diffuse_T1_T2 / Combiners_Mod_Mod, which multiplied the Cookout Campfire's stones by their dark
-            // crossfade layer into black. Draw the first texture with the plain combiner.
-            // shortcut: no crossfade; write the dual-crossfade combiner if a model's blend matters.
+        } else if ((shader >= 0x8004 && shader <= 0x8007) || shader == 0x800a || shader == 0x800b || (shader >= 0x800d && shader <= 0x800f)
+            || shader == 0x8012) {
+            // A base texture plus an additive (glow) layer: Opaque/Mod_AddAlpha(_Alpha, _Wgt), Mod_Add_Alpha (retail
+            // M2ShaderTable 4-7, 10, 11, 13-15), and 18 Mod_Dual_Crossfade. The two-texture fallback below draws them
+            // Mod_Mod, multiplying the base by a mostly black glow map (the Cookout Campfire's stones, 0x800a, came out
+            // black). Draw the base texture with the plain combiner. shortcut: no glow layer; write the additive combiners
+            // if an emissive piece looks flat.
             b[p] = b[p + 1] = 0;
             b[p + 12] = 1; b[p + 13] = 0;
         } else if (shader == 0x8015) {
