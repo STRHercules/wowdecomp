@@ -11,24 +11,187 @@ x64 is the main target. Win32 still builds and is used to check struct layouts a
 
 Join the `Custom Race` discord for other clients and to show off what you build: https://discord.gg/W5YSWcM8PB
 
-## What this fork adds
+## Contents
+
+**Start here**
+- [Features at a glance](#features-at-a-glance)
+- [Getting started](#getting-started): [requirements](#requirements), [building](#building), [build options](#options), [running](#running), [extensions and Vulkan](#extensions-and-vulkan)
+
+**Features**
+- [Player housing](#player-housing)
+- [Retail races and character creation](#retail-races-and-character-creation)
+- [Races](#races): [on Retail models](#races-on-retail-models), [Esteria's own](#esterias-own-races)
+- [Interface and gameplay](#interface-and-gameplay)
+- [Graphics](#graphics): [Lumenveil](#lumenveil-vulkan), [Azeroth Remastered](#azeroth-remastered-visuals-vulkan), [Living Azeroth](#living-azeroth-wind-grass-and-snow)
+- [Retail content](#retail-content-optional)
+- [Stability and fixes](#stability-and-fixes)
+
+**Reference**
+- [Repository layout](#layout)
+- [About the upstream reconstruction](#about-the-upstream-reconstruction)
+- [Special thanks](#special-thanks)
+
+## Features at a glance
 
 Most of this is opt-in at build time or needs a matching server. No game data is included in the repository, and
 the client never modifies your original MPQs.
 
-### Rendering
+| Area | What you get | Needs |
+|---|---|---|
+| [Player housing](#player-housing) | Buy a plot, build a house room by room, decorate it with Retail decor, run shops, train on dummies and show off your collections | Esteria realm, Retail assets |
+| [Characters](#retail-races-and-character-creation) | Retail appearance customization, a restyled creator with Body, Fate and Zone pages, two-form races | Esteria realm |
+| [Races](#races) | More than 30 playable races beyond the stock ten | Esteria realm |
+| [Interface and gameplay](#interface-and-gameplay) | Character hot-swap wheel, Paths of Fate, searchable inventory, Conquest of Azeroth spell support, speedflying, transmog, radio, GM tools | Esteria realm for most server-backed features |
+| [Graphics](#graphics) | Vulkan renderer, three visual sets, world wind, grass and weathering snow | Vulkan for most |
+| [Retail content](#retail-content-optional) | Retail models, WMOs and terrain loaded natively from a local install, the CDN or packed MPQs | Retail assets build option |
+
+## Getting started
+
+### Requirements
+
+- Windows 10 or 11
+- Visual Studio 2022 with the **Desktop development with C++** workload (MSVC v143 and a Windows SDK)
+- CMake 3.10 or newer (the one that ships with Visual Studio works)
+- For Win32 builds only: [NASM](https://www.nasm.us/), on `PATH` or passed as `-DNASM_EXECUTABLE=<path>`, and
+  `DivxDecoder.dll` from your 3.3.5a client copied to `ThirdParty/DivxDecoder/` (the build copies it next to the
+  executables; the x64 build uses its own decoder instead)
+- A **3.3.5a (12340)** client. **No** game data is included in this repository.
+
+### Building
+
+From a Developer PowerShell or any shell with `cmake` on `PATH`:
+
+```powershell
+git clone <this repository's URL>
+cd <the cloned folder>
+
+# x64 (main target)
+cmake -S . -B build/x64 -G "Visual Studio 17 2022" -A x64
+cmake --build build/x64 --config Release --target <client target> --parallel
+
+# Win32 (optional, needs NASM)
+cmake -S . -B build/win32 -G "Visual Studio 17 2022" -A Win32
+cmake --build build/win32 --config Release --target <client target> --parallel
+```
+
+The client targets and the project's CMake options are named in `CMakeLists.txt` and `Tools/`; the names below are described, not spelled out.
+
+In-source builds are refused, so keep the build directory separate (`build/` above).
+
+The client is written to `bin/Win/`:
+
+| Target | x64 | Win32 |
+|---|---|---|
+| The client with a crash logger | `<client>64.exe` | `<client>32.exe` |
+| The same client without it | `<name>64.exe` | `<name>32.exe` |
+
+The first target is the client with a crash logger: it opens a console window and writes a crash log
+when the client crashes. The second is the same client without it. You can also turn the logger off
+with its CMake option.
+
+### Options
+
+Every option starts with the project's prefix (see `CMakeLists.txt`); only the part after it is shown.
+
+| CMake option | Default | Effect |
+|---|---|---|
+| `<prefix>_DISABLE_SIGNATURE_CHECKS` | `OFF` | Skip the MPQ file and `.toc.sig` signature checks, so modified game data and interface files load |
+| `<prefix>_RETAIL_ASSETS` | `OFF` | Enable local CASC/CDN access and the first Retail model adapter; see [support boundaries and setup](docs/retail-casc.md) |
+| `<prefix>_EXTENDED_LIMITS` | `OFF` | Opt into custom player/container layouts; requires a matching server |
+| `<prefix>_QUEST_LOG_SLOTS` | `25` | Active quest ceiling, up to 1000 with extended limits |
+| `<prefix>_CONTAINER_SLOTS` | `36` | Container ceiling, up to 254 with extended limits; adds no bag content or art |
+| `<prefix>_MAX_CLASSES` | `32` | Maximum class ID, up to 254 with extended limits; widens class masks and requires matching server/DBC formats |
+| `<prefix>_MAX_UPDATE_MASKS` | derived (`42` stock) | Accepted mask blocks; 1000 quests require 194 |
+| `<client>_CRASH_LOG` | `ON` | Build the client with the crash logger |
+| `<client>_OUTPUT_OVERRIDE` | empty | Name the crash-logger client's executable something other than its default |
+| `<prefix>_EXTENSION_HELLOWORLD` | `ON` | Compile the imported extension hook examples into the client |
+
+See [extended limits](docs/uncaps.md) for the 1000-quest/254-class configuration, generated
+server field contract, and pending server/UI acceptance work. Extended descriptor
+generation requires Python 3.10 or newer; stock builds do not require Python.
+
+### Running
+
+1. Copy the `Data` folder of your 3.3.5a client into `bin/Win/`, so you have `bin/Win/Data/`.
+2. Point `Data/<locale>/realmlist.wtf` at the server you want to connect to.
+3. Start the 64-bit client from `bin/Win/`.
+
+The built-in cursor selector is under **Escape → Interface → Mouse → Cursor appearance**.
+Human (Default), Night Elf, Orc, Undead, Hearthstone, and animated Starcraft apply
+immediately and save between sessions.
+See [native cursor textures](Addons/Cursors/README.md) for conversion and behavior details.
+
+### Extensions and Vulkan
+
+The extension hook system from upstream pull request #10
+discovers extensions under `Extensions/<Name>/src/`. Each has a
+`<prefix>_EXTENSION_<UPPERCASE_NAME>` CMake option; the bundled `HelloWorld` extension
+demonstrates the hooks and writes to `Logs/Extensions.log`.
+
+The experimental Vulkan backend from upstream pull request #11
+can be selected with `-vulkan` or the `gxApi` CVar set to `Vulkan`. D3D11 remains available
+with `-d3d11`. Vulkan requires a driver providing `vulkan-1.dll`; building it uses the
+bundled headers and requires a C++20 compiler, without requiring the Vulkan SDK.
+For world and model shaders, follow the [offline Vulkan shader translation instructions](Tools/VulkanShaders/README.md)
+using your own client data. Vulkan remains work in progress; build success does not establish
+rendering or gameplay correctness.
+
+## Player housing
+
+Retail-style houses and neighborhoods on 3.3.5a. The server holds every placement, price and permission and checks every edit; the
+client draws the answers. Decor, rooms and maps are the Retail originals, read through [Retail content](#retail-content-optional) with
+no conversion, and none of them are in this repository.
+
+It needs a realm with housing turned on (`EsteriaHousing.Enable`). The client side is on by default (the saved `housingEnabled` CVar) and
+stays silent until such a realm answers. The client code is the [Housing extension](Extensions/Housing/README.md) and the `EsteriaHousing`
+addon; plans, the wire protocol and the in-game checklists are in [docs/housing](docs/housing/README.md).
+
+Open it from the house button on DragonUI's micro strip or the stock micro bar.
+
+**Your plot and house**
 
 | Feature | What it does |
 |---|---|
-| Vulkan backend | Experimental renderer selected with `-vulkan` or the `gxApi` CVar. Uses retail assets by default, with a larger texture table and offline shader translation ([instructions](Tools/VulkanShaders/README.md)). D3D11 stays available with `-d3d11`. Offers the stock shadow qualities up to Very High (cascaded shadow maps), with per-frame descriptor and uniform budgets sized for them, and has the post-pass layer Lumenveil draws through (`GxEffects`, below) |
-| [Lumenveil](#lumenveil-vulkan) | Volumetric fog and light shafts, night lights, water, wet surfaces and shadows for the Vulkan client, ported from the Lumenveil mod and set up from pages in the Video options. See [below](#lumenveil-vulkan) |
-| Visuals switch | The `visuals` CVar (saved; the Effects page has a dropdown) picks the look of the Vulkan client: 0 Stock, 1 Lumenveil (default) or 2 [Azeroth Remastered](#azeroth-remastered-visuals-vulkan). Stock and Lumenveil are untouched by the Remastered code |
-| [Azeroth Remastered visuals](#azeroth-remastered-visuals-vulkan) | Ambient occlusion, contact shadows, global illumination, volumetric fog, bloom, colour grading, a Forever sky, per-pixel lamp lights and PBR water with FFT waves, ported onto the Vulkan backend's post-pass layer. Includes `hdTime` to hold the time of day |
-| [Living Azeroth](#living-azeroth-wind-grass-and-snow) | World wind, waving trees and grass, grass that parts around units, and snow that falls, lies, melts and takes trenches, all driven by optional data tables |
-| Native M3 models | The [ASECM3](Extensions/ASECM3/README.md) extension loads and animates M3 models in-process: materials, skinning, particles, ribbons, cloth and rigid-body physics. Still in progress |
-| Retail model adapter | Loads supported Retail M2 models (mounts, creatures such as Darkfallen and the Writhing Brood) straight from Blizzard's CDN, with no export step and no generated MPQ |
+| Plots | Each plot has a cornerstone that opens a plot window with its price and Buy, Enter or Visit. A second plot can hold a new house or a mirror of one you own, and **Move Out** keeps a house saved on no plot |
+| Exterior | Swap walls, roof, door, windows and chimney among Retail's shapes and colours; add towers, dormers and chimneys at roof and wall spots. Raise, lower, size, turn and drag the house on its plot |
+| Upgrades | A house upgrades window raises the room limit; restyle or move the house from its cornerstone |
+| Visitors | Each house can be open to party, friends, guild or everyone |
 
-### Retail races and character creation
+**Rooms and decor**
+
+| Feature | What it does |
+|---|---|
+| Layout blueprint | Build Retail rooms with a **+** on each free wall, with floor tabs up to 15 floors, basements and stacked stairs. Joined walls become Retail doorways and wide openings |
+| House Editor | A decor chest with Retail's 400 × 400 thumbnails (3D previews where there are none), catalog and cart, and a placement ghost under the cursor. Indoors and outdoors, with Retail's plot boundary shown while you decorate outside |
+| Expert mode | Translate, rotate and scale handles, snap to other decor, undo and redo (Ctrl+Z, Ctrl+Y) and duplicate (Ctrl+D) |
+
+**Neighborhoods**
+
+The Neighborhood window has tabs for Plots, My Homes, Neighborhoods, Favorites, Recent and Manage. Every account has its own neighborhood
+instance, in Founder's Point or Razorwind Shores, and can invite other characters by name. Guild Masters can buy a guild neighborhood with
+per-rank permissions. Travel there and back is refused in combat, when dead, on a flight path and in instances.
+
+**Things to place in your house**
+
+| Feature | What it does | Checklist |
+|---|---|---|
+| Shops and commissions | Player shops with stock and a sales ledger, merchants you can customize with the character creator's looks, and a commission board for crafting orders | |
+| Training Hall | Training, Tank, Healing and Boss dummies with live damage, healing and mechanics stats, personal bests and owner settings | [adventure](docs/housing/adventure-checklist.md) |
+| Travel | Portals to cities and your homes, Meeting Stones bound to a dungeon, and the **Teleport: Home** and **Portal: Home** spells | [adventure](docs/housing/adventure-checklist.md) |
+| Trophies | Wall mounts, pedestals, plaques and cases for any achievement the account earned, or any item you own | [collections](docs/housing/collections-checklist.md) |
+| Mount displays | Stall, paddock or statue pedestal for any mount on the account | [collections](docs/housing/collections-checklist.md) |
+| Mannequins | Custom race and body, 14 gear slots from owned gear or collected transmog, saved outfits, eight poses; visitors can inspect them | [collections](docs/housing/collections-checklist.md) |
+| Library | Bookshelf, lectern, display table and reading nook open one window of Books, Exploration, Achievements and Storylines | [collections](docs/housing/collections-checklist.md) |
+| Pet Sanctuary | A habitat for up to six companions, who sleep, play and eat at nearby pet furniture | [collections](docs/housing/collections-checklist.md) |
+
+Nothing on display is taken from your collection. At most 12 mounts and pets move at once per house or neighborhood
+(`EsteriaHousing.MaxAnimatedDisplays`); past that, mounts stand still and pets nap.
+
+Status: rooms, plots and Retail maps were confirmed in game during development. Collections is built but not yet tested in game, and item trophies
+show a name and tooltip rather than a model, because 3.3.5a only draws an item's model on a character. The phase status table is in
+[docs/housing](docs/housing/README.md#status).
+
+## Retail races and character creation
 
 | Feature | What it does |
 |---|---|
@@ -36,15 +199,97 @@ the client never modifies your original MPQs.
 | Extra options without new DB2 | `Esteria\RetailExtras.txt` in an MPQ clones existing choices under new IDs, so custom faces and skins (for example extra Nightborne faces and Venthyr skins) show up beside the retail ones |
 | Expanded creator | Restyled and expanded character creation, creator zoom, and polished character selection. Both creator panels slide out of the way on the customization pages, behind a collapsible tab |
 | Faction race browser | Race selection with three factions (Alliance, Horde and the Freeborn): a sliding faction rail and a detail view for each race |
-| Body sliders | A Body page in the creator, saved per character and synced to nearby players ([plan](docs/body-sliders-creator-plan.md)) |
+| Body sliders | A Body page in the creator, saved per character and synced to nearby players, with saved looks per race and sex and shareable body codes ([plan](docs/body-sliders-creator-plan.md)) |
 | Eye lightning toggle | Per-character toggle for glowing eyes |
 | Two forms | Worgen/Gilnean and Dracthyr/Visage, with both looks saved on the server ([design](TWOFORMS.md), [server](docs/two-forms-server.md), [test plan](docs/two-forms-e2e-test.md)). Work in progress |
-| Character select | `GetCharacterInfo` returns a pending-rename flag as an 11th value, for a rename service icon beside the re-customize, race change and faction change ones |
+| Character select | `GetCharacterInfo` returns a pending-rename flag as an 11th value, for a rename service icon beside the re-customize, race change and faction change ones. Mouse-wheel zoom and right-drag camera panning, and each character's active cosmetic wings are shown |
+| Paths of Fate page | A Fate step in the creator picks a background trait that goes to the server with the new character. See [Paths of Fate](#interface-and-gameplay) |
+| Starting zones | A Zone step picks where the character starts, or the race's own zone |
 
 Retail looks travel to the server and to other players in a 132-byte `RLK1` footer and the `0x524` opcode, so these
 features need the matching Esteria server. Every custom race, with its IDs and what it offers, is listed under [Races](#races).
 
-### Interface and gameplay
+## Races
+
+The stock 3.3.5a client has ten playable races. This fork adds many more, in three families that differ in where their models and looks
+come from. All of them use the creator, character select and in-world rendering described under
+[Retail races and character creation](#retail-races-and-character-creation); their looks travel to the server and other players in the
+`RLK1` footer, so they need the matching Esteria server (race IDs are the client's effective `ChrRaces` IDs, and the server's race,
+class, start and language rows have to agree). Armor, helmets, emotes and animations of every race below work through the same
+native pipeline, and helmet fitting follows the anatomy of the stock race named in each row.
+
+
+### Races on Retail models
+
+Their bodies, geosets and textures are the Retail originals, read from your installed Retail client or Blizzard's CDN and composed in
+process (see [Retail content](#retail-content-optional)). They map onto race slots already present in the client's effective
+`ChrRaces` table; the mapping is `Tools/RetailAssets/RetailRaces.csv` (target race ID, then the Retail `ChrRaces` ID) and, at run
+time, the retail races environment variable. The stock race slots 1 to 11 can be mapped onto their Retail bodies the same way; Human and
+Dwarf are the ones verified in game.
+
+
+<details>
+<summary>Retail race table (16 races)</summary>
+
+| Race | Target ID | Retail ID | Helmets follow | Notes |
+|---|---:|---:|---|---|
+| Worgen | 12 | 22 | its own | [Two forms](#retail-races-and-character-creation): Wolf and Human, each with its own saved look |
+| Nightborne | 17 | 27 | Night Elf | Extra faces beside the Retail ones (`custom\nightborne\faces`) |
+| Pandaren | 18 | 25 | its own | Alliance source; Retail's registry-only slot 26 has no models and is left out |
+| Void Elf | 19 | 29 | Blood Elf | |
+| Vulpera | 20 | 35 | Goblin | Extra textures from `EsteriaVulperaTextures.bin` |
+| Lightforged Draenei | 21 | 30 | Draenei | |
+| Zandalari Troll | 22 | 31 | Troll | |
+| Dark Iron Dwarf | 23 | 34 | Dwarf | |
+| Dracthyr | 28 | 70 | Blood Elf (Visage) | Two forms: Dragon (the race's native model) and Visage, each with its own saved look; the rig can exceed 256 bones |
+| Kul Tiran | 29 | 32 | Human | |
+| Mag'har Orc | 45 | 36 | Orc | |
+| Highmountain Tauren | 46 | 28 | Tauren | Extra textures from the Esteria catalog |
+| Mechagnome | 47 | 37 | Gnome | Inherited emotes work through recursive skeleton parents |
+| Earthen (Alliance, Horde) | 48, 49 | 84, 85 | Dwarf | Both factions enabled; extra choices from the Esteria catalog |
+| Haranir (Alliance, Horde) | 50, 51 | 86, 91 | Night Elf | Both factions enabled; extra textures from `EsteriaHaranirTextures.bin` |
+| Skyborne (Alliance, Horde) | 52, 53 | Forever 95, 96 | Blood Elf | From the separate Forever source (`ForeverCasc.ini`); 10 faces and 9 skin palettes; adds no classes or spells |
+
+</details>
+
+Customization choices are the Retail ones (faces, skins, hair, tattoos, markings, eye colours), filtered per race, with Retail's
+character-texture compositing (copy, multiply, overlay, screen and alpha layers), plus extra choices cloned from
+`Esteria\RetailExtras.txt` and an optional Eye Lightning toggle on models that have the effect mesh.
+
+### Esteria's own races
+
+These are not Blizzard races. Some are built from Retail models with an Esteria profile in the client; the rest use appearance
+catalogs the client reads from its own folder.
+
+<details>
+<summary>Esteria race table (15 races)</summary>
+
+| Race | Race IDs | Looks | What it offers |
+|---|---|---|---|
+| Ethereal | 77, 78 | Retail bodies, Esteria profile | Two forms: the Darkweaver body and the mechanical Dreadnaught, which hides armor. Three bodies, six energy colours plus more custom ones (ten named, from Sunforged to Chartreuse), seven lightning palettes (Shadowguard, Violet, Amber, Teal, Lavender, Shifting, Crimson) with custom ones, and mech colours with matching glow. Its own hand and foot geosets swap under gloves and boots, equipment atlases repeat their body tile into the wrap gutter, and it has complete shoe surfaces despite the NPC barefoot flag. Equipment follows the Nightborne and Night Elf helmet family |
+| Slime Giant | 71, 72 | Retail SlimeSkeleton body | One authored male body for both factions. Slime Color (Green, Amber, Mauve, Red, Gold, plus 30 more) and Slime Drip (off or on). Keeps the original 208-bone rig and animations; clothing is a skinned collection on Kul Tiran HD UVs. Helmets use the Human mask ([notes](docs/slime-giant.md)) |
+| Centaur | 73, 74 | Retail Centaur bodies | Male and female, 16 skins each, head and beard options and a belt layer. Legacy helmets use the fitted Draenei family |
+| Kyrian | 75 | Retail looks through an Esteria catalog (`EsteriaKyrian.bin`) | Male and female; five appearance fields saved in the character's extra bytes, high-resolution equipment, and native takeoff and flight |
+| Venthyr | 76 | Retail looks through an Esteria catalog (`EsteriaVenthyr.bin`) | Male and female, with extra skins beside the Retail ones |
+| Darkfallen | 43, 44 | Retail model adapter | Male and female; five appearance fields |
+| Naga | 54 | Esteria catalog | Male and female |
+| Tuskarr | 55 | Esteria catalog | Male and female |
+| Vrykul | 56, 57 | Esteria catalog | Male and female; the female uses the stock player Vrykul materials; authored at full size, shown at 0.55 in the creator |
+| Forgotten | 58, 59 | Esteria catalog (thin human) | Male only |
+| Sethrak | 62 | Esteria catalog | Male and female |
+| Gnoll | 63 | Esteria catalog | Male only, with fifteen controls |
+| Saberon | 64 | Esteria catalog | Male only |
+| Drakkin (Alliance, Horde) | 66, 67 | Esteria catalog | Male and female; the Alliance female and both Horde bodies use stock materials |
+| Drakonid (Alliance, Horde) | 69, 70 | Esteria catalog | Male only |
+
+</details>
+
+The catalog races are a port of the original Esteria client DLL (`EsteriaAppearance.dll`): their looks are packed bytes, five per
+character, whose choices come from per-race tables (`ComponentCore/CreatureAppearance.h` in the shared game code) and catalog files beside the
+executable. The creator's art table also names Ogre (60, 61), Jinyu (65), Arakkoa (68) and Illidari (30, 31), but this client has no
+appearance data for them.
+
+## Interface and gameplay
 
 | Feature | What it does |
 |---|---|
@@ -55,24 +300,23 @@ features need the matching Esteria server. Every custom race, with its IDs and w
 | Performance overlay | A small movable overlay with frame rate, frame time, draw calls, triangles and CPU use (`showPerformance`) |
 | Manastorm speedflying and transmog | The Manastorm speedflying controller, HUD, talent panel and flight camera effects, and the transmog addon with Vulkan-backed model snapshots (`Addons/Manastorm_Speedflying`, `Addons/Manastorm_Transmog`; [integration notes](docs/MANASTORM_INTEGRATION.md)). Replaces the earlier retail-style Skyriding, whose documents are archived in `docs/archive/` |
 | Everlook Broadcasting radio | Internet radio in the DragonUI micro strip. The [Everlook Broadcasting](Addons/EverlookBroadcasting) addon by Bset runs on a native stream player ([EverlookRadio](Extensions/EverlookRadio)) built on the client's FMOD, so it needs no external DLLs. MP3 and Ogg streams only |
+| Character hot-swap | Hold a key for a radial wheel of favorite characters (`/swap`, or **Key Bindings → Esteria**) and become one without character select or a loading screen: the camera climbs into drifting clouds and comes down on the new character. Only at safe moments, with a cooldown ([extension](Extensions/CharacterSwap/README.md), [plan](docs/character-hot-swap-plan.md)). Needs the server's `Esteria.Swap.Enable` |
+| Paths of Fate | The Perk Codex (`/fate`, a micro-strip button or a key binding): cards across six paths (Combat, Survival, Exploration, Industry, Influence, Companions) that you buy with earned points and can respec. The server holds the state ([extension](Extensions/EsteriaPerks/README.md)). Needs the server's `Esteria.Perks.Enable` |
+| Conquest of Azeroth spell support | Spell charges with action-bar counts and recharge, live aura amounts in tooltips, spell text markup (per-level math, spell references, Shift-dependent text) and server-driven spell visual overrides |
+| GM Tool Chest | In-client building tools for GM accounts (`/tc`). The panel opens only after the server answers, and it answers GM accounts alone |
 | Bundled addons | The body shape and view distance addons in `Addons/` |
 
-### Retail content (optional)
+## Graphics
 
-Off by default. The retail assets build option (see [Options](#options)) enables local CASC/CDN access and the Retail model adapter, with durable
-decoded caches and background downloads. See [support boundaries and setup](docs/retail-casc.md),
-[CDN downloads](docs/cdn-downloads.md) and [native Retail imports](docs/retail-native-importer.md). Support is
-partial: not every Retail creature or item works yet.
-
-- **Packed originals.** Decoded Retail files can also be read from an MPQ (`EsteriaRetail\<product>-<build>\<locale>\<id>.bin`)
-  before the client goes to the CDN or the cache, and the log says whether it is reading local files or the CDN.
-- **Mount replacement.** An `EsteriaMounts\mounts.csv` in an MPQ replaces the model, scale and skins of a mount's *mounted*
-  appearance with the Retail original (NPCs on the same display keep their own records). The
-  [Mount Studio](Tools/MountStudio/README.md) desktop tool (Rust/Tauri) builds that catalog: it scans your client read-only,
-  protects custom additions, downloads the original dependencies with checkpoints and validates them with the client's own loader
-  in offline mode. No retroporting, resampling or conversion.
-- **Tooling.** `RetailAssetProbe` can extract Retail `.db2` tables (`--extract-table`) and reports its capabilities
-  (`--capabilities`); the server helper takes the database container's name.
+| Feature | What it does |
+|---|---|
+| Vulkan backend | Experimental renderer selected with `-vulkan` or the `gxApi` CVar. Uses retail assets by default, with a larger texture table and offline shader translation ([instructions](Tools/VulkanShaders/README.md)). D3D11 stays available with `-d3d11`. Offers the stock shadow qualities up to Very High (cascaded shadow maps), with per-frame descriptor and uniform budgets sized for them, and has the post-pass layer Lumenveil draws through (`GxEffects`, below) |
+| [Lumenveil](#lumenveil-vulkan) | Volumetric fog and light shafts, night lights, water, wet surfaces and shadows for the Vulkan client, ported from the Lumenveil mod and set up from pages in the Video options. See [below](#lumenveil-vulkan) |
+| Visuals switch | The `visuals` CVar (saved; the Effects page has a dropdown) picks the look of the Vulkan client: 0 Stock, 1 Lumenveil (default) or 2 [Azeroth Remastered](#azeroth-remastered-visuals-vulkan). Stock and Lumenveil are untouched by the Remastered code |
+| [Azeroth Remastered visuals](#azeroth-remastered-visuals-vulkan) | Ambient occlusion, contact shadows, global illumination, volumetric fog, bloom, colour grading, a Forever sky, per-pixel lamp lights and PBR water with FFT waves, ported onto the Vulkan backend's post-pass layer. Includes `hdTime` to hold the time of day |
+| [Living Azeroth](#living-azeroth-wind-grass-and-snow) | World wind, waving trees and grass, grass that parts around units, and snow that falls, lies, melts and takes trenches, all driven by optional data tables |
+| Native M3 models | The [ASECM3](Extensions/ASECM3/README.md) extension loads and animates M3 models in-process: materials, skinning, particles, ribbons, cloth and rigid-body physics. Still in progress |
+| Retail model adapter | Loads supported Retail M2 models (mounts, creatures such as Darkfallen and the Writhing Brood) straight from Blizzard's CDN, with no export step and no generated MPQ |
 
 ### Lumenveil (Vulkan)
 
@@ -158,80 +402,59 @@ and `worldWind`. `surfaceCoverInfo` reports what the snow is doing and what it c
 Not done yet: ground moisture and wet terrain (so mud and wet-ash covers stay off), lights, ground fog and anti-aliasing from the same
 donor; the handoff lists them in order.
 
-### Stability and fixes
+## Retail content (optional)
+
+Off by default. The retail assets build option (see [Options](#options)) enables local CASC/CDN access and the Retail model adapter, with durable
+decoded caches and background downloads. See [support boundaries and setup](docs/retail-casc.md),
+[CDN downloads](docs/cdn-downloads.md) and [native Retail imports](docs/retail-native-importer.md). Support is
+partial: not every Retail creature or item works yet.
+
+- **Retail WMOs and terrain.** Legion-and-later WMOs, terrain WDTs, split ADT tiles and their water are rewritten in memory into the
+  3.3.5a layout, so Retail buildings and maps load with no export step. Minimaps answer from the WDT's own tile list, and
+  `make_worldmap.py` and `make_loadscreen.py` in `docs/housing/tools/ui/` build world map tiles and loading screens. Not loaded yet:
+  sound emitters and WDL ([details](docs/retail-casc.md)).
+- **Range downloads.** The CDN source fetches single archived assets with HTTP range requests instead of whole archives, and reuses local
+  archives when they exist. `Tools/RetailAssets/cache_trim.cpp` validates decoded originals before it removes indexed archive containers.
+- **Packed originals.** Decoded Retail files can also be read from an MPQ (`EsteriaRetail\<product>-<build>\<locale>\<id>.bin`)
+  before the client goes to the CDN or the cache, and the log says whether it is reading local files or the CDN. `Tools/RetailAssets/pack_cache.py` stages a verified cache as
+  size-capped patch MPQs ([packed distribution](docs/cdn-downloads.md)).
+- **Mount replacement.** An `EsteriaMounts\mounts.csv` in an MPQ replaces the model, scale and skins of a mount's *mounted*
+  appearance with the Retail original (NPCs on the same display keep their own records). The
+  [Mount Studio](Tools/MountStudio/README.md) desktop tool (Rust/Tauri) builds that catalog: it scans your client read-only,
+  protects custom additions, downloads the original dependencies with checkpoints and validates them with the client's own loader
+  in offline mode. No retroporting, resampling or conversion.
+- **Tooling.** `RetailAssetProbe` can extract Retail `.db2` tables (`--extract-table`) and reports its capabilities
+  (`--capabilities`), checks a whole list with one CDN setup (`--batch`); the server helper takes the database container's name.
+
+## Stability and fixes
 
 - Fixes for guild bank packets, `IsTransport` on units, Lua `UnitAttackPower` return types and the console
+- Long CVar lines no longer write a cut-off line that wiped the settings after it in `Config.wtf`
+- Tree shadows no longer turn with the camera, in every visual set
+- A Vulkan texture upload that would read past its texels is skipped and logged instead of crashing
 - A crash logger in the main client target that writes a crash log beside the executable
 - Extension hook system (upstream pull request #10) so features such as the
   ones above stay out of core files
 
-## Races
+## Layout
 
-The stock 3.3.5a client has ten playable races. This fork adds many more, in three families that differ in where their models and looks
-come from. All of them use the creator, character select and in-world rendering described under
-[Retail races and character creation](#retail-races-and-character-creation); their looks travel to the server and other players in the
-`RLK1` footer, so they need the matching Esteria server (race IDs are the client's effective `ChrRaces` IDs, and the server's race,
-class, start and language rows have to agree). Armor, helmets, emotes and animations of every race below work through the same
-native pipeline, and helmet fitting follows the anatomy of the stock race named in each row.
-
-### Races on Retail models
-
-Their bodies, geosets and textures are the Retail originals, read from your installed Retail client or Blizzard's CDN and composed in
-process (see [Retail content](#retail-content-optional)). They map onto race slots already present in the client's effective
-`ChrRaces` table; the mapping is `Tools/RetailAssets/RetailRaces.csv` (target race ID, then the Retail `ChrRaces` ID) and, at run
-time, the retail races environment variable. The stock race slots 1 to 11 can be mapped onto their Retail bodies the same way; Human and
-Dwarf are the ones verified in game.
-
-| Race | Target ID | Retail ID | Helmets follow | Notes |
-|---|---:|---:|---|---|
-| Worgen | 12 | 22 | its own | [Two forms](#retail-races-and-character-creation): Wolf and Human, each with its own saved look |
-| Nightborne | 17 | 27 | Night Elf | Extra faces beside the Retail ones (`custom\nightborne\faces`) |
-| Pandaren | 18 | 25 | its own | Alliance source; Retail's registry-only slot 26 has no models and is left out |
-| Void Elf | 19 | 29 | Blood Elf | |
-| Vulpera | 20 | 35 | Goblin | Extra textures from `EsteriaVulperaTextures.bin` |
-| Lightforged Draenei | 21 | 30 | Draenei | |
-| Zandalari Troll | 22 | 31 | Troll | |
-| Dark Iron Dwarf | 23 | 34 | Dwarf | |
-| Dracthyr | 28 | 70 | Blood Elf (Visage) | Two forms: Dragon (the race's native model) and Visage, each with its own saved look; the rig can exceed 256 bones |
-| Kul Tiran | 29 | 32 | Human | |
-| Mag'har Orc | 45 | 36 | Orc | |
-| Highmountain Tauren | 46 | 28 | Tauren | Extra textures from the Esteria catalog |
-| Mechagnome | 47 | 37 | Gnome | Inherited emotes work through recursive skeleton parents |
-| Earthen (Alliance, Horde) | 48, 49 | 84, 85 | Dwarf | Both factions enabled; extra choices from the Esteria catalog |
-| Haranir (Alliance, Horde) | 50, 51 | 86, 91 | Night Elf | Both factions enabled; extra textures from `EsteriaHaranirTextures.bin` |
-| Skyborne (Alliance, Horde) | 52, 53 | Forever 95, 96 | Blood Elf | From the separate Forever source (`ForeverCasc.ini`); 10 faces and 9 skin palettes; adds no classes or spells |
-
-Customization choices are the Retail ones (faces, skins, hair, tattoos, markings, eye colours), filtered per race, with Retail's
-character-texture compositing (copy, multiply, overlay, screen and alpha layers), plus extra choices cloned from
-`Esteria\RetailExtras.txt` and an optional Eye Lightning toggle on models that have the effect mesh.
-
-### Esteria's own races
-
-These are not Blizzard races. Some are built from Retail models with an Esteria profile in the client; the rest use appearance
-catalogs the client reads from its own folder.
-
-| Race | Race IDs | Looks | What it offers |
-|---|---|---|---|
-| Ethereal | 77, 78 | Retail bodies, Esteria profile | Two forms: the Darkweaver body and the mechanical Dreadnaught, which hides armor. Three bodies, six energy colours plus more custom ones (ten named, from Sunforged to Chartreuse), seven lightning palettes (Shadowguard, Violet, Amber, Teal, Lavender, Shifting, Crimson) with custom ones, and mech colours with matching glow. Its own hand and foot geosets swap under gloves and boots, equipment atlases repeat their body tile into the wrap gutter, and it has complete shoe surfaces despite the NPC barefoot flag. Equipment follows the Nightborne and Night Elf helmet family |
-| Slime Giant | 71, 72 | Retail SlimeSkeleton body | One authored male body for both factions. Slime Color (Green, Amber, Mauve, Red, Gold, plus 30 more) and Slime Drip (off or on). Keeps the original 208-bone rig and animations; clothing is a skinned collection on Kul Tiran HD UVs. Helmets use the Human mask ([notes](docs/slime-giant.md)) |
-| Centaur | 73, 74 | Retail Centaur bodies | Male and female, 16 skins each, head and beard options and a belt layer. Legacy helmets use the fitted Draenei family |
-| Kyrian | 75 | Retail looks through an Esteria catalog (`EsteriaKyrian.bin`) | Male and female; five appearance fields saved in the character's extra bytes, high-resolution equipment, and native takeoff and flight |
-| Venthyr | 76 | Retail looks through an Esteria catalog (`EsteriaVenthyr.bin`) | Male and female, with extra skins beside the Retail ones |
-| Darkfallen | 43, 44 | Retail model adapter | Male and female; five appearance fields |
-| Naga | 54 | Esteria catalog | Male and female |
-| Tuskarr | 55 | Esteria catalog | Male and female |
-| Vrykul | 56, 57 | Esteria catalog | Male and female; the female uses the stock player Vrykul materials; authored at full size, shown at 0.55 in the creator |
-| Forgotten | 58, 59 | Esteria catalog (thin human) | Male only |
-| Sethrak | 62 | Esteria catalog | Male and female |
-| Gnoll | 63 | Esteria catalog | Male only, with fifteen controls |
-| Saberon | 64 | Esteria catalog | Male only |
-| Drakkin (Alliance, Horde) | 66, 67 | Esteria catalog | Male and female; the Alliance female and both Horde bodies use stock materials |
-| Drakonid (Alliance, Horde) | 69, 70 | Esteria catalog | Male only |
-
-The catalog races are a port of the original Esteria client DLL (`EsteriaAppearance.dll`): their looks are packed bytes, five per
-character, whose choices come from per-race tables (`ComponentCore/CreatureAppearance.h` in the shared game code) and catalog files beside the
-executable. The creator's art table also names Ogre (60, 61), Jinyu (65), Arakkoa (68) and Illidari (30, 31), but this client has no
-appearance data for them.
+| Path | Contents |
+|---|---|
+| `Engine/Source/` | Engine modules: Storm, Gx (Direct3D 9 / Direct3D 11 / OpenGL / Vulkan), Model2, Frame/FrameXML UI, SoundEngine, Lua, ... |
+| The game modules' `Source/` | Game modules: objects, world rendering, UI, networking, database, glue screens |
+| The game modules' `Common/` | Code shared by the game modules |
+| `ThirdParty/` | Libraries linked from their upstream sources |
+| `Tools/<client>/` | The client executable target |
+| `Extensions/` | Optional client extensions: ASECM3, BodyShapeSync, CharacterSwap, DigitalInventory, EsteriaPerks, EverlookRadio, Housing, RetailPreview, HelloWorld |
+| `Addons/` | Bundled Lua addons (EsteriaHousing, EsteriaInventory, EsteriaPerks, EsteriaSwap, EsteriaToolChest, Everlook Broadcasting, Manastorm speedflying and transmog, body shape, view distance) and the native cursor converter |
+| `Engine/Source/Lumenveil/` | Lumenveil for the Vulkan client: the controller, renderer, the options pages, the shaders and `Core/` (the mod's own GPL-2.0 files) |
+| `Engine/Source/Retail/` | Native Retail loading: CASC/CDN source, packed archives, WMO and terrain adapters |
+| `docs/housing/` | Housing plans, protocol, checklists and asset tools |
+| `Tools/EsteriaShell/` | The interface shell MPQ builder and its art |
+| `Tools/RetailAssets/` | Retail asset, race and glue-screen tooling |
+| `Tools/MountStudio/` | Desktop tool that builds the mount replacement catalog from Retail originals |
+| `Tools/LumenveilOptions/` | Generator for the options table the Lumenveil pages are built from |
+| `Tools/XvidDecoder/` | x64 movie decoder that replaces the original 32-bit `DivxDecoder.dll` |
 
 ## About the upstream reconstruction
 
@@ -254,112 +477,6 @@ initializers, template instances) that our compiler emits on its own, C runtime 
 libraries that are linked from their upstream sources instead of being reconstructed (FreeType, zlib, PCRE,
 parts of FMOD Ex).
 
-## Requirements
-
-- Windows 10 or 11
-- Visual Studio 2022 with the **Desktop development with C++** workload (MSVC v143 and a Windows SDK)
-- CMake 3.10 or newer (the one that ships with Visual Studio works)
-- For Win32 builds only: [NASM](https://www.nasm.us/), on `PATH` or passed as `-DNASM_EXECUTABLE=<path>`, and
-  `DivxDecoder.dll` from your 3.3.5a client copied to `ThirdParty/DivxDecoder/` (the build copies it next to the
-  executables; the x64 build uses its own decoder instead)
-- A **3.3.5a (12340)** client. **No** game data is included in this repository.
-
-## Building
-
-From a Developer PowerShell or any shell with `cmake` on `PATH`:
-
-```powershell
-git clone <this repository's URL>
-cd <the cloned folder>
-
-# x64 (main target)
-cmake -S . -B build/x64 -G "Visual Studio 17 2022" -A x64
-cmake --build build/x64 --config Release --target <client target> --parallel
-
-# Win32 (optional, needs NASM)
-cmake -S . -B build/win32 -G "Visual Studio 17 2022" -A Win32
-cmake --build build/win32 --config Release --target <client target> --parallel
-```
-
-The client targets and the project's CMake options are named in `CMakeLists.txt` and `Tools/`; the names below are described, not spelled out.
-
-In-source builds are refused, so keep the build directory separate (`build/` above).
-
-The client is written to `bin/Win/`:
-
-| Target | x64 | Win32 |
-|---|---|---|
-| The client with a crash logger | `<client>64.exe` | `<client>32.exe` |
-| The same client without it | `<name>64.exe` | `<name>32.exe` |
-
-The first target is the client with a crash logger: it opens a console window and writes a crash log
-when the client crashes. The second is the same client without it. You can also turn the logger off
-with its CMake option.
-
-### Options
-
-Every option starts with the project's prefix (see `CMakeLists.txt`); only the part after it is shown.
-
-| CMake option | Default | Effect |
-|---|---|---|
-| `<prefix>_DISABLE_SIGNATURE_CHECKS` | `OFF` | Skip the MPQ file and `.toc.sig` signature checks, so modified game data and interface files load |
-| `<prefix>_RETAIL_ASSETS` | `OFF` | Enable local CASC/CDN access and the first Retail model adapter; see [support boundaries and setup](docs/retail-casc.md) |
-| `<prefix>_EXTENDED_LIMITS` | `OFF` | Opt into custom player/container layouts; requires a matching server |
-| `<prefix>_QUEST_LOG_SLOTS` | `25` | Active quest ceiling, up to 1000 with extended limits |
-| `<prefix>_CONTAINER_SLOTS` | `36` | Container ceiling, up to 254 with extended limits; adds no bag content or art |
-| `<prefix>_MAX_CLASSES` | `32` | Maximum class ID, up to 254 with extended limits; widens class masks and requires matching server/DBC formats |
-| `<prefix>_MAX_UPDATE_MASKS` | derived (`42` stock) | Accepted mask blocks; 1000 quests require 194 |
-| `<client>_CRASH_LOG` | `ON` | Build the client with the crash logger |
-| `<client>_OUTPUT_OVERRIDE` | empty | Name the crash-logger client's executable something other than its default |
-| `<prefix>_EXTENSION_HELLOWORLD` | `ON` | Compile the imported extension hook examples into the client |
-
-See [extended limits](docs/uncaps.md) for the 1000-quest/254-class configuration, generated
-server field contract, and pending server/UI acceptance work. Extended descriptor
-generation requires Python 3.10 or newer; stock builds do not require Python.
-
-## Running
-
-1. Copy the `Data` folder of your 3.3.5a client into `bin/Win/`, so you have `bin/Win/Data/`.
-2. Point `Data/<locale>/realmlist.wtf` at the server you want to connect to.
-3. Start the 64-bit client from `bin/Win/`.
-
-The built-in cursor selector is under **Escape → Interface → Mouse → Cursor appearance**.
-Human (Default), Night Elf, Orc, Undead, Hearthstone, and animated Starcraft apply
-immediately and save between sessions.
-See [native cursor textures](Addons/Cursors/README.md) for conversion and behavior details.
-
-### Extensions and Vulkan
-
-The extension hook system from upstream pull request #10
-discovers extensions under `Extensions/<Name>/src/`. Each has a
-`<prefix>_EXTENSION_<UPPERCASE_NAME>` CMake option; the bundled `HelloWorld` extension
-demonstrates the hooks and writes to `Logs/Extensions.log`.
-
-The experimental Vulkan backend from upstream pull request #11
-can be selected with `-vulkan` or the `gxApi` CVar set to `Vulkan`. D3D11 remains available
-with `-d3d11`. Vulkan requires a driver providing `vulkan-1.dll`; building it uses the
-bundled headers and requires a C++20 compiler, without requiring the Vulkan SDK.
-For world and model shaders, follow the [offline Vulkan shader translation instructions](Tools/VulkanShaders/README.md)
-using your own client data. Vulkan remains work in progress; build success does not establish
-rendering or gameplay correctness.
-
-## Layout
-
-| Path | Contents |
-|---|---|
-| `Engine/Source/` | Engine modules: Storm, Gx (Direct3D 9 / Direct3D 11 / OpenGL / Vulkan), Model2, Frame/FrameXML UI, SoundEngine, Lua, ... |
-| The game modules' `Source/` | Game modules: objects, world rendering, UI, networking, database, glue screens |
-| The game modules' `Common/` | Code shared by the game modules |
-| `ThirdParty/` | Libraries linked from their upstream sources |
-| `Tools/<client>/` | The client executable target |
-| `Extensions/` | Optional client extensions: ASECM3, DigitalInventory, BodyShapeSync, RetailPreview, HelloWorld |
-| `Addons/` | Bundled Lua addons (EsteriaInventory, Manastorm speedflying and transmog, body shape, view distance) and the native cursor converter |
-| `Engine/Source/Lumenveil/` | Lumenveil for the Vulkan client: the controller, renderer, the options pages, the shaders and `Core/` (the mod's own GPL-2.0 files) |
-| `Tools/RetailAssets/` | Retail asset, race and glue-screen tooling |
-| `Tools/MountStudio/` | Desktop tool that builds the mount replacement catalog from Retail originals |
-| `Tools/LumenveilOptions/` | Generator for the options table the Lumenveil pages are built from |
-| `Tools/XvidDecoder/` | x64 movie decoder that replaces the original 32-bit `DivxDecoder.dll` |
-
 ## Special thanks
 
 - [binana](https://github.com/thunderbrewhq/binana)
@@ -374,5 +491,6 @@ rendering or gameplay correctness.
 - [Furioz420](https://github.com/Furioz420), for the native Direct3D 11 backend this client's DX11 work draws on
 - [Lumenveil](https://github.com/lumenveil/Lumenveil) and [CoAVolFog](https://github.com/jealous-sound/coa-vfog), for the fog and lighting mod behind Lumenveil
 - The Azeroth Remastered project, for the HD effects ported under `visuals 2`, and Intel's XeGTAO (MIT) for its ambient occlusion
+- moust4ki, for the radial-wheel art of Easy Controller - Forever (MIT), used by the character swap wheel
 - The modding community
 - Saty
