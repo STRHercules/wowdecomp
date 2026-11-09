@@ -240,6 +240,21 @@ bool Particles(std::vector<uint8_t>& b, const ModelFiles& files, std::string& re
                 }
             }
         }
+        // zSource: the legacy emitter sends particles away from (0, 0, zSource) when it is above 0. Retail writes 255 on
+        // emitters that have no source (the Cookout Campfire's fire and smoke), which the legacy emitter takes as a point
+        // 255 yd overhead, so everything streamed down. shortcut: values from 100 up are treated as that "none".
+        {
+            const size_t z = p + 0xf0;
+            for (uint32_t j = 0; j < U32(b, z + 12); ++j) {
+                const size_t pair = U32(b, z + 16) + size_t(j) * 8;
+                if (!Array(b, pair, 4)) continue;
+                for (uint32_t k = 0; k < U32(b, pair); ++k) {
+                    const size_t key = U32(b, pair + 4) + size_t(k) * 4;
+                    float value; uint32_t bits = U32(b, key); std::memcpy(&value, &bits, 4);
+                    if (value >= 100.0f) Put(b, key, 0);
+                }
+            }
+        }
         const size_t o = out.size();
         out.insert(out.end(), b.begin() + p, b.begin() + p + kLegacy);
         // 0x10000000: the texture field packs three 5-bit indices; draw the first.
@@ -1197,6 +1212,13 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
         } else if (shader == 0x8003 || shader == 0x4014) {
             shader = shader == 0x8003 ? 0x8010 : 0x8011;
             b[p] = uint8_t(shader); b[p + 1] = uint8_t(shader >> 8);
+        } else if (shader == 0x8012) {
+            // Retail's 0x8012 is Diffuse_T1 / Combiners_Mod_Dual_Crossfade (two textures blended by a weight); the client's
+            // own 0x8012 is Diffuse_T1_T2 / Combiners_Mod_Mod, which multiplied the Cookout Campfire's stones by their dark
+            // crossfade layer into black. Draw the first texture with the plain combiner.
+            // shortcut: no crossfade; write the dual-crossfade combiner if a model's blend matters.
+            b[p] = b[p + 1] = 0;
+            b[p + 12] = 1; b[p + 13] = 0;
         } else if (shader == 0x8015) {
             // Diffuse_EdgeFade_T1_T2 / Combiners_Mod_Mod: the 3.3.5 client has no edge-fade vertex shader, so draw it without the fade.
             b[p] = 0x12; b[p + 1] = 0x80;
