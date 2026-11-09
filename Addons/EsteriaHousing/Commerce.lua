@@ -515,7 +515,7 @@ for i, t in ipairs(CTABS) do
   ctabs[i] = b
 end
 c.numTabs = #CTABS
-local cHint = Label(cbox, "Waiting for the merchant to load...", "GameFontNormalSmall"); cHint:SetPoint("TOPLEFT", 12, -12)
+local cHint = Label(cbox, "Waiting for the character to load...", "GameFontNormalSmall"); cHint:SetPoint("TOPLEFT", 12, -12)
 
 -- each option a striped line: its name, then its value between arrows (or a slider for the body)
 local cRowsList = {}
@@ -641,7 +641,7 @@ function H.OpenCustomizer(lines)
   end
   EsteriaHousing_SetMerchant(a[2])
   cTarget = (a[6] and a[6] ~= "") and a[6] or nil
-  cTitle:SetText(cTarget and "Mannequin Appearance" or "Merchant Appearance")
+  cTitle:SetText(cTarget and ((a[7] and a[7] ~= "" and a[7] or "Mannequin") .. " Appearance") or "Merchant Appearance")
   cRace, cSex, cPage = tonumber(a[3]) or 1, tonumber(a[4]) or 0, 0
   if a[5] and a[5] ~= "" then EsteriaHousing_MerchantBody("BS:" .. a[5]) end
   presets, presetAt = {}, 0
