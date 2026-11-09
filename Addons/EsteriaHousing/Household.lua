@@ -71,6 +71,9 @@ local guestCheck = K.Check(guestLine); guestCheck:SetPoint("RIGHT", -4, 0)
 local greetLine = K.Line(spages[2], 5, -10, "Greeting"); local greetBox = K.Box(greetLine, 220); greetBox:SetPoint("RIGHT", -4, 0)
 local look = K.Button(spages[2], "Change Appearance", 150); look:SetPoint("BOTTOMLEFT", 8, 8)
 look:SetScript("OnClick", function() if svc then Send("mqappearance", svc.placed) end end)
+-- the mannequin's outfit window: gear from your own or your collected looks, saved outfits
+local dress = K.Button(spages[2], "Outfit", 90); dress:SetPoint("LEFT", look, "RIGHT", 6, 0)
+dress:SetScript("OnClick", function() if svc then Send("mqopen", svc.placed) end end)
 local ssave = K.Button(spages[2], "Save", 90); ssave:SetPoint("BOTTOMRIGHT", -8, 8)
 ssave:SetScript("OnClick", function()
   if not svc then return end
@@ -120,7 +123,7 @@ local function ReadService(lines)
     end
   end
   -- settings
-  Show(nameLine, svc.figure); Show(titleLine, svc.figure); Show(look, svc.figure)
+  Show(nameLine, svc.figure); Show(titleLine, svc.figure); Show(look, svc.figure); Show(dress, svc.figure)
   Show(guestLine, svc.kind == INNKEEPER); Show(greetLine, svc.kind == AUCTIONEER)
   if not nameBox:HasFocus() then nameBox:SetText(svc.figure and svc.name or "") end
   if not titleBox:HasFocus() then titleBox:SetText(svc.title) end

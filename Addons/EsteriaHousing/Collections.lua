@@ -398,7 +398,8 @@ local function ReadMannequin(lines)
   for _, line in ipairs(lines) do
     local f = Fields(line)
     if f[1] == "mq" then
-      mq = { placed = f[2], owner = f[3] == "1", race = Num(f[4]), sex = Num(f[5]), type = Num(f[6]), pose = Num(f[7]), label = f[8], sub = f[9] }
+      mq = { placed = f[2], owner = f[3] == "1", race = Num(f[4]), sex = Num(f[5]), type = Num(f[6]), pose = Num(f[7]), label = f[8], sub = f[9],
+        kind = Num(f[11]) }
     elseif f[1] == "slot" then mqSlots[Num(f[2])] = { entry = Num(f[3]), name = f[4], quality = f[5], link = f[6] or "" }
     elseif f[1] == "outfit" then outfits[#outfits + 1] = f[2] end
   end
@@ -408,8 +409,11 @@ local function ReadMannequin(lines)
     slotLines[i].value:SetText(it and Quality(it.name, it.quality) or "|cff606060Empty|r")
     if it then n = n + 1 end
   end
+  -- a service NPC wears an outfit too; the type and pose (statues, poses) stay a mannequin's
+  local mannequin = mq.kind == 0 or mq.kind == 8
   MQ.title:SetText(mq.label ~= "" and mq.label or "Mannequin")
-  MQ.status:SetText(string.format("%s, %s  |cffb0b0b0%d %s|r", TYPES[mq.type + 1] or "", POSES[mq.pose + 1] or "", n, n == 1 and "piece" or "pieces"))
+  MQ.status:SetText(mannequin and string.format("%s, %s  |cffb0b0b0%d %s|r", TYPES[mq.type + 1] or "", POSES[mq.pose + 1] or "", n,
+    n == 1 and "piece" or "pieces") or string.format("Outfit  |cffb0b0b0%d %s|r", n, n == 1 and "piece" or "pieces"))
   MQ.note:SetText(mq.owner and "Gear here is a copy of its look; your items stay yours." or (mq.sub ~= "" and mq.sub or ""))
   typeFill(mq.type); poseFill(mq.pose)
   mqLabelFill(mq.label, mq.sub)
@@ -420,8 +424,9 @@ local function ReadMannequin(lines)
   local first = not MQ:IsShown()
   MQ:SetHeight(560)
   if first then pickFrame:Hide(); slotFrame:Show(); MQ:PickTab(1) end
-  for i = 1, 4 do Show(_G["EsteriaHousingMannequinTab" .. i], mq.owner or i == 1) end
-  if not mq.owner then MQ:PickTab(1, { true, false, false, false }) end
+  local tabs = { true, mq.owner and mannequin, mq.owner, mq.owner }
+  for i = 1, 4 do Show(_G["EsteriaHousingMannequinTab" .. i], tabs[i]) end
+  if not mq.owner then MQ:PickTab(1, tabs) elseif not mannequin and MQ.selectedTab == 2 then MQ:PickTab(1, tabs) end
   MQ:Show()
 end
 
