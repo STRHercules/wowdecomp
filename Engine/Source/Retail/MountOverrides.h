@@ -9,6 +9,7 @@
 #include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace Retail
 {
@@ -64,6 +65,49 @@ inline bool ParseMountOverrides(const std::string& input, std::map<uint32_t, Mou
         if (scale.ec != std::errc() || scale.ptr != fields[8].data() + fields[8].size()
             || !std::isfinite(entry.scale) || entry.scale <= 0 || entry.scale > 100
             || !parsed.emplace(display, std::move(entry)).second)
+            return false;
+    }
+    output.swap(parsed);
+    return true;
+}
+
+// A customizable retail mount's look: M2 texture type -> FileDataID, and shown geosets (group, value).
+struct MountSkin
+{
+    std::vector<std::pair<uint32_t, uint32_t>> textures, geosets;
+};
+
+// Rows: display;t;textureType;fileDataId  or  display;g;geosetGroup;geosetValue
+inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSkin>& output)
+{
+    std::map<uint32_t, MountSkin> parsed;
+    std::istringstream lines(input);
+    std::string line;
+    const auto number = [](const std::string& value, uint32_t& result)
+    {
+        const auto conversion = std::from_chars(value.data(), value.data() + value.size(), result);
+        return !value.empty() && conversion.ec == std::errc() && conversion.ptr == value.data() + value.size();
+    };
+    while (std::getline(lines, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty() || line.front() == '#')
+            continue;
+        std::array<std::string, 4> fields;
+        std::istringstream columns(line);
+        for (auto& field : fields)
+            if (!std::getline(columns, field, ';'))
+                return false;
+        uint32_t display = 0, first = 0, second = 0;
+        if (columns.peek() != std::char_traits<char>::eof() || !number(fields[0], display) || !display
+            || !number(fields[2], first) || !number(fields[3], second))
+            return false;
+        if (fields[1] == "t" && first < 32 && second)
+            parsed[display].textures.emplace_back(first, second);
+        else if (fields[1] == "g" && first && first < 100 && second < 100)
+            parsed[display].geosets.emplace_back(first, second);
+        else
             return false;
     }
     output.swap(parsed);

@@ -54,6 +54,7 @@
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Retail/CascSource.h"
 #include "Engine/Source/Retail/RetailModel.h"
+#include "Engine/Source/Retail/MountOverrides.h"
 #endif
 
 // STATIC: 0x009F6A00
@@ -5640,6 +5641,44 @@ void CCharacterComponent::ReplaceMonsterSkin(CM2Model* model, const CreatureDisp
             }
         }
     }
+
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+    // Customizable retail mounts fill character-style slots (1 skin, 6 hair ...) that have no display fields.
+    static const auto skins = []
+    {
+        std::map<uint32_t, Retail::MountSkin> result;
+        void* bytes = nullptr;
+        uint32_t size = 0;
+        if (SFile::LoadFile("EsteriaMounts\\skins.csv", &bytes, &size, 0, nullptr))
+        {
+            if (size <= 4 * 1024 * 1024)
+                Retail::ParseMountSkins(std::string(static_cast<const char*>(bytes), size), result);
+            SFileUnloadFile(bytes);
+        }
+        return result;
+    }();
+    const auto skin = skins.find(static_cast<uint32_t>(displayRec->m_id));
+    if (skin != skins.end()) {
+        for (const auto& entry : skin->second.textures) {
+            strcpy(fileName, (std::to_string(entry.second) + ".blp").c_str());
+            CTexture* texture = TextureCreate(path, flags, &status, 0);
+
+            if (texture) {
+                model->ReplaceTexture(entry.first, texture);
+                HandleClose(reinterpret_cast<HOBJECT>(texture));
+            }
+        }
+
+        for (const auto& entry : skin->second.geosets) {
+            model->SetGeometryVisible(entry.first * 100, entry.first * 100 + 99, 0);
+            model->SetGeometryVisible(entry.first * 100 + entry.second, entry.first * 100 + entry.second, 1);
+        }
+
+        if (!skin->second.geosets.empty()) {
+            model->OptimizeVisibleGeometry();
+        }
+    }
+#endif
 
     ReplaceParticleColor(displayRec->m_particleColorID, model);
 }

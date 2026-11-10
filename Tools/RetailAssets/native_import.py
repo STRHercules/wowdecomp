@@ -10,6 +10,7 @@ from contextlib import closing
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import shutil
 import sqlite3
@@ -70,9 +71,10 @@ def client_ids(client, server_root, exclude_pack=None):
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    if not module.DLL_DEFAULT.is_file():
-        raise ValueError("Esteria's configured StormLib DLL is missing")
-    storm = module.Storm(module.DLL_DEFAULT)
+    dll = Path(os.environ.get("ESTERIA_STORMLIB", module.DLL_DEFAULT))
+    if not dll.is_file():
+        raise ValueError("Esteria's configured StormLib DLL is missing; set ESTERIA_STORMLIB")
+    storm = module.Storm(dll)
     data = client / "Data"
     roots = [data] + [p for p in data.iterdir() if p.is_dir() and re.fullmatch(r"[a-z]{2}[A-Z]{2}", p.name)]
     ids = {table: set() for table in TABLES}

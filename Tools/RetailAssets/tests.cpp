@@ -1577,6 +1577,11 @@ int main(int argc, char** argv) {
             "mount mapping requires a real build pin");
         Check(!Retail::ParseMountOverrides("20;wow;0123456789abcdef0123456789abcdef;2;42;0;0;0;nan\n", overrides),
             "mount mapping rejects non-finite scale");
+        std::map<uint32_t, Retail::MountSkin> skins;
+        Check(Retail::ParseMountSkins("# c\n200;t;1;4547582\n200;g;39;2\n", skins) && skins.at(200).textures[0].second == 4547582
+            && skins.at(200).geosets[0].first == 39, "mount skin textures and geosets");
+        Check(!Retail::ParseMountSkins("200;x;1;2\n", skins) && !Retail::ParseMountSkins("200;t;1;0\n", skins)
+            && !Retail::ParseMountSkins("200;g;100;1\n", skins) && skins.size() == 1, "bad mount skin rows rejected");
     }
     auto temp = std::filesystem::temp_directory_path() / ("wow-retail-tests-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temp);
