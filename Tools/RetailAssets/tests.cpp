@@ -1473,6 +1473,18 @@ int main(int argc, char** argv) {
     auto unusedInfluences = zeroMax; unusedInfluences[Get(zeroMax, 32) + 16] = 0;
     Check(Retail::PrepareSkin(unusedInfluences, prepared, error), "derive unused Retail skin influence count");
     Check(unusedInfluences[Get(zeroMax, 32) + 16] == 1, "reconstructed skin influence count");
+    {
+        auto twoLookups = body; // both texture lookups name texture 0
+        Put(twoLookups, 0x80, 2); Put(twoLookups, 0x84, uint32_t(twoLookups.size())); twoLookups.resize(twoLookups.size() + 4);
+        std::vector<uint8_t> twoModel;
+        Check(Retail::PrepareModel(Model(twoLookups), twoModel, files, error), error.c_str());
+        for (const auto& [shader, expected] : {std::pair<uint16_t, uint16_t>{0x13, 0x10}, {0x8017, 0x10}}) {
+            auto pair = skin; const size_t batch = Get(pair, 40);
+            pair[batch + 2] = uint8_t(shader); pair[batch + 3] = uint8_t(shader >> 8); pair[batch + 14] = 2;
+            Check(Retail::PrepareSkin(pair, twoModel, error) && (pair[batch + 2] | pair[batch + 3] << 8) == expected
+                && pair[batch + 14] == 1, "same-texture runtime pair and Opaque_Alpha draw one texture with its alpha");
+        }
+    }
     for (size_t n = 0; n < valid.size(); ++n) {
         std::vector<uint8_t> truncated(valid.begin(), valid.begin() + n);
         Check(!Retail::PrepareModel(truncated, prepared, files, error), "reject truncated model at every byte boundary");
@@ -1578,10 +1590,13 @@ int main(int argc, char** argv) {
         Check(!Retail::ParseMountOverrides("20;wow;0123456789abcdef0123456789abcdef;2;42;0;0;0;nan\n", overrides),
             "mount mapping rejects non-finite scale");
         std::map<uint32_t, Retail::MountSkin> skins;
-        Check(Retail::ParseMountSkins("# c\n200;t;1;4547582\n200;g;39;2\n", skins) && skins.at(200).textures[0].second == 4547582
-            && skins.at(200).geosets[0].first == 39, "mount skin textures and geosets");
+        Check(Retail::ParseMountSkins("# c\n200;t;1;4547582\n200;g;39;2\n200;g;0;3\n", skins) && skins.at(200).textures[0].second == 4547582
+            && skins.at(200).geosets[0].first == 39 && skins.at(200).geosets[1].first == 0, "mount skin textures and geosets");
         Check(!Retail::ParseMountSkins("200;x;1;2\n", skins) && !Retail::ParseMountSkins("200;t;1;0\n", skins)
             && !Retail::ParseMountSkins("200;g;100;1\n", skins) && skins.size() == 1, "bad mount skin rows rejected");
+        Check(Retail::ParseMountSkins("201;r;1490;91\n", skins) && skins.at(201).riderAnim == 1490
+            && skins.at(201).riderFallback == 91 && !Retail::ParseMountSkins("201;r;120;600\n", skins)
+            && !Retail::ParseMountSkins("201;r;120;0\n201;r;97;0\n", skins), "rider pose rows");
     }
     auto temp = std::filesystem::temp_directory_path() / ("wow-retail-tests-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temp);

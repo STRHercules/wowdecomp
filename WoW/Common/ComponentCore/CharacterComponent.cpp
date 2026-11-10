@@ -55,6 +55,7 @@
 #include "Engine/Source/Retail/CascSource.h"
 #include "Engine/Source/Retail/RetailModel.h"
 #include "Engine/Source/Retail/MountOverrides.h"
+#include "Engine/Source/BlizzardCore/Source/System/Log/Log.h"
 #endif
 
 // STATIC: 0x009F6A00
@@ -5614,6 +5615,31 @@ bool CCharacterComponent::SkinNpc(const char* debug) {
     return true;
 }
 
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+// Customizable retail mounts fill character-style slots (1 skin, 6 hair ...) that have no display fields.
+const Retail::MountSkin* EsteriaMountSkin(uint32_t display) {
+    static const auto skins = []
+    {
+        std::map<uint32_t, Retail::MountSkin> result;
+        void* bytes = nullptr;
+        uint32_t size = 0;
+        const bool loaded = SFile::LoadFile("EsteriaMounts\\skins.csv", &bytes, &size, 0, nullptr);
+        bool parsed = false;
+        if (loaded)
+        {
+            if (size <= 4 * 1024 * 1024)
+                parsed = Retail::ParseMountSkins(std::string(static_cast<const char*>(bytes), size), result);
+            SFileUnloadFile(bytes);
+        }
+        if (loaded && !parsed)
+            Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Invalid mount skin catalog\n");
+        return result;
+    }();
+    const auto found = skins.find(display);
+    return found == skins.end() ? nullptr : &found->second;
+}
+#endif
+
 // VERIFY: 505c73ad manual
 // OFFSET: 0x004F20C0
 void CCharacterComponent::ReplaceMonsterSkin(CM2Model* model, const CreatureDisplayInfoRec* displayRec, const CreatureModelDataRec* modelRec) {
@@ -5643,23 +5669,8 @@ void CCharacterComponent::ReplaceMonsterSkin(CM2Model* model, const CreatureDisp
     }
 
 #if defined(WOWDECOMP_RETAIL_ASSETS)
-    // Customizable retail mounts fill character-style slots (1 skin, 6 hair ...) that have no display fields.
-    static const auto skins = []
-    {
-        std::map<uint32_t, Retail::MountSkin> result;
-        void* bytes = nullptr;
-        uint32_t size = 0;
-        if (SFile::LoadFile("EsteriaMounts\\skins.csv", &bytes, &size, 0, nullptr))
-        {
-            if (size <= 4 * 1024 * 1024)
-                Retail::ParseMountSkins(std::string(static_cast<const char*>(bytes), size), result);
-            SFileUnloadFile(bytes);
-        }
-        return result;
-    }();
-    const auto skin = skins.find(static_cast<uint32_t>(displayRec->m_id));
-    if (skin != skins.end()) {
-        for (const auto& entry : skin->second.textures) {
+    if (const Retail::MountSkin* skin = EsteriaMountSkin(static_cast<uint32_t>(displayRec->m_id))) {
+        for (const auto& entry : skin->textures) {
             strcpy(fileName, (std::to_string(entry.second) + ".blp").c_str());
             CTexture* texture = TextureCreate(path, flags, &status, 0);
 
@@ -5669,12 +5680,13 @@ void CCharacterComponent::ReplaceMonsterSkin(CM2Model* model, const CreatureDisp
             }
         }
 
-        for (const auto& entry : skin->second.geosets) {
-            model->SetGeometryVisible(entry.first * 100, entry.first * 100 + 99, 0);
+        for (const auto& entry : skin->geosets) {
+            // Group 0's mesh 0 is the shared base; its 1..99 are alternative bodies (Delve vehicles).
+            model->SetGeometryVisible(entry.first ? entry.first * 100 : 1, entry.first * 100 + 99, 0);
             model->SetGeometryVisible(entry.first * 100 + entry.second, entry.first * 100 + entry.second, 1);
         }
 
-        if (!skin->second.geosets.empty()) {
+        if (!skin->geosets.empty()) {
             model->OptimizeVisibleGeometry();
         }
     }

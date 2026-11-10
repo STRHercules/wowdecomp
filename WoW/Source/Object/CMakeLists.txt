@@ -14,3 +14,8 @@ target_link_libraries(Object
         Extension
         ASECM3Host
 )
+
+# Unit_C's retail blocks (rider poses, Mount Studio replacements, Ethereal hands) need the define RetailAssets carries.
+if (WOWDECOMP_RETAIL_ASSETS)
+    target_link_libraries(Object PRIVATE RetailAssets)
+endif ()

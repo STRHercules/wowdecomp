@@ -75,9 +75,12 @@ inline bool ParseMountOverrides(const std::string& input, std::map<uint32_t, Mou
 struct MountSkin
 {
     std::vector<std::pair<uint32_t, uint32_t>> textures, geosets;
+    int32_t riderAnim = -1;       // retail rider animation; may be newer than the client's list
+    uint32_t riderFallback = 91;  // client animation used when the rider model lacks riderAnim
 };
 
-// Rows: display;t;textureType;fileDataId  or  display;g;geosetGroup;geosetValue
+// Rows: display;t;textureType;fileDataId  or  display;g;geosetGroup;geosetValue (group 0 keeps mesh 0)
+//   or  display;r;riderAnim;fallbackAnim
 inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSkin>& output)
 {
     std::map<uint32_t, MountSkin> parsed;
@@ -105,8 +108,13 @@ inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSk
             return false;
         if (fields[1] == "t" && first < 32 && second)
             parsed[display].textures.emplace_back(first, second);
-        else if (fields[1] == "g" && first && first < 100 && second < 100)
+        else if (fields[1] == "g" && first < 100 && second < 100)
             parsed[display].geosets.emplace_back(first, second);
+        else if (fields[1] == "r" && first < 0x10000 && second < 0x1FA && parsed[display].riderAnim < 0)
+        {
+            parsed[display].riderAnim = static_cast<int32_t>(first);
+            parsed[display].riderFallback = second;
+        }
         else
             return false;
     }

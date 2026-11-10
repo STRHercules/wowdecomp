@@ -1205,6 +1205,15 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
     for (uint32_t i = 0; i < U32(b, 36); ++i) {
         size_t p = U32(b, 40) + size_t(i) * 24 + 2;
         uint16_t shader = U16(b, p);
+        // Retail reads both textures of a runtime two-texture shader from UV set 1 unless 0x4000 asks for set 2; the
+        // legacy combiners read set 2, which is often all zeros (Thrayir's glow card drew as a flat square). When both
+        // slots name the same texture, draw it once with the first op.
+        if (!(shader & 0xC088) && U16(b, p + 12) == 2 && Index(m, 0x80, U16(b, p + 14), 2)
+            && U16(m, U32(m, 0x84) + size_t(U16(b, p + 14)) * 2) == U16(m, U32(m, 0x84) + size_t(U16(b, p + 14)) * 2 + 2)) {
+            b[p] = uint8_t(shader & 0x70); b[p + 1] = 0;
+            b[p + 12] = 1; b[p + 13] = 0;
+            continue;
+        }
         if (shader >= 0x8000 && shader <= 0x8002) {
             ++shader;
             b[p] = uint8_t(shader);
@@ -1213,13 +1222,15 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
             shader = shader == 0x8003 ? 0x8010 : 0x8011;
             b[p] = uint8_t(shader); b[p + 1] = uint8_t(shader >> 8);
         } else if ((shader >= 0x8004 && shader <= 0x8007) || shader == 0x800a || shader == 0x800b || (shader >= 0x800d && shader <= 0x800f)
-            || shader == 0x8012) {
+            || shader == 0x8012 || shader == 0x8017) {
             // A base texture plus an additive (glow) layer: Opaque/Mod_AddAlpha(_Alpha, _Wgt), Mod_Add_Alpha (retail
-            // M2ShaderTable 4-7, 10, 11, 13-15), and 18 Mod_Dual_Crossfade. The two-texture fallback below draws them
-            // Mod_Mod, multiplying the base by a mostly black glow map (the Cookout Campfire's stones, 0x800a, came out
-            // black). Draw the base texture with the plain combiner. shortcut: no glow layer; write the additive combiners
-            // if an emissive piece looks flat.
-            b[p] = b[p + 1] = 0;
+            // M2ShaderTable 4-7, 10, 11, 13-15), 18 Mod_Dual_Crossfade and 23 Opaque_Alpha (a lerp to texture 2). The
+            // two-texture fallback below draws them Mod_Mod, multiplying the base by a mostly black glow map (the Cookout
+            // Campfire's stones, 0x800a) or by itself (Ratstallion's 0x8017 fur came out near black). Draw the base texture
+            // with the Mod combiner (0x10), which keeps its alpha: the Opaque one drew the Mechacycle's additive headlight
+            // beam (0x8006) as a solid panel. shortcut: no glow layer; write the additive combiners if an emissive piece
+            // looks flat.
+            b[p] = 0x10; b[p + 1] = 0;
             b[p + 12] = 1; b[p + 13] = 0;
         } else if (shader == 0x8015) {
             // Diffuse_EdgeFade_T1_T2 / Combiners_Mod_Mod: the 3.3.5 client has no edge-fade vertex shader, so draw it without the fade.
@@ -1237,9 +1248,9 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
             b[p] = 0; b[p + 1] = 0x80;
         } else if ((shader & 0x8000) && U16(b, p + 12) == 1) {
             // Other single-texture explicit shaders (0x8022 on Founder's Point doodads): draw the texture with
-            // the plain combiner, as the character-layer fallback above does. shortcut: loses the retail combiner's
-            // extra term; map the shader exactly if one of these looks wrong.
-            b[p] = b[p + 1] = 0;
+            // the Mod combiner so its alpha still applies. shortcut: loses the retail combiner's extra term; map the
+            // shader exactly if one of these looks wrong.
+            b[p] = 0x10; b[p + 1] = 0;
         } else if ((shader & 0x8000) && U16(b, p + 12) == 2) {
             // Other two-texture explicit shaders (the skyriding speed aura's 0x8021): draw with Diffuse_T1_T2 /
             // Combiners_Mod_Mod. shortcut: approximate combiner, map the shader exactly if an effect looks wrong.
