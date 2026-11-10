@@ -2,6 +2,8 @@
 #include "Engine/Source/Retail/RetailModel.h"
 #include <charconv>
 #include <cstdio>
+#include <cstring>
+#include <functional>
 #include <filesystem>
 #include <fstream>
 #include <map>
@@ -45,7 +47,32 @@ int main(int argc, char** argv) {
         const auto& model = fetch(modelId, ".m2");
         Retail::ModelFiles graph;
         std::vector<uint8_t> prepared;
-        if (!Retail::PrepareModel(model, prepared, graph, error)) throw std::runtime_error(error);
+        // A shared skeleton (SKID) and its SKPD parents are merged before preparation, as CascSource::LoadSkeleton does.
+        std::vector<uint8_t> skeleton;
+        std::function<void(uint32_t, std::vector<uint8_t>&, int)> loadSkeleton = [&](uint32_t id, std::vector<uint8_t>& out, int depth) {
+            if (depth >= 8) throw std::runtime_error("Retail skeleton parent cycle or depth limit");
+            out = fetch(id, ".skel");
+            uint32_t parent = 0;
+            for (size_t p = 0; p + 8 <= out.size();) {
+                uint32_t tag, size;
+                std::memcpy(&tag, out.data() + p, 4);
+                std::memcpy(&size, out.data() + p + 4, 4);
+                p += 8;
+                if (size > out.size() - p) throw std::runtime_error("Retail skeleton chunk exceeds file size");
+                if (tag == 0x44504b53 && size >= 12) std::memcpy(&parent, out.data() + p + 8, 4); // SKPD
+                p += size;
+            }
+            if (parent) {
+                std::vector<uint8_t> ancestor, merged;
+                loadSkeleton(parent, ancestor, depth + 1);
+                if (!Retail::MergeSkeleton(out, ancestor, merged, error)) throw std::runtime_error(error);
+                out.swap(merged);
+            }
+        };
+        Retail::ModelFiles inspected;
+        if (Retail::InspectModel(model, inspected, error) && inspected.skeleton) loadSkeleton(inspected.skeleton, skeleton, 0);
+        if (!Retail::PrepareModel(model, prepared, graph, error, skeleton.empty() ? nullptr : &skeleton))
+            throw std::runtime_error(error);
         // Validate temporary copies. Persist only the original decoded source bytes.
         for (size_t i = 0; i < graph.skins.size(); ++i) {
             auto copy = fetch(graph.skins[i], ".skin");

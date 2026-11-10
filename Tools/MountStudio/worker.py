@@ -664,7 +664,8 @@ class Studio:
             textures = display.get("TextureVariationFileDataID", [])
             if not isinstance(textures, list):
                 textures = [textures]
-            unsupported = "Fourth replaceable texture needs native support" if any(textures[3:]) else ""
+            # A fourth variation texture is dropped: no retail mount M2 has a texture of a type past 13 to receive it.
+            unsupported = ""
             catalog.append({"mount": mount["ID"], "spell": mount["SourceSpellID"],
                             "display": display_id, "name": mount.get("Name_lang", mount.get("Name", "")),
                             "model": model["FileDataID"], "textures": textures[:3],

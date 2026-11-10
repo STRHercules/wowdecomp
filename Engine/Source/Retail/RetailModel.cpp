@@ -424,7 +424,13 @@ bool Validate(const std::vector<uint8_t>& b, const ModelFiles& files, std::strin
             const auto found = std::find_if(files.animations.begin(), files.animations.end(), [&](const AnimationFile& f) {
                 return f.id == U16(b, p) && f.variation == U16(b, p + 2) && f.fileId;
             });
-            if (found == files.animations.end()) return Fail(error, "External animation has no AFID entry");
+            if (found == files.animations.end()) {
+                char message[96];
+                std::snprintf(message, sizeof(message), "External animation has no AFID entry (sequence %u: anim %u.%u, flags 0x%x)",
+                    unsigned(i), unsigned(U16(b, p)), unsigned(U16(b, p + 2)), unsigned(U32(b, p + 12)));
+                error = message;
+                return false;
+            }
         }
     }
     const Field lookups[] = {{0x24, 0x1c}, {0x34, 0x2c}, {0x78, 0x2c}, {0x80, 0x50}, {0x90, 0x58}, {0x98, 0x60}, {0xf8, 0xf0}};
@@ -920,6 +926,26 @@ bool PrepareModel(const std::vector<uint8_t>& bytes, std::vector<uint8_t>& prepa
         if (!SpliceSkeleton(b, files, *skeleton, error)) return false;
     }
     if (!Array(b, 0x1c, 64)) return Fail(error, "Invalid sequence array");
+    {
+        // Retail lists some external sequences whose .anim it no longer ships (Brawler's Burly Basilisk's anim 101, the
+        // Vicious Warsabers' 75, the Gladiator's Slitherdrakes' 60). Alias them to the model's Stand instead of failing.
+        const auto shipped = [&](uint32_t i) {
+            const size_t p = U32(b, 0x20) + size_t(i) * 64;
+            return (U32(b, p + 12) & 0x20) || std::any_of(files.animations.begin(), files.animations.end(),
+                [&](const AnimationFile& f) { return f.id == U16(b, p) && f.variation == U16(b, p + 2) && f.fileId; });
+        };
+        uint32_t stand = U32(b, 0x1c);
+        for (uint32_t i = 0; i < U32(b, 0x1c) && stand == U32(b, 0x1c); ++i)
+            if (!U16(b, U32(b, 0x20) + size_t(i) * 64) && !(U32(b, U32(b, 0x20) + size_t(i) * 64 + 12) & 0x40) && shipped(i))
+                stand = i;
+        for (uint32_t i = 0; i < U32(b, 0x1c) && stand < U32(b, 0x1c); ++i) {
+            const size_t p = U32(b, 0x20) + size_t(i) * 64;
+            if (!(U32(b, p + 12) & (0x20 | 0x40)) && !shipped(i)) {
+                Put(b, p + 12, U32(b, p + 12) | 0x40);
+                b[p + 62] = uint8_t(stand); b[p + 63] = uint8_t(stand >> 8);
+            }
+        }
+    }
     // 0x200000 only marks chunked .anim files (AFM2 wraps the legacy payload); see StripAnimationChunk.
     // Retail particle emitters are repacked into the legacy layout; unreadable ones are omitted, the model kept.
     {
@@ -1087,7 +1113,12 @@ bool ValidateSkin(const std::vector<uint8_t>& b, const std::vector<uint8_t>& m, 
         if (!n || n > 3 || (n == 3 && shader != 0x8010) ||
             ((shader & 0x8000) && shader != 0x8000 && !((shader >= 0x8001 && shader <= 0x8003 && n == 2) ||
                 (shader == 0x8010 && n == 3) || ((shader == 0x8011 || shader == 0x8012) && n == 2))))
-            return Fail(error, "Retail shader or texture count is not supported yet");
+        {
+            char text[96];
+            std::snprintf(text, sizeof(text), "Retail shader or texture count is not supported yet: 0x%04x with %u textures in batch %u",
+                unsigned(shader), unsigned(n), unsigned(i));
+            return Fail(error, text);
+        }
         // The batch geoset index (+6) is unused by the legacy renderer and may exceed the section count in newer models.
         const bool section = U16(b, p + 4) < U32(b, 28);
         const bool material = U16(b, p + 10) < U32(m, 0x70);
@@ -1211,6 +1242,14 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
         if (!(shader & 0xC088) && U16(b, p + 12) == 2 && Index(m, 0x80, U16(b, p + 14), 2)
             && U16(m, U32(m, 0x84) + size_t(U16(b, p + 14)) * 2) == U16(m, U32(m, 0x84) + size_t(U16(b, p + 14)) * 2 + 2)) {
             b[p] = uint8_t(shader & 0x70); b[p + 1] = 0;
+            b[p + 12] = 1; b[p + 13] = 0;
+            continue;
+        }
+        if (U16(b, p + 12) == 3 && shader != 0x8003 && shader != 0x8010) {
+            // Three-texture combiners other than Mod_Mod2x_Mod (the Mana Rays' and Electro Eels' 0x8011, the Wind
+            // Rider's 0x8009, Startouched Furline's runtime 0x4011) have no legacy equivalent: draw the base texture
+            // with the Mod combiner. shortcut: loses the overlay layers; map the combiner if one of these looks flat.
+            b[p] = 0x10; b[p + 1] = 0;
             b[p + 12] = 1; b[p + 13] = 0;
             continue;
         }

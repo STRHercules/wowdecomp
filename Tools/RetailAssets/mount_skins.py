@@ -20,20 +20,40 @@ FALLBACK = {896: 0}
 
 
 def model_meshes(originals, model_file):
-    """Submesh IDs of the model's first skin profile."""
+    """{submesh ID: the M2 texture types its batches draw} for the model's first skin profile."""
     data = (originals / f"{model_file}.bin").read_bytes()
     chunks, offset = {}, 0
     while offset + 8 <= len(data):
         size = struct.unpack_from("<I", data, offset + 4)[0]
         chunks[data[offset:offset + 4]] = (offset + 8, size)
         offset += 8 + size
+    model = data[chunks[b"MD21"][0]:]
     skin = (originals / f"{struct.unpack_from('<I', data, chunks[b'SFID'][0])[0]}.bin").read_bytes()
+    word = lambda blob, at: struct.unpack_from("<I", blob, at)[0]
+    half = lambda blob, at: struct.unpack_from("<H", blob, at)[0]
     count, start = struct.unpack_from("<II", skin, 0x1C)
-    return {struct.unpack_from("<H", skin, start + 48 * i)[0] for i in range(count)}
+    meshes = {half(skin, start + 48 * i): set() for i in range(count)}
+    types = [word(model, word(model, 0x54) + 16 * i) for i in range(word(model, 0x50))]
+    lookup = [half(model, word(model, 0x84) + 2 * i) for i in range(word(model, 0x80))]
+    for i in range(word(skin, 0x24)):
+        batch = word(skin, 0x28) + 24 * i
+        section, textures, first = half(skin, batch + 4), half(skin, batch + 14), half(skin, batch + 16)
+        if section < count:
+            meshes[half(skin, start + 48 * section)] |= {types[lookup[k]] for k in range(first, first + textures)
+                                                          if k < len(lookup) and lookup[k] < len(types)}
+    return meshes
 
 
-def geoset_rows(tables, retail_display, target, meshes, chosen):
-    """Retail's per-display choices; any other group with variants shows its first one, as retail does."""
+def empty_slots(tables, retail_display):
+    """M2 texture types the display leaves without a texture: 11-13 for variations 0-2, 5 for variation 3."""
+    slots = (tables["CreatureDisplayInfo"][retail_display].get("TextureVariationFileDataID") or []) + [0] * 4
+    return {kind for kind, fid in zip((11, 12, 13, 5), slots) if not fid}
+
+
+def geoset_rows(tables, retail_display, target, meshes, chosen, empty=frozenset()):
+    """Retail's per-display choices; a group that draws a texture the display leaves empty is hidden (retail cannot
+    show it either: Dapple Gray's banner is slot 13 and the display names two textures); any other group with
+    variants shows its first one, as retail does."""
     explicit = {row["GeosetIndex"] + 1: row["GeosetValue"] for row in tables["CreatureDisplayInfoGeosetData"].values()
                 if row["CreatureDisplayInfoID"] == retail_display}
     groups = defaultdict(set)
@@ -46,6 +66,8 @@ def geoset_rows(tables, retail_display, target, meshes, chosen):
             continue
         if group in explicit:
             rows.append(f"{target};g;{group};{explicit[group]}")
+        elif any(meshes.get(group * 100 + value, set()) & empty for value in groups[group]):
+            rows.append(f"{target};g;{group};0")
         elif len(groups[group]) > 1 and 1 in groups[group]:
             rows.append(f"{target};g;{group};1")
     return rows
@@ -91,8 +113,11 @@ def slot_rows(tables, retail_display, target_display):
     """Creature textures behind an empty slot: the import packed them leftward, so restore their real type."""
     slots = tables["CreatureDisplayInfo"][retail_display].get("TextureVariationFileDataID") or []
     packed = [fid for fid in slots[:3] if fid]
-    return [f"{target_display};t;{11 + i};{fid}" for i, fid in enumerate(slots[:3])
-            if fid and packed.index(fid) != i]
+    rows = [f"{target_display};t;{11 + i};{fid}" for i, fid in enumerate(slots[:3]) if fid and packed.index(fid) != i]
+    # The fourth variation fills texture type 5 (Coldflame Cormaera's glow map, the Arboons' and Petalwings' wing cards).
+    if len(slots) > 3 and slots[3]:
+        rows.append(f"{target_display};t;5;{slots[3]}")
+    return rows
 
 
 def skin_rows(tables, target_display, extra_id, chosen, model):
@@ -154,7 +179,8 @@ def main():
         skin = slot_rows(tables, display, esteria) + (skin_rows(tables, esteria, *custom) if custom else [])
         chosen = {int(row.split(";")[2]) for row in skin if ";g;" in row}
         meshes = model_meshes(manifest_path.parent / "originals", source_info["model_file_id"])
-        lines += skin + geoset_rows(tables, display, esteria, meshes, chosen)
+        filled = {int(row.split(";")[2]) for row in skin if ";t;" in row}  # customization can fill a display slot
+        lines += skin + geoset_rows(tables, display, esteria, meshes, chosen, empty_slots(tables, display) - filled)
         pose = rider_pose(lookup, source_info["retail_spell_id"])
         if pose:
             lines.append(f"{esteria};r;{pose[0]};{pose[1]}")

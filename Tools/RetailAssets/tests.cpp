@@ -1484,6 +1484,29 @@ int main(int argc, char** argv) {
             Check(Retail::PrepareSkin(pair, twoModel, error) && (pair[batch + 2] | pair[batch + 3] << 8) == expected
                 && pair[batch + 14] == 1, "same-texture runtime pair and Opaque_Alpha draw one texture with its alpha");
         }
+        auto threeLookups = body;
+        Put(threeLookups, 0x80, 3); Put(threeLookups, 0x84, uint32_t(threeLookups.size())); threeLookups.resize(threeLookups.size() + 6);
+        std::vector<uint8_t> threeModel;
+        Check(Retail::PrepareModel(Model(threeLookups), threeModel, files, error), error.c_str());
+        for (uint16_t shader : {uint16_t(0x8011), uint16_t(0x8009), uint16_t(0x4011)}) {
+            auto triple = skin; const size_t batch = Get(triple, 40);
+            triple[batch + 2] = uint8_t(shader); triple[batch + 3] = uint8_t(shader >> 8); triple[batch + 14] = 3;
+            Check(Retail::PrepareSkin(triple, threeModel, error) && (triple[batch + 2] | triple[batch + 3] << 8) == 0x10
+                && triple[batch + 14] == 1, "unmapped three-texture combiners draw their base texture");
+        }
+    }
+    {
+        auto missing = body; // sequence 1 is external (no 0x20) and no AFID ships it
+        const size_t first = Get(body, 0x20), second = missing.size();
+        missing.insert(missing.end(), body.begin() + first, body.begin() + first + 64);
+        missing.insert(missing.end(), body.begin() + first, body.begin() + first + 64);
+        missing[second + 64] = 75; Put(missing, second + 64 + 12, 0);
+        Put(missing, 0x1c, 2); Put(missing, 0x20, uint32_t(second));
+        std::vector<uint8_t> aliased;
+        Check(Retail::PrepareModel(Model(missing), aliased, files, error), error.c_str());
+        const size_t seq1 = Get(aliased, 0x20) + 64;
+        Check((Get(aliased, seq1 + 12) & 0x40) && aliased[seq1 + 62] == 0 && aliased[seq1 + 63] == 0,
+            "an external sequence without its .anim aliases the model's Stand");
     }
     for (size_t n = 0; n < valid.size(); ++n) {
         std::vector<uint8_t> truncated(valid.begin(), valid.begin() + n);

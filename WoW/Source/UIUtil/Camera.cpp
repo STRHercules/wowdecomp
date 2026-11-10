@@ -2201,6 +2201,13 @@ void CGCamera::UpdateMountHeightOrOffset(CGUnit_C* unit) {
         float delta = fabsf(height - this->m_targetHeightFar);
         this->m_flags |= 0x80;
 
+        // NOT IN BINARY. Retail mounts may place $CMA at their origin (Sunflare Driftmoth's sits on a bone at 0,0,0),
+        // which put the camera in the ground; this path skips FinishLoadingTarget's 0.83 yd floor. Keep the computed
+        // height for those.
+        if (height < 0.8333333f) {
+            delta = 0.0f;
+        }
+
         if (delta > 0.05f) {
             this->m_targetHeightFar = height;
             this->m_targetHeightNear = height;
