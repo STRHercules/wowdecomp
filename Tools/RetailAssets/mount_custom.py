@@ -17,22 +17,32 @@ sys.path.insert(0, str(Path(__file__).parent))
 from mount_skins import TABLES, customization  # noqa: E402
 
 PAINTS = [("Factory", 0xFF8A8D92), ("Blue", 0xFF2B6CD6), ("Green", 0xFF3FA34D), ("Red", 0xFFC0392B), ("Yellow", 0xFFE5B92E)]
-# Client-defined option sets by retail display: the G-99 Breakneck (D.R.I.V.E.) has no ChrModel; its garage paints
-# are its displays' texture variations: slot 11 the body (*_1.blp), slot 12 the trim (*_2.blp).
-SYNTHETIC = {124514: [
-    (1, "Body Paint", 11, [6236355, 6310327, 6310355, 6310357, 6310359]),
-    (2, "Trim Paint", 12, [6236357, 6310326, 6310354, 6310356, 6310358]),
-]}
+# Client-defined option sets by retail display, for mounts whose variants are separate displays rather than a ChrModel:
+# (option, name, texture types each choice fills, [(choice name, swatch ARGB, texture file)]); the first is the default.
+SYNTHETIC = {
+    # G-99 Breakneck (D.R.I.V.E.): garage paints, slot 11 the body (*_1.blp), slot 12 the trim (*_2.blp)
+    124514: [
+        (1, "Body Paint", (11,), [(p, s, f) for (p, s), f in zip(PAINTS, [6236355, 6310327, 6310355, 6310357, 6310359])]),
+        (2, "Trim Paint", (12,), [(p, s, f) for (p, s), f in zip(PAINTS, [6236357, 6310326, 6310354, 6310356, 6310358])]),
+    ],
+    # Hati: the six spectral wolves of retail's Hati creatures (displays 68716-68901, 90439), one texture in all three
+    # slots. Retail names none of them; named and swatched by each texture's average colour.
+    70574: [
+        (1, "Appearance", (11, 12, 13), [("Stormcaller", 0xFF58B0EE, 1380817), ("Deep Blue", 0xFF1E5AA2, 1380814),
+                                         ("Azure", 0xFF1E5EAC, 1380815), ("Teal", 0xFF366E9E, 1380816),
+                                         ("Slate", 0xFF405870, 1380818), ("Twilight", 0xFF5C80B8, 1380819)]),
+    ],
+}
 
 
 def synthetic_rows(target, options):
     rows = []
-    for option, name, texture_type, files in options:
+    for option, name, texture_types, choices in options:
         rows.append(f"{target};o;{option};{name}")
-        for index, ((paint, swatch), fid) in enumerate(zip(PAINTS, files)):
+        for index, (choice_name, swatch, fid) in enumerate(choices):
             choice = option * 100 + index + 1
-            rows.append(f"{target};c;{option};{choice};{swatch};{paint}")
-            rows.append(f"{target};t;{choice};{texture_type};{fid}")
+            rows.append(f"{target};c;{option};{choice};{swatch};{choice_name}")
+            rows += [f"{target};t;{choice};{texture_type};{fid}" for texture_type in texture_types]
         rows.append(f"{target};d;{option * 100 + 1}")
     return rows
 
