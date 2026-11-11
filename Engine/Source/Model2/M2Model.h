@@ -320,6 +320,11 @@ class CM2Model {
     // Explicit collection skinning: the child must already be attached at the parent's root.
     // No fields are added to the native model layout; null removes the pose binding.
     bool SetSkinParent(CM2Model* parent);
+    // NOT IN BINARY. A colour drawn additively over the model's opaque batches (CM2SceneRender::DrawBatch): retail
+    // state-kit gradients on mounts. Black clears it.
+    // alpha < 1 also draws the model's own batches translucent (not its attached children, such as the rider).
+    void SetRetailGlow(const C3Vector& color, float alpha = 1.0f);
+    bool GetRetailGlow(C3Vector& color, float* alpha = nullptr) const;
     bool HasSkinParent(const CM2Model* parent) const;
     C3Vector GetAttachmentPosition(uint32_t id);
     float GetAttachmentWorldScale(uint32_t id);

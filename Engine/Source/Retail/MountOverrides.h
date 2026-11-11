@@ -121,5 +121,77 @@ inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSk
     output.swap(parsed);
     return true;
 }
+
+// A retail display's state visual kit, as far as the client can show it: effect models attached to the mount
+// (SpellVisualKitModelAttach) and an emissive tint standing in for the kit's gradient effect.
+struct MountKitModel
+{
+    int32_t attachment = -1;  // -1: the model root; -2: the middle of the model's bounds (retail positioners)
+    uint32_t model = 0;       // FileDataID of the effect M2
+    float scale = 1.0f;
+    std::array<float, 3> offset{};
+};
+
+struct MountKit
+{
+    std::vector<MountKitModel> models;
+    bool tinted = false;
+    std::array<float, 3> emissive{};
+    float alpha = 1.0f;  // the mount's own batches draw at this alpha
+};
+
+// Rows: display;m;attachment;modelFileDataId;scale;offsetX;offsetY;offsetZ  or  display;e;r;g;b[;alpha]
+inline bool ParseMountKits(const std::string& input, std::map<uint32_t, MountKit>& output)
+{
+    std::map<uint32_t, MountKit> parsed;
+    std::istringstream lines(input);
+    std::string line;
+    const auto real = [](const std::string& value, float& result)
+    {
+        const auto conversion = std::from_chars(value.data(), value.data() + value.size(), result);
+        return !value.empty() && conversion.ec == std::errc() && conversion.ptr == value.data() + value.size()
+            && std::isfinite(result) && std::fabs(result) <= 1000.0f;
+    };
+    while (std::getline(lines, line))
+    {
+        if (!line.empty() && line.back() == '\r')
+            line.pop_back();
+        if (line.empty() || line.front() == '#')
+            continue;
+        std::vector<std::string> fields;
+        std::istringstream columns(line);
+        for (std::string field; std::getline(columns, field, ';');)
+            fields.push_back(field);
+        uint32_t display = 0;
+        if (fields.size() < 2 || std::from_chars(fields[0].data(), fields[0].data() + fields[0].size(), display).ec != std::errc()
+            || !display)
+            return false;
+        if (fields[1] == "m" && fields.size() == 8)
+        {
+            MountKitModel entry;
+            const auto attachment = std::from_chars(fields[2].data(), fields[2].data() + fields[2].size(), entry.attachment);
+            const auto model = std::from_chars(fields[3].data(), fields[3].data() + fields[3].size(), entry.model);
+            if (attachment.ec != std::errc() || entry.attachment < -2 || entry.attachment > 255 || model.ec != std::errc()
+                || !entry.model || !real(fields[4], entry.scale) || entry.scale <= 0
+                || !real(fields[5], entry.offset[0]) || !real(fields[6], entry.offset[1]) || !real(fields[7], entry.offset[2]))
+                return false;
+            parsed[display].models.push_back(entry);
+        }
+        else if (fields[1] == "e" && (fields.size() == 5 || fields.size() == 6))
+        {
+            MountKit& kit = parsed[display];
+            for (size_t i = 0; i < 3; ++i)
+                if (!real(fields[2 + i], kit.emissive[i]) || kit.emissive[i] < 0 || kit.emissive[i] > 1)
+                    return false;
+            if (fields.size() == 6 && (!real(fields[5], kit.alpha) || kit.alpha <= 0 || kit.alpha > 1))
+                return false;
+            kit.tinted = true;
+        }
+        else
+            return false;
+    }
+    output.swap(parsed);
+    return true;
+}
 }
 #endif

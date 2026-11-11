@@ -6460,6 +6460,38 @@ void CM2Model::AttachToParent(CM2Model* parent, uint32_t id, const C3Vector* pos
     this->m_refCount++;
 }
 
+static std::mutex s_retailGlowMutex;
+struct RetailGlow {
+    C3Vector color;
+    float alpha;
+};
+static std::map<const CM2Model*, RetailGlow> s_retailGlow;
+
+void CM2Model::SetRetailGlow(const C3Vector& color, float alpha) {
+    std::lock_guard<std::mutex> lock(s_retailGlowMutex);
+    if (color.x <= 0.0f && color.y <= 0.0f && color.z <= 0.0f && alpha >= 1.0f) {
+        s_retailGlow.erase(this);
+    } else {
+        s_retailGlow[this] = RetailGlow{color, alpha};
+    }
+}
+
+bool CM2Model::GetRetailGlow(C3Vector& color, float* alpha) const {
+    std::lock_guard<std::mutex> lock(s_retailGlowMutex);
+    if (s_retailGlow.empty()) {
+        return false;
+    }
+    const auto found = s_retailGlow.find(this);
+    if (found == s_retailGlow.end()) {
+        return false;
+    }
+    color = found->second.color;
+    if (alpha) {
+        *alpha = found->second.alpha;
+    }
+    return true;
+}
+
 bool CM2Model::SetSkinParent(CM2Model* parent) {
     std::lock_guard<std::mutex> lock(s_skinParentMutex);
     if (!parent) {
@@ -6992,6 +7024,7 @@ CM2Model::~CM2Model() {
     this->ReleaseBodyShapeBuffer();
     delete[] this->m_bodyShapeVertices;
     ClearSkinParents(this);
+    this->SetRetailGlow(C3Vector(0.0f, 0.0f, 0.0f), 1.0f);
     // Not in the original: the instance is still complete here.
     sExtensionMgr->OnModelDestroy(this);
 

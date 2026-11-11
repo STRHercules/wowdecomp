@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include "Engine/Source/Model2/CM2SceneRender.h"
+#include "Engine/Source/Retail/SourceContext.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "Engine/Source/Gx/CGxBuf.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -27,6 +28,8 @@ const uint32_t s_fogModes[7] = { 1, 1, 1, 2, 2, 3, 4 };
 
 // STATIC: 0x00AF58A8
 static C44Matrix s_identity;
+// NOT IN BINARY. Set after a retail glow overlay pass changed the shader colours (see DrawRetailGlow).
+static bool s_retailGlowDirty;
 
 // VERIFY: 6a3520ef manual
 // OFFSET: 0x0081F330
@@ -312,7 +315,11 @@ void CM2SceneRender::SetupMaterial() {
         if (!this->m_curMaterial->m_blendMode) {
             alphaRef = 0.0f;
         } else if (this->m_curMaterial->m_blendMode == 1) {
-            alphaRef = this->m_curElement->m_alpha * 0.87843138f;
+            // NOT IN BINARY. Retail art keys alpha at 128 (0.502); the legacy 224 cut holes in its soft edges (Crimson
+            // Rooster's body is a quarter 192-223).
+            const CM2Model* model = this->m_curElement->m_model;
+            const bool retail = model && model->m_shared && Retail::IsCdnPath(model->m_shared->m_fileName);
+            alphaRef = this->m_curElement->m_alpha * (retail ? 0.50196081f : 0.87843138f);
         } else {
             alphaRef = 0.0039215689f;
         }
@@ -368,7 +375,7 @@ void CM2SceneRender::SetupMaterial() {
         return;
     }
 
-    if (this->m_curType == this->m_prevType && this->m_curShared == this->m_prevShared && this->m_curLocalLighting == this->m_prevLocalLighting && this->m_curMaterial->m_blendMode == this->m_prevMaterial->m_blendMode && this->m_prevBatch && this->m_curBatch->m_colorIndex == this->m_prevBatch->m_colorIndex && this->m_prevElement->m_alpha == element->m_alpha) {
+    if (this->m_curType == this->m_prevType && this->m_curShared == this->m_prevShared && this->m_curLocalLighting == this->m_prevLocalLighting && this->m_curMaterial->m_blendMode == this->m_prevMaterial->m_blendMode && this->m_prevBatch && this->m_curBatch->m_colorIndex == this->m_prevBatch->m_colorIndex && this->m_prevElement->m_alpha == element->m_alpha && !s_retailGlowDirty) {
         if (!(this->m_curModel->m_diffuseColor != this->m_prevModel->m_diffuseColor) && !(this->m_curModel->m_emissiveColor != this->m_prevModel->m_emissiveColor)) {
             return;
         }
@@ -377,6 +384,7 @@ void CM2SceneRender::SetupMaterial() {
         element = this->m_curElement;
     }
 
+    s_retailGlowDirty = false;
     C3Vector diffuse = this->m_curModel->m_diffuseColor;
     C3Vector emissive = this->m_curModel->m_emissiveColor;
     uint16_t blend = this->m_curMaterial->m_blendMode;
@@ -487,6 +495,7 @@ void CM2SceneRender::DrawBatch() {
         // Not in the original binary: the unit outline re-draws a recorded unit's batch into its mask first.
         CUnitOutline::StampBatch(batch, this->m_curModel);
         g_theGxDevicePtr->Draw(&batch, 1);
+        this->DrawRetailGlow(batch);
     } else if (sharedVertices) {
         CGxMatrixStack& world = g_theGxDevicePtr->m_xforms[GxXform_World];
         world.m_dirty = 1;
@@ -510,6 +519,44 @@ void CM2SceneRender::DrawBatch() {
         CUnitOutline::StampBatch(batch, this->m_curModel);
         g_theGxDevicePtr->Draw(&batch, 1);
     }
+}
+
+// NOT IN BINARY. Retail state kits wash a mount in a gradient (Scarlet Lady's pink, Spectral Bear's blue). The
+// legacy shaders multiply emissive by the texture, so a tint vanishes on a dark coat: redraw the opaque batch
+// additively with a white texture, no diffuse and the glow as emissive. shortcut: one flat colour, not retail's
+// height gradient and rim; write a gradient shader if a mount needs the shape.
+void CM2SceneRender::DrawRetailGlow(const CGxBatch& batch) {
+    C3Vector glow;
+    if (this->m_curMaterial->m_blendMode > 1 || !this->m_curModel->GetRetailGlow(glow)) {
+        return;
+    }
+    static CTexture* s_white = []() {
+        static const uint32_t white = 0xFFFFFFFF;
+        return TextureCreateSolid(*reinterpret_cast<const CImVector*>(&white));
+    }();
+    CGxTex* gxTex = s_white ? TextureGetGxTex(s_white, 1, nullptr) : nullptr;
+    if (!gxTex) {
+        return;
+    }
+    g_theGxDevicePtr->RsPush();
+    for (uint32_t i = 0; i < 3; i++) {
+        g_theGxDevicePtr->RsSet(static_cast<EGxRenderState>(GxRs_Texture0 + i), gxTex);
+    }
+    GxRsSet(GxRs_BlendingMode, GxBlend_Add);
+    GxRsSet(GxRs_DepthWrite, 0);
+    C4Vector color;
+    color.x = color.y = color.z = 0.0f;
+    color.w = this->m_curElement->m_alpha;
+    CShaderEffect::SetDiffuse(color);
+    color.x = glow.x;
+    color.y = glow.y;
+    color.z = glow.z;
+    color.w = 0.0f;
+    CShaderEffect::SetEmissive(color);
+    CGxBatch overlay = batch;
+    g_theGxDevicePtr->Draw(&overlay, 1);
+    g_theGxDevicePtr->RsPop();
+    s_retailGlowDirty = true;  // the next batch must set its own colours again
 }
 
 // VERIFY: eebe62d2 manual

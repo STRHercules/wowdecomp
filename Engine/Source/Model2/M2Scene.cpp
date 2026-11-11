@@ -5,6 +5,7 @@
 #include <new>
 #include <xmmintrin.h>
 #include "Engine/Source/Model2/M2Scene.h"
+#include "Engine/Source/Retail/SourceContext.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -1517,7 +1518,9 @@ void __stdcall CM2Scene::ComputeElementShaders(M2Element* element) {
     if (!material->m_blendMode) {
         alphaTest = 0;
     } else if (material->m_blendMode == 1) {
-        alphaTest = static_cast<int32_t>(element->m_alpha * 224.0f);
+        // NOT IN BINARY. Retail art keys alpha at 128 (see CM2SceneRender's alpha reference).
+        const bool retail = element->m_model && element->m_model->m_shared && Retail::IsCdnPath(element->m_model->m_shared->m_fileName);
+        alphaTest = static_cast<int32_t>(element->m_alpha * (retail ? 128.0f : 224.0f));
     } else {
         alphaTest = 1;
     }
@@ -1868,6 +1871,11 @@ int32_t CM2Scene::Animate(const C3Vector& cameraPos) {
             batchCount = 0;
         }
 
+        // NOT IN BINARY. A retail state kit's gradient makes the mount translucent (Spectral Bear, Scarlet Lady).
+        float retailAlpha = 1.0f;
+        C3Vector retailGlow;
+        model->GetRetailGlow(retailGlow, &retailAlpha);
+
         for (uint32_t i = 0; i < batchCount; i++) {
             M2Batch* batch;
             M2SkinSection* section;
@@ -1888,7 +1896,7 @@ int32_t CM2Scene::Animate(const C3Vector& cameraPos) {
                 continue;
             }
 
-            float alpha = model->m_alpha;
+            float alpha = model->m_alpha * retailAlpha;
 
             if (batch->m_colorIndex < data->m_colors.m_count) {
                 alpha *= model->m_colors[batch->m_colorIndex].m_alphaTrack.m_currentValue;

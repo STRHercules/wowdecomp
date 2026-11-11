@@ -1,7 +1,8 @@
 """Write EsteriaMounts/skins.csv rows (skins, geosets, rider poses) for installed native retail mounts.
 
-Usage: mount_skins.py <reader> <definitions> <tables-dir> <output.csv> <Data/Retail/Packs>
-tables-dir holds <Name>.db2 for every table in TABLES.
+Usage: mount_skins.py <reader> <definitions> <tables-dir> <output.csv> <Data/Retail/Packs> [display-geosets.json]
+tables-dir holds <Name>.db2 for every table in TABLES. display-geosets.json maps "<build>:<display>" to
+[[GeosetIndex, GeosetValue], ...] for mounts imported from another build's export (their displays are not in tables-dir).
 """
 import json
 import struct
@@ -154,7 +155,8 @@ def skin_rows(tables, target_display, extra_id, chosen, model):
 
 
 def main():
-    reader, definitions, source, output, packs = sys.argv[1:]
+    reader, definitions, source, output, packs = sys.argv[1:6]
+    foreign_geosets = json.loads(Path(sys.argv[6]).read_text(encoding="utf-8")) if len(sys.argv) > 6 else {}
     sys.path.insert(0, reader)
     from wotlkconv.db.db2 import parse_db2
     from wotlkconv.db.dbd import DbdIndex
@@ -175,6 +177,16 @@ def main():
         if target.get("kind") != "mount":
             continue
         display, esteria = source_info["retail_display_id"], target["ids"]["CreatureDisplayInfo"]
+        if "fourth_texture" in source_info:  # written only by recipes made from another build's export
+            # A mount from another build or product (wago.tools exports of newer retail, Forever, Classic): these
+            # tables lack its display, or hold an unrelated one under the same ID. Its recipe holds its textures, with
+            # no gaps, and its fourth texture; its geosets come from display-geosets.json. shortcut: no rider pose for these.
+            display = f"{source_info['metadata_build']}:{display}"
+            for index, value in foreign_geosets.get(display, []):
+                tables["CreatureDisplayInfoGeosetData"][f"{display}:{index}"] = {
+                    "CreatureDisplayInfoID": display, "GeosetIndex": index, "GeosetValue": value}
+            tables["CreatureDisplayInfo"][display] = {"ExtendedDisplayInfoID": 0, "TextureVariationFileDataID":
+                (source_info["texture_file_ids"] + [0, 0, 0])[:3] + [source_info.get("fourth_texture") or 0]}
         custom = customization(tables, display)
         skin = slot_rows(tables, display, esteria) + (skin_rows(tables, esteria, *custom) if custom else [])
         chosen = {int(row.split(";")[2]) for row in skin if ";g;" in row}

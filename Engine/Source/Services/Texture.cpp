@@ -11,6 +11,7 @@
 #include "Engine/Source/Images/tga.h"
 #include "Engine/Source/Os/System.h"
 #include "Engine/Source/Os/TimeManager.h"
+#include "Engine/Source/BlizzardCore/Source/System/Log/Log.h"
 #include "Engine/Source/Services/AsyncFile.h"
 #include "Engine/Source/Services/SysMessage.h"
 #include "Engine/Source/Services/Texture.h"
@@ -85,6 +86,20 @@ static int32_t s_atlasEnable;
 
 // STATIC: 0x00B49C90
 static MipBits* s_mipBits;
+
+// NOT IN BINARY. s_mipBits holds a 1024x1024 ARGB8888 chain, the largest the stock client decodes; retail palettized
+// textures go to 2048 (Sha-scarred Drake's 6799146) and overran it. Grow it to fit the chain being decoded.
+static uint32_t s_mipBitsSize;
+
+static void EnsureMipBits(uint32_t width, uint32_t height) {
+    const uint32_t size = MippedImgCalcSize(PIXEL_ARGB8888, width, height);
+    if (size <= s_mipBitsSize) {
+        return;
+    }
+    SMemFree(s_mipBits, __FILE__, __LINE__, 0);
+    s_mipBits = static_cast<MipBits*>(SMemAlloc(size, __FILE__, __LINE__, 0));
+    s_mipBitsSize = size;
+}
 
 // STATIC: 0x00B49C94
 static int32_t s_pumping;
@@ -730,6 +745,11 @@ int32_t TextureLoadBlpMips(char* fileName, char* extension, int32_t flags, MipBi
         *pixelFormat = pixels;
     }
 
+    if (*images && *images == s_mipBits) {
+        EnsureMipBits(imageWidth, imageHeight);
+        *images = s_mipBits;
+    }
+
     if (!image.LockChain(pixels, *images, bestMip)) {
         return 0;
     }
@@ -1219,6 +1239,14 @@ void FillInSolidTexture(const CImVector& color, CTexture* texture) {
     SStrCopy(texture->m_filename, "SolidTexture", 260);
 }
 
+// NOT IN BINARY. Texture reads share a 4 MB budget and wait until they fit, so a larger file (retail's 11 MB palettized
+// 2048x2048 skins: Sha-scarred Drake's 6799146) waited forever and left its model undrawable; it only loaded when the
+// unsigned budget happened to wrap. Let an oversized read through whenever the budget is not already spent (waiting
+// for an idle budget stalled if any load's share was never returned).
+static bool AsyncTextureOversizedReady(const CAsyncObject* object) {
+    return object->m_size > 0x400000 && s_asyncLoadBufferUsed < 0x400000;
+}
+
 // VERIFY: f77dd4dd manual
 // OFFSET: 0x004B69E0
 void AsyncTextureHandler() {
@@ -1227,9 +1255,9 @@ void AsyncTextureHandler() {
     for (CAsyncObject* object = s_asyncLoadList.Head(); !s_asyncLoadList.IsEnd(object); ) {
         CAsyncObject* next = s_asyncLoadList.RawNext(object);
 
-        if (available >= object->m_size) {
+        if (available >= object->m_size || AsyncTextureOversizedReady(object)) {
             AsyncTextureProcess(object, 0);
-            available -= object->m_size;
+            available = available >= object->m_size ? available - object->m_size : 0;
         }
 
         object = next;
@@ -1238,9 +1266,9 @@ void AsyncTextureHandler() {
     for (CAsyncObject* object = s_asyncTextureList.Head(); !s_asyncTextureList.IsEnd(object); ) {
         CAsyncObject* next = s_asyncTextureList.RawNext(object);
 
-        if (available >= object->m_size) {
+        if (available >= object->m_size || AsyncTextureOversizedReady(object)) {
             AsyncTextureProcess(object, 0);
-            available -= object->m_size;
+            available = available >= object->m_size ? available - object->m_size : 0;
         }
 
         object = next;
@@ -1812,10 +1840,15 @@ int32_t PumpBlpTextureAsync(CTexture* texture, void* data) {
         image.m_header.m_colorEncoding == 3 ? PIXEL_ARGB8888
             : static_cast<PIXEL_FORMAT>(image.m_header.m_preferredFormat), image.m_header.m_alphaSize);
 
+    EnsureMipBits(width, height);
     s_pumping = 1;
 
     if (!image.LockChain2(texture->m_filename, pixelFormat, s_mipBits, texture->m_bestMip, 1)) {
         s_pumping = 0;
+        if (image.m_header.m_width > 1024 || image.m_header.m_height > 1024) {
+            Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Large texture decode failed: %s (%ux%u, encoding %u)\n", texture->m_filename,
+                unsigned(image.m_header.m_width), unsigned(image.m_header.m_height), unsigned(image.m_header.m_colorEncoding));
+        }
         texture->m_status.Add(STATUS_FATAL, "BLP Texture failure: \"%s\" decompression failed.\n", texture->m_filename);
         return 0;
     }
@@ -1912,6 +1945,7 @@ int32_t AsyncTextureStatus() {
 // OFFSET: 0x004B7F80
 void TextureInitialize() {
     s_mipBits = static_cast<MipBits*>(SMemAlloc(MippedImgCalcSize(PIXEL_ARGB8888, 1024, 1024), __FILE__, __LINE__, 0));
+    s_mipBitsSize = MippedImgCalcSize(PIXEL_ARGB8888, 1024, 1024);
     AsyncFileReadAddPollHandler(AsyncTextureHandler);
     AsyncFileReadAddStatusHandler(AsyncTextureStatus);
     s_currentTime = OsGetAsyncTimeMs();
@@ -2062,6 +2096,7 @@ void TextureDestroy() {
     s_gxTexCacheFree.Clear();
     SMemFree(s_mipBits, __FILE__, __LINE__, 0);
     s_mipBits = nullptr;
+    s_mipBitsSize = 0;
 
     for (int32_t x = 0; x < 6; x++) {
         for (int32_t y = 0; y < 6; y++) {
@@ -2263,7 +2298,7 @@ CTexture* CreateBlpAsync(char* extension, const char* fileName, uint32_t flags, 
 
     CAsyncObject* object = texture->m_asyncObject;
 
-    if (0x400000 - s_asyncLoadBufferUsed < object->m_size) {
+    if (0x400000 - s_asyncLoadBufferUsed < object->m_size && !AsyncTextureOversizedReady(object)) {
         s_asyncTextureList.LinkNode(object, 2, nullptr);
     } else {
         AsyncTextureProcess(object, 0);

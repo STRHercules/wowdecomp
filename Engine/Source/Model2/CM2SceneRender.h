@@ -61,6 +61,7 @@ class CM2SceneRender {
     void BeginFixed(const C3Vector& position);
     void Draw(M2PASS pass, M2Element* elements, uint32_t* indices, uint32_t count);
     void DrawBatch();
+    void DrawRetailGlow(const CGxBatch& batch);
     uint32_t DrawBatchedParticle(uint32_t index, M2Element* elements, uint32_t* indices, uint32_t count);
     void DrawBatchDoodad(M2Element* elements, uint32_t* indices);
     void DrawBatchProj();

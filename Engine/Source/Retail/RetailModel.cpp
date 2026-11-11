@@ -1213,12 +1213,15 @@ std::string HexWord(uint16_t v) {
 bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::string& error, bool degradeShaders) {
     if (!Range(b, 0, 48) || !Range(m, 0, 0x130) || !Array(b, 4, 2) || !Array(b, 28, 48) || !Array(m, 0x3c, 48))
         return Fail(error, "Invalid SKIN arrays");
-    // Retail leaves the old per-section influence count unused (zero). The legacy
-    // renderer uses it to choose a vertex shader and remap the bone palette.
+    // An empty skin (particle-only effect models such as 166237, the Spectral Bear's wisps) can carry uninitialized
+    // memory (0xCDCDCDCD) as its bone palette maximum; with nothing to draw, it means nothing.
+    if (!U32(b, 4) && !U32(b, 28)) Put(b, 44, 0);
+    // Retail leaves the old per-section influence count unused (zero), or understates it (Tuskarr Hermit Crab says 2-3
+    // where its vertices carry 4 weights). The legacy renderer uses it to choose a vertex shader and remap the bone
+    // palette, so take the larger of the stored and the actual count.
     for (uint32_t i = 0; i < U32(b, 28); ++i) {
         size_t p = U32(b, 32) + size_t(i) * 48;
-        if (U16(b, p + 16)) continue;
-        uint16_t influences = 0;
+        uint16_t influences = U16(b, p + 16);
         if (!Index(b, 4, U16(b, p + 4), U16(b, p + 6))) return Fail(error, "Invalid SKIN vertex range");
         for (uint32_t j = U16(b, p + 4); j < uint32_t(U16(b, p + 4)) + U16(b, p + 6); ++j) {
             uint16_t index = U16(b, U32(b, 8) + size_t(j) * 2);
@@ -1297,6 +1300,18 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
         } else if (shader & 0x8000) {
             return Fail(error, ("Retail explicit shader is not implemented yet: 0x" + HexWord(shader) + " in batch " + std::to_string(i) + " (textures " + std::to_string(U16(b, U32(b, 40) + size_t(i) * 24 + 14)) + ")").c_str());
         }
+    }
+    {
+        // Retail data can name a material past the model's table (Swift Spectral Tiger 125989's batch 4 uses material 4
+        // of 4); retail draws nothing there, so drop the batch instead of failing the model.
+        const size_t base = U32(b, 40);
+        uint32_t kept = 0;
+        for (uint32_t i = 0; i < U32(b, 36); ++i) {
+            if (U16(b, base + size_t(i) * 24 + 10) >= U32(m, 0x70)) continue;
+            if (kept != i) std::memmove(b.data() + base + size_t(kept) * 24, b.data() + base + size_t(i) * 24, 24);
+            ++kept;
+        }
+        Put(b, 36, kept);
     }
     // Diagnostic: WOW_RETAIL_HIDE_BATCHES=1,5 drops those batch indices (of the original skin) from every Retail model.
     if (const char* hide = std::getenv("WOW_RETAIL_HIDE_BATCHES")) {

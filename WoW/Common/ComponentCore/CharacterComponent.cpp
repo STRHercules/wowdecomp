@@ -5638,6 +5638,63 @@ const Retail::MountSkin* EsteriaMountSkin(uint32_t display) {
     const auto found = skins.find(display);
     return found == skins.end() ? nullptr : &found->second;
 }
+
+// Retail state visual kits on mount displays (effect models, gradient tint), from mount_kits.py.
+static const Retail::MountKit* EsteriaMountKit(uint32_t display) {
+    static const auto kits = []
+    {
+        std::map<uint32_t, Retail::MountKit> result;
+        void* bytes = nullptr;
+        uint32_t size = 0;
+        const bool loaded = SFile::LoadFile("EsteriaMounts\\kits.csv", &bytes, &size, 0, nullptr);
+        bool parsed = false;
+        if (loaded)
+        {
+            if (size <= 4 * 1024 * 1024)
+                parsed = Retail::ParseMountKits(std::string(static_cast<const char*>(bytes), size), result);
+            SFileUnloadFile(bytes);
+        }
+        if (loaded && !parsed)
+            Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Invalid mount kit catalog\n");
+        return result;
+    }();
+    const auto found = kits.find(display);
+    return found == kits.end() ? nullptr : &found->second;
+}
+
+// Attach the kit's effect models once per model (a skin can be reapplied); the parent owns them from then on and
+// releases them with itself.
+static void ApplyMountKit(CM2Model* model, const Retail::MountKit& kit) {
+    if (kit.tinted) {
+        model->SetRetailGlow(C3Vector(kit.emissive[0], kit.emissive[1], kit.emissive[2]), kit.alpha);
+    }
+    for (const auto& entry : kit.models) {
+        const std::string name = "retail\\" + std::to_string(entry.model) + ".m2";
+        const uint32_t id = entry.attachment < 0 ? 0xFFFFFFFF : static_cast<uint32_t>(entry.attachment);
+        bool present = false;
+        for (CM2Model* child = model->m_attachList; child && !present; child = child->m_attachNext)
+            present = child->m_attachmentId == id && child->m_shared && !SStrCmpI(child->m_shared->m_fileName, name.c_str(), STORM_MAX_STR)
+                && child->m_worldTransform.d0 == entry.offset[0] && child->m_worldTransform.d1 == entry.offset[1];
+        if (present)
+            continue;
+        CM2Model* effect = model->m_scene->CreateModel(name.c_str(), 0);
+        if (!effect)
+            continue;
+        effect->AttachToParent(model, id, nullptr, entry.attachment < 0);
+        C44Matrix transform(entry.scale);
+        transform.d0 = entry.offset[0];
+        transform.d1 = entry.offset[1];
+        transform.d2 = entry.offset[2];
+        if (entry.attachment == -2 && (model->m_fFlags & 1)) {
+            // retail's positioner paths circle the body; centre them on it rather than on the feet
+            const CAaBox& box = model->m_shared->m_data->m_bounds.m_extent;
+            transform.d2 += (box.b.z + box.t.z) * 0.5f;
+        }
+        effect->m_worldTransform = transform;
+        effect->m_fFlags |= 0x8000;
+        effect->Release();
+    }
+}
 #endif
 
 // VERIFY: 505c73ad manual
@@ -5689,6 +5746,10 @@ void CCharacterComponent::ReplaceMonsterSkin(CM2Model* model, const CreatureDisp
         if (!skin->geosets.empty()) {
             model->OptimizeVisibleGeometry();
         }
+    }
+
+    if (const Retail::MountKit* kit = EsteriaMountKit(static_cast<uint32_t>(displayRec->m_id))) {
+        ApplyMountKit(model, *kit);
     }
 #endif
 

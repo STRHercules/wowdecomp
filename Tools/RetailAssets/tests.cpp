@@ -1474,6 +1474,19 @@ int main(int argc, char** argv) {
     Check(Retail::PrepareSkin(unusedInfluences, prepared, error), "derive unused Retail skin influence count");
     Check(unusedInfluences[Get(zeroMax, 32) + 16] == 1, "reconstructed skin influence count");
     {
+        auto twoWeights = body; twoWeights[Get(body, 0x40) + 12] = 200; twoWeights[Get(body, 0x40) + 13] = 55;
+        std::vector<uint8_t> weighted;
+        Check(Retail::PrepareModel(Model(twoWeights), weighted, files, error), error.c_str());
+        auto understated = zeroMax; // stores 1 influence; the vertex carries 2 weights, both on bone 0
+        Check(Retail::PrepareSkin(understated, weighted, error) && understated[Get(zeroMax, 32) + 16] == 2,
+            "an understated retail influence count is raised to the vertices' weights");
+        std::vector<uint8_t> empty(48); Put(empty, 0, 0x4e494b53); Put(empty, 44, 0xcdcdcdcd);
+        Check(Retail::PrepareSkin(empty, weighted, error) && Get(empty, 44) == 0, error.c_str());
+        auto pastMaterials = zeroMax; pastMaterials[Get(zeroMax, 40) + 10] = 1; // the model has one material
+        Check(Retail::PrepareSkin(pastMaterials, weighted, error) && Get(pastMaterials, 36) == 0,
+            "a batch naming a material past the model's table is dropped");
+    }
+    {
         auto twoLookups = body; // both texture lookups name texture 0
         Put(twoLookups, 0x80, 2); Put(twoLookups, 0x84, uint32_t(twoLookups.size())); twoLookups.resize(twoLookups.size() + 4);
         std::vector<uint8_t> twoModel;
@@ -1620,6 +1633,16 @@ int main(int argc, char** argv) {
         Check(Retail::ParseMountSkins("201;r;1490;91\n", skins) && skins.at(201).riderAnim == 1490
             && skins.at(201).riderFallback == 91 && !Retail::ParseMountSkins("201;r;120;600\n", skins)
             && !Retail::ParseMountSkins("201;r;120;0\n201;r;97;0\n", skins), "rider pose rows");
+        std::map<uint32_t, Retail::MountKit> kits;
+        Check(Retail::ParseMountKits("# c\r\n300;m;-1;7507893;0.5;-1;0;0\r\n300;m;17;7507894;0.12;0.03;-0.17;0.43\n300;e;0.273;0.133;0.231\n", kits)
+            && kits.at(300).models.size() == 2 && kits.at(300).models[0].attachment == -1 && kits.at(300).models[1].offset[1] < 0
+            && kits.at(300).tinted && kits.at(300).emissive[2] > 0.23f, "mount kit models and tint");
+        Check(!Retail::ParseMountKits("300;m;17;0;1;0;0;0\n", kits) && !Retail::ParseMountKits("300;e;2;0;0\n", kits)
+            && !Retail::ParseMountKits("300;m;17;5;1;0;0\n", kits) && !Retail::ParseMountKits("300;m;-2;5;1;0;0;0\n", kits)
+            && kits.size() == 1, "bad mount kit rows rejected");
+        Check(Retail::ParseMountKits("301;m;-2;7507893;0.5;-1;0;0\n301;e;0.1;0.2;0.3;0.5\n", kits) && kits.at(301).models[0].attachment == -2
+            && kits.at(301).alpha == 0.5f && !Retail::ParseMountKits("301;e;0.1;0.2;0.3;0\n", kits)
+            && !Retail::ParseMountKits("301;m;-3;5;1;0;0;0\n", kits), "kit translucency and body-centred effects");
     }
     auto temp = std::filesystem::temp_directory_path() / ("wow-retail-tests-" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
     std::filesystem::create_directories(temp);
