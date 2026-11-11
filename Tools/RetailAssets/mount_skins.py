@@ -1,8 +1,10 @@
 """Write EsteriaMounts/skins.csv rows (skins, geosets, rider poses) for installed native retail mounts.
 
 Usage: mount_skins.py <reader> <definitions> <tables-dir> <output.csv> <Data/Retail/Packs> [display-geosets.json]
-tables-dir holds <Name>.db2 for every table in TABLES. display-geosets.json maps "<build>:<display>" to
-[[GeosetIndex, GeosetValue], ...] for mounts imported from another build's export (their displays are not in tables-dir).
+                      [imported-riders.json]
+tables-dir holds <Name>.db2 for every table in TABLES. For mounts imported from another build's export (their displays
+and spells are not in tables-dir): display-geosets.json maps "<build>:<display>" to [[GeosetIndex, GeosetValue], ...],
+imported-riders.json maps "<build>:<spell>" to [retail rider anim, client anim] (the same rule as rider_pose).
 """
 import json
 import struct
@@ -157,6 +159,7 @@ def skin_rows(tables, target_display, extra_id, chosen, model):
 def main():
     reader, definitions, source, output, packs = sys.argv[1:6]
     foreign_geosets = json.loads(Path(sys.argv[6]).read_text(encoding="utf-8")) if len(sys.argv) > 6 else {}
+    foreign_riders = json.loads(Path(sys.argv[7]).read_text(encoding="utf-8")) if len(sys.argv) > 7 else {}
     sys.path.insert(0, reader)
     from wotlkconv.db.db2 import parse_db2
     from wotlkconv.db.dbd import DbdIndex
@@ -180,7 +183,7 @@ def main():
         if "fourth_texture" in source_info:  # written only by recipes made from another build's export
             # A mount from another build or product (wago.tools exports of newer retail, Forever, Classic): these
             # tables lack its display, or hold an unrelated one under the same ID. Its recipe holds its textures, with
-            # no gaps, and its fourth texture; its geosets come from display-geosets.json. shortcut: no rider pose for these.
+            # no gaps, and its fourth texture; its geosets and rider pose come from the two side files.
             display = f"{source_info['metadata_build']}:{display}"
             for index, value in foreign_geosets.get(display, []):
                 tables["CreatureDisplayInfoGeosetData"][f"{display}:{index}"] = {
@@ -193,7 +196,10 @@ def main():
         meshes = model_meshes(manifest_path.parent / "originals", source_info["model_file_id"])
         filled = {int(row.split(";")[2]) for row in skin if ";t;" in row}  # customization can fill a display slot
         lines += skin + geoset_rows(tables, display, esteria, meshes, chosen, empty_slots(tables, display) - filled)
-        pose = rider_pose(lookup, source_info["retail_spell_id"])
+        if "fourth_texture" in source_info:  # its spell ID means something else (or nothing) in these tables
+            pose = foreign_riders.get(f"{source_info['metadata_build']}:{source_info['retail_spell_id']}")
+        else:
+            pose = rider_pose(lookup, source_info["retail_spell_id"])
         if pose:
             lines.append(f"{esteria};r;{pose[0]};{pose[1]}")
     Path(output).write_text("# display;t;textureType;fileDataId | display;g;geosetGroup;geosetValue\n"
