@@ -98,6 +98,10 @@ namespace Retail::Db2::appearance
      */
     bool BuildForCreature(uint32_t creatureDisplayInfoId, Recipe& out);
 
+    /// The appearance of a non-player ChrModel (customizable mounts: Dragonflight drakes, Delve vehicles) for the
+    /// given choices; choices of other models are ignored. False when the tables hold no such model.
+    bool BuildForChrModel(uint32_t chrModelId, const uint32_t* choiceIds, uint32_t choiceCount, Recipe& out);
+
     /// The ChrModel a race and sex resolve to, 0 when the tables pair them with none. The unit a
     /// model's customization hangs off is the ChrModel, not the race, so this is where an enumeration
     /// starts.

@@ -630,6 +630,27 @@ namespace Retail::Db2::appearance
         return out.modelFileDataId != 0;
     }
 
+    bool BuildForChrModel(uint32_t chrModelId, const uint32_t* choiceIds, uint32_t choiceCount, Recipe& out)
+    {
+        out.Clear();
+        EnsureLoaded();
+        const wdc5::Row* model = State().status.loaded ? State().chrModel.Find(chrModelId) : nullptr;
+        if (!model) return false;
+
+        out.skeletonFileDataId = State().chrModel.Value(*model, "SkeletonFileDataID");
+        out.textureLayoutId    = State().chrModel.Value(*model, "CharComponentTextureLayoutID");
+        out.modelFileDataId    = ModelFileFromDisplay(State().chrModel.Value(*model, "DisplayID"));
+        for (uint32_t i = 0; i < choiceCount; ++i) {
+            const auto* choice = State().choice.Find(choiceIds[i]);
+            const auto* option = choice ? State().option.Find(State().choice.Value(*choice, "ChrCustomizationOptionID")) : nullptr;
+            if (option && State().option.Value(*option, "ChrModelID") == chrModelId)
+                AddChoice(choiceIds[i], out.textureLayoutId, choiceIds, choiceCount, out, false);
+        }
+        std::stable_sort(out.layers.begin(), out.layers.end(),
+                         [](const TextureLayer& a, const TextureLayer& b) { return a.layer < b.layer; });
+        return out.modelFileDataId != 0;
+    }
+
     bool BuildForCreature(uint32_t creatureDisplayInfoId, Recipe& out)
     {
         out.Clear();

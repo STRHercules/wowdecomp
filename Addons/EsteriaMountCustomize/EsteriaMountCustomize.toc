@@ -1,0 +1,5 @@
+## Interface: 30300
+## Title: Esteria Mount Customization
+## Notes: Retail-style customization for Dragonflight drakes, the D.R.I.V.E. and other customizable mounts (Mount Journal > Customize).
+esteria_style.lua
+EsteriaMountCustomize.lua

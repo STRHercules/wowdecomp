@@ -28,6 +28,12 @@ STORM_DLL = REPO / "Tools" / "MountStudio" / "runtime" / "backend" / "StormLib.d
 
 # (file, old, new, expected matches)
 PATCHES = {
+    # the journal's info pane tells Addons/EsteriaMountCustomize which mount is shown (its Customize button)
+    "modules" + B + "collections" + B + "journal.lua": [
+        ("local function updateInfo()\n    local entry = selectedEntry()\n",
+         "local function updateInfo()\n    local entry = selectedEntry()\n"
+         "    if EsteriaMountCustomize_UpdateJournal then EsteriaMountCustomize_UpdateJournal(isMount() and entry or nil, model) end\n", 1),
+    ],
     "modules" + B + "modules.xml": [
         ('<Script file="micromenu.lua"/>', '<Script file="esteria_microbuttons.lua"/>\n    <Script file="micromenu.lua"/>', 1),
     ],
@@ -220,6 +226,9 @@ def main():
         entries.update(tree(REPO / "Addons" / addon, "Interface" + B + "AddOns" + B + addon + B))
     # The Codex draws with the character creator's style kit: one file, shipped in both places.
     entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + "esteria_style.lua"] = (
+        REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
+    entries.update(tree(REPO / "Addons" / "EsteriaMountCustomize", "Interface" + B + "AddOns" + B + "EsteriaMountCustomize" + B))
+    entries["Interface" + B + "AddOns" + B + "EsteriaMountCustomize" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     entries.update(tree(REPO / "Addons" / "EsteriaToolChest", "Interface" + B + "AddOns" + B + "EsteriaToolChest" + B))
     entries["Interface" + B + "AddOns" + B + "EsteriaToolChest" + B + "esteria_style.lua"] = (

@@ -1,6 +1,7 @@
 #include "Engine/Source/Retail/BodyShape.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/MountCustomize.h"
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Retail/Ethereal.h"
 #endif
@@ -22850,6 +22851,7 @@ void CGUnit_C::CreateUnitMount(int32_t a2, int32_t a3) {
         CCharacterComponent::ApplyMonsterGeosets(mount, displayInfo);
         CCharacterComponent::ReplaceMonsterSkin(mount, displayInfo, modelData);
 #if defined(WOWDECOMP_RETAIL_ASSETS)
+        MountCustomize::ApplyOwner(mount, static_cast<uint32_t>(displayInfo->m_id), this->m_obj->m_guid.m_guid);
         ApplyRetailRiderPose(this, static_cast<uint32_t>(displayInfo->m_id));
 #endif
         this->SetMountModel(mount);
