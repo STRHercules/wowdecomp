@@ -1444,10 +1444,17 @@ int main(int argc, char** argv) {
     invalidTable = newItem; Put(invalidTable, 4, 0xffffffff);
     Check(!Retail::MergeClientTable("item.dbc", baseItem, invalidTable, prepared, error), "reject overflowing table counts");
     for (const auto& schema : {std::pair<const char*, unsigned>{"creaturemodeldata.dbc", 28},
-        {"creaturedisplayinfo.dbc", 16}, {"spell.dbc", 234}, {"spellicon.dbc", 2}, {"skilllineability.dbc", 14}}) {
+        {"creaturedisplayinfo.dbc", 16}, {"spell.dbc", 234}, {"spellicon.dbc", 2}, {"skilllineability.dbc", 14},
+        {"spellvisual.dbc", 32}, {"spellvisualkit.dbc", 38}, {"spellvisualkitmodelattach.dbc", 10}}) {
         Check(Retail::MergeClientTable(schema.first, table(schema.second, 1), table(schema.second, 2), prepared, error), "mount table additions");
         Check(!Retail::MergeClientTable(schema.first, table(schema.second, 1), table(schema.second, 1), prepared, error), "mount ID collision rejection");
     }
+    auto baseEffect = table(7, 10), newEffect = table(7, 20);
+    newEffect.push_back('E'); newEffect.push_back(0); Put(newEffect, 16, 3); Put(newEffect, 28, 1);
+    Check(Retail::MergeClientTable("spellvisualeffectname.dbc", baseEffect, newEffect, prepared, error) &&
+        Get(prepared, 4) == 2 && Get(prepared, 56) == 2, "append effect names and relocate their file strings");
+    Put(newEffect, 28, 99);
+    Check(!Retail::MergeClientTable("spellvisualeffectname.dbc", baseEffect, newEffect, prepared, error), "reject invalid effect name strings");
     Check(Retail::MergeClientTable("spell.dbc", table(234, 13990005), table(234, 300000), prepared, error) &&
         Get(prepared, 20) == 13990005, "preserve Esteria's existing high spell IDs verbatim");
     Check(!Retail::MergeClientTable("spell.dbc", table(234, 1), table(234, 13990005), prepared, error), "new imports retain bounded allocation policy");

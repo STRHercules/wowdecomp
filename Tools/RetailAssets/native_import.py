@@ -26,6 +26,9 @@ MOUNT_TABLES = {"CreatureModelData": (28, (2,)), "CreatureDisplayInfo": (16, (6,
                 "Spell": (234, (*range(136, 152), *range(153, 169), *range(170, 186), *range(187, 203))),
                 "SpellIcon": (2, (1,)), "SkillLineAbility": (14, ())}
 TABLES.update(MOUNT_TABLES)
+# Client-only supplemental tables (spell visuals): carried by packs and the registry, no server store.
+CLIENT_TABLES = {"SpellVisual": (32, ()), "SpellVisualKit": (38, ()), "SpellVisualEffectName": (7, (1, 2)),
+                 "SpellVisualKitModelAttach": (10, ())}
 
 
 def digest(data):
@@ -181,11 +184,15 @@ def server_table_ids():
 def literal(value):
     if isinstance(value, int):
         return str(value)
+    if value == "":
+        return "''"  # an empty hex literal (0x) is a syntax error
     return "CONVERT(0x" + str(value).encode("utf-8").hex() + " USING utf8mb4) COLLATE utf8mb4_bin"
 
 
 def server_sql(manifest):
     target = manifest["target"]
+    if target.get("kind") == "client-rows":
+        return ""
     key, fingerprint = manifest["source_key"], manifest["definition_sha256"]
     records = target["records"]
     lines = [
@@ -293,6 +300,7 @@ def load_pack(stage):
         raise ValueError("Invalid source build")
     expected = {"item_template", "item_dbc", "itemdisplayinfo_dbc"}
     if target.get("kind") == "mount": expected |= {"creature_template", "creature_template_model", "creature_model_info"}
+    if target.get("kind") == "client-rows": expected = set()  # registry rows only; server content ships separately
     if set(target["records"]) != expected:
         raise ValueError("Unexpected server record tables")
     if manifest["definition_sha256"] != digest(json.dumps({"source": source, "target": target}, sort_keys=True).encode()):
@@ -310,6 +318,8 @@ def load_pack(stage):
 
 
 def verify_server(manifest):
+    if manifest["target"].get("kind") == "client-rows":
+        return
     for table, record in manifest["target"]["records"].items():
         where = " AND ".join(f"`{column}` <=> {literal(value)}" for column, value in record.items())
         if query(f"SELECT COUNT(*) FROM `{table}` WHERE {where};") != "1":
@@ -322,7 +332,7 @@ def verify_server(manifest):
 
 
 def combine_tables(packs, name):
-    fields, string_fields = TABLES[name]
+    fields, string_fields = TABLES[name] if name in TABLES else CLIENT_TABLES[name]
     result, values, ids = [], {}, set()
     for pack in packs:
         path = pack / "tables" / f"{name.lower()}.dbc"
@@ -419,7 +429,9 @@ def install(args):
     revision = digest(json.dumps(state, sort_keys=True).encode())[:16]
     registry = root / "Registries" / revision
     registry.mkdir(parents=True, exist_ok=True)
-    for name in TABLES:
+    for name in [*TABLES, *CLIENT_TABLES]:
+        if name in CLIENT_TABLES and not any((pack / "tables" / f"{name.lower()}.dbc").is_file() for pack in packs):
+            continue  # an empty client-only table would be an invalid WDBC with no rows to add
         data = combine_tables(packs, name)
         path = registry / f"{name.lower()}.dbc"
         if path.exists() and path.read_bytes() != data:

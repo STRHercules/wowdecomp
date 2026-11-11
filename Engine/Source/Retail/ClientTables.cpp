@@ -53,9 +53,12 @@ bool MergeClientTable(const std::string& table, const std::vector<uint8_t>& base
     merged.clear();
     const uint32_t fields = table == "item.dbc" ? 8 : table == "itemdisplayinfo.dbc" ? 25 :
         table == "creaturemodeldata.dbc" ? 28 : table == "creaturedisplayinfo.dbc" ? 16 :
-        table == "spell.dbc" ? 234 : table == "spellicon.dbc" ? 2 : table == "skilllineability.dbc" ? 14 : 0;
+        table == "spell.dbc" ? 234 : table == "spellicon.dbc" ? 2 : table == "skilllineability.dbc" ? 14 :
+        table == "spellvisual.dbc" ? 32 : table == "spellvisualkit.dbc" ? 38 :
+        table == "spellvisualeffectname.dbc" ? 7 : table == "spellvisualkitmodelattach.dbc" ? 10 : 0;
     if (!fields) return Reject(error, "Unsupported supplemental client table");
     std::vector<unsigned> strings;
+    if (table == "spellvisualeffectname.dbc") strings = {1, 2};
     if (fields == 25) { for (unsigned i = 1; i <= 6; ++i) strings.push_back(i); for (unsigned i = 15; i <= 22; ++i) strings.push_back(i); }
     if (fields == 28) strings = {2};
     if (fields == 16) strings = {6, 7, 8, 9};
