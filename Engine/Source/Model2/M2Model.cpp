@@ -7320,9 +7320,19 @@ void CM2Model::SetBoneSequence(uint32_t boneId, uint32_t sequenceId, uint32_t va
             }
         }
 
+        // NOT IN BINARY. A converted model whose lookup cannot reach the sequence (or that lacks it and its fallback)
+        // leaves index at 0xFFFF; the stock client then reads m_sequences[0xFFFF] and crashes. Leave the bone as is.
+        if (index >= data->m_sequences.m_count) {
+            return;
+        }
+
         this->PickRandomSequenceVariation(&variation, &index);
     } else if (pickRandom) {
         this->PickRandomSequenceVariation(&variation, &index);
+    }
+
+    if (index >= data->m_sequences.m_count) {
+        return;
     }
 
     if (!(data->m_sequences[index].m_flags & 0x20)) {
