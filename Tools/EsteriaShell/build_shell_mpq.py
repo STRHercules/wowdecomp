@@ -38,11 +38,11 @@ PATCHES = {
         ('<Script file="micromenu.lua"/>', '<Script file="esteria_microbuttons.lua"/>\n    <Script file="micromenu.lua"/>', 1),
     ],
     "modules" + B + "micromenu.lua": [
-        # the strip: Esteria's five buttons sit after Collections
+        # the strip: Esteria's six buttons sit after Collections
         ('MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),',
-         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
-        # five more buttons of 26 px each: the strip starts further left
-        ("-180", "-310", 3),
+         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
+        # six more buttons of 26 px each: the strip starts further left
+        ("-180", "-336", 3),
         # one row, however many buttons the profile's saved column count allows
         ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 16))", 1),
         # atlas rows for the new sheets
@@ -132,6 +132,19 @@ def compass(d, S, c):
     d.ellipse([cx - 4 * S, cy - 4 * S, cx + 4 * S, cy + 4 * S], fill=(255, 255, 255, 255))
 
 
+def paw_at(d, cx, cy, u, c):
+    # a beast's paw print: the Incarnations mark, about 42 u wide
+    edge = (60, 40, 10, 255)
+    w = max(1, round(u))
+    d.ellipse([cx - 13 * u, cy - 6 * u, cx + 13 * u, cy + 15 * u], fill=c + (255,), outline=edge, width=w)
+    for x, y, r in ((-15, -12, 5.5), (-6, -21, 6), (6, -21, 6), (15, -12, 5.5)):
+        d.ellipse([cx + (x - r) * u, cy + (y - r) * u, cx + (x + r) * u, cy + (y + r) * u], fill=c + (255,), outline=edge, width=w)
+
+
+def paw(d, S, c):
+    paw_at(d, 32 * S, 45 * S, S, c)
+
+
 def house_at(d, cx, cy, u, c):
     # a gabled house with a door: the Neighborhood mark, about 44 u wide
     edge = (60, 40, 10, 255)
@@ -144,13 +157,13 @@ def house(d, S, c):
     house_at(d, 32 * S, 41 * S, S, c)
 
 
-def stock_micro(tint, dx=0):
+def stock_micro(tint, dx=0, mark=None):
     """One state of the stock micro bar's button: a 32x64 texture with the frame in its lower part, as Blizzard's are."""
     S = 4
     big = Image.new("RGBA", (32 * S, 64 * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(big)
     d.rounded_rectangle([(3 + dx) * S, (24 + dx) * S, (28 + dx) * S, (60 + dx) * S], radius=3 * S, fill=(42, 26, 18, 255), outline=tint + (255,), width=S)
-    house_at(d, (16 + dx) * S, (43 + dx) * S, S * 0.45, tint)
+    (mark or house_at)(d, (16 + dx) * S, (43 + dx) * S, S * 0.45, tint)
     return big.resize((32, 64), Image.LANCZOS)
 
 
@@ -216,6 +229,10 @@ def main():
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-flight.tga"] = tga(sheet(wing))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-fate.tga"] = tga(sheet(compass))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-neighborhood.tga"] = tga(sheet(house))
+    entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-incarnation.tga"] = tga(sheet(paw))
+    # the stock micro bar's Incarnations button (Addons/EsteriaIncarnations), for when DragonUI is off
+    for state, tint, dx in (("Up", (235, 200, 110), 0), ("Down", (190, 150, 70), 1), ("Disabled", (120, 120, 120), 0)):
+        entries["Interface" + B + "Esteria" + B + "IncarnationMicro-" + state + ".tga"] = tga(stock_micro(tint, dx, paw_at))
     # the stock micro bar's Neighborhood button (Addons/EsteriaHousing/Neighborhood.lua), for when DragonUI is off
     for state, tint, dx in (("Up", (235, 200, 110), 0), ("Down", (190, 150, 70), 1), ("Disabled", (120, 120, 120), 0)):
         entries["Interface" + B + "Esteria" + B + "NeighborhoodMicro-" + state + ".tga"] = tga(stock_micro(tint, dx))

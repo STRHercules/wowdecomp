@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Esteria Incarnations
+## Notes: Choose the body of your shapeshift forms and summoned demons (/incarnation or /incantation). Saved by the realm and seen by everyone.
+esteria_style.lua
+EsteriaIncarnationsData.lua
+EsteriaIncarnations.lua

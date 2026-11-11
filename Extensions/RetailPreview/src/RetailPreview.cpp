@@ -135,6 +135,52 @@ int ReportLoaded(lua_State* L) {
     return 1;
 }
 
+// RetailModelFit(modelFrame[, zoom]) -> true once the model has loaded and is framed. Frames the bind-pose vertex box
+// rather than the header radius, which converted models inflate with effect and collision extents (tiny previews).
+// zoom > 1 moves the camera closer. Used by the incarnation picker's cards and stage.
+int Fit(lua_State* L) {
+    auto* frame = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
+    const float zoom = std::max(0.2f, std::min(5.0f, static_cast<float>(luaL_optnumber(L, 2, 1.0))));
+    if (!frame->m_model || !frame->m_model->IsLoaded(0, 0)) { lua_pushboolean(L, false); return 1; }
+    const auto* data = frame->m_model->m_shared->m_data;
+    C3Vector lo(1e9f, 1e9f, 1e9f), hi(-1e9f, -1e9f, -1e9f);
+    for (uint32_t i = 0; i < data->m_vertices.m_count; ++i) {
+        const C3Vector& p = data->m_vertices[i].m_position;
+        lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y); lo.z = std::min(lo.z, p.z);
+        hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y); hi.z = std::max(hi.z, p.z);
+    }
+    if (!data->m_vertices.m_count) { lo = data->m_bounds.m_extent.b; hi = data->m_bounds.m_extent.t; }
+    const C3Vector center((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f);
+    const float dx = hi.x - lo.x, dy = hi.y - lo.y, dz = hi.z - lo.z;
+    const float radius = std::max(0.1f, 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz));
+    const float fov = 0.8f, distance = radius / std::sin(fov * 0.5f) * 1.02f / zoom;
+    // front three-quarter view, slightly above
+    C3Vector dir(0.84f, -0.46f, 0.28f);
+    const float len = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+    frame->m_facing = 0;
+    const float uiScale = frame->m_layoutScale * NDCToDDCHeight(1.0f) * 1.6666666f;
+    frame->m_modelScale = uiScale > 0 ? 1.0f / uiScale : 1.0f;
+    frame->m_position = C3Vector(0, 0, 0);
+    if (CCamera* camera = CameraCreate()) {
+        CameraSetCoord(camera, 7, C3Vector(center.x + dir.x / len * distance, center.y + dir.y / len * distance,
+                                           center.z + dir.z / len * distance));
+        CameraSetCoord(camera, 8, center);
+        CameraSetFloat(camera, 4, fov);
+        CameraSetFloat(camera, 3, std::max(0.01f, radius * 0.01f));
+        CameraSetFloat(camera, 2, radius * 40);
+        frame->SetCamera(camera);
+        HandleClose(reinterpret_cast<HOBJECT>(camera));
+    }
+    frame->m_light.SetLightType(M2LIGHT_DIRECT);
+    frame->m_light.SetDirection(C3Vector(-0.5f, -0.8f, -1));
+    frame->m_light.m_ambColor = C3Vector(0.75f, 0.75f, 0.75f);
+    frame->m_light.m_dirColor = C3Vector(0.65f, 0.65f, 0.65f);
+    frame->m_light.m_specColor = C3Vector(0.2f, 0.2f, 0.2f);
+    frame->m_light.SetVisible(1);
+    lua_pushboolean(L, true);
+    return 1;
+}
+
 int32_t Preview(const char*, const char* arguments) {
     if (!FrameScript_GetContext()) return 0;
     if (arguments && std::string(arguments) == "hide") {
@@ -219,6 +265,7 @@ public:
         sExtensionMgr->RegisterLuaFunction("RetailModelBindTexture", BindTexture, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("RetailModelBindDisplay", BindDisplay, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("RetailModelReportLoaded", ReportLoaded, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("RetailModelFit", Fit, FRAMESCRIPT_CONTEXTS_ALL);
         if (const char* request = std::getenv("WOW_RETAIL_EQUIP_PREVIEW")) {
             Retail::HandItemAppearance appearance;
             if (ParseEquipment(request, appearance) && Retail::Source().SetMainHandPreview(appearance))

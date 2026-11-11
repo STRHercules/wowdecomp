@@ -1,4 +1,5 @@
--- Esteria's own buttons on DragonUI's micro strip (Transmog, Speedflying talents, Paths of Fate, Radio, Neighborhood), and the Talents
+-- Esteria's own buttons on DragonUI's micro strip (Transmog, Speedflying talents, Paths of Fate, Incarnations, Radio,
+-- Neighborhood), and the Talents
 -- button turned into Character Advancement. Loaded from modules.xml before micromenu.lua, which captures its
 -- button list in a file-scope local, so the buttons have to exist by the time it runs (as Pets & Mounts does).
 -- micromenu.lua reads addon.EsteriaMicro to place, skin and size the strip around them.
@@ -24,6 +25,11 @@ local SPECS = {
         stem = 'Fate', sheet = SHEETS .. 'esteria-fate',
         title = 'Paths of Fate', text = 'Spend perk points on the paths your character walks.',
         click = 'EsteriaPerks_MicroClick',
+    },
+    {
+        stem = 'Incarnation', sheet = SHEETS .. 'esteria-incarnation',
+        title = 'Incarnations', text = 'Choose the body of your shapeshift forms and summoned demons.',
+        click = 'EsteriaIncarnations_Toggle',
     },
     {
         stem = 'Radio', sheet = 'Interface\\AddOns\\EverlookBroadcasting\\Textures\\radio-micro.blp',
