@@ -26,6 +26,12 @@ void UpdateWorldBindings(uint32_t time);
 const char* PrepareUnitModel(CGUnit_C* unit,const char* path);
 void AttachUnitModel(CGUnit_C* unit);
 void RemoveUnitModel(CGUnit_C* unit);
+const char* PrepareMountModel(CGUnit_C* unit,const char* path,int32_t displayId,int32_t modelId);
+void AttachMountModel(CGUnit_C* unit);
+void RemoveMountModel(CGUnit_C* unit,CM2Model* expected=nullptr);
+CM2Model* CreatePreviewModel(CM2Scene* scene,const char* path);
+void UpdatePreviewModel(CM2Model* model);
+void RemovePreviewModel(CM2Model* model);
 void SetUnitAction(CGUnit_C* unit,uint32_t action);
 // Called when native code starts a base animation (attacks, casts, emotes): the M3 plays its matching clip once.
 void OnUnitBaseAnimation(CGUnit_C* unit,uint32_t animId,int32_t flags);

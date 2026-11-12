@@ -241,12 +241,12 @@ Solid(trait, "BACKGROUND", INK, 0.9):SetAllPoints(trait);
 trait.edges = Border(trait, GOLD_DIM, 0.8);
 trait.label = Label(trait, 11, GOLD);
 trait.label:SetPoint("LEFT", trait, "LEFT", 8, 0);
+-- Starting traits live in Traits.lua (loaded after this file): the button names them and opens the rechoose dialog.
 trait:SetScript("OnEnter", function(self)
     Tint(self.edges, GOLD, 1);
-    local t = D.TRAITS[C.snap and C.snap.trait or 0] or D.TRAITS[0];
-    Tip(self, "BACKGROUND · " .. string.upper(t.name), { { "+ " .. t.up, GOOD }, { "- " .. t.down, BAD },
-        { "Chosen when you were created. Change it once for free in the world.", MUTED } });
+    Tip(self, EsteriaPerksTraits.Label(), EsteriaPerksTraits.Lines());
 end);
+trait:SetScript("OnClick", function() HideTip(); EsteriaPerksTraits.Open(); end);
 trait:SetScript("OnLeave", function(self) Tint(self.edges, GOLD_DIM, 0.8); HideTip(); end);
 C.trait = trait;
 
@@ -889,7 +889,7 @@ overview:Hide();
 C.overview = overview;
 local OV = {};
 for _, spec in ipairs({
-    { "head", 10, GOLD_DIM, "BACKGROUND", -0 }, { "trait", 16, GOLD, nil, -4 }, { "up", 12, GOOD, nil, -8 },
+    { "head", 10, GOLD_DIM, "STARTING TRAITS", -0 }, { "trait", 16, GOLD, nil, -4 }, { "up", 12, GOOD, nil, -8 },
     { "down", 12, BAD, nil, -4 }, { "traitNote", 10, MUTED, nil, -6 },
     { "head2", 10, GOLD_DIM, "YOUR BUILD", -20 }, { "points", 12, TEXT, nil, -6 }, { "perks", 12, TEXT, nil, -4 },
     { "active", 12, TEXT, nil, -4 }, { "previews", 12, MUTED, nil, -4 },
@@ -914,11 +914,12 @@ end
 function C.ShowOverview(owned)
     local s = C.snap;
     overview:Show();
-    local trait = D.TRAITS[s and s.trait or 0] or D.TRAITS[0];
-    OV.trait:SetText(string.upper(trait.name));
-    OV.up:SetText("+ " .. trait.up);
-    OV.down:SetText("- " .. trait.down);
-    OV.traitNote:SetText("Chosen at creation. Change it once for free in the world.");
+    local ups, downs = EsteriaPerksTraits.Text();
+    OV.trait:SetText(EsteriaPerksTraits.Label());
+    OV.up:SetText(ups);
+    OV.down:SetText(downs);
+    OV.traitNote:SetText("Chosen at creation with trait points, apart from the perk points below. Rechoose them from the "
+        .. "button under your name: once for free.");
     local active, previews = 0, 0;
     for _, data in ipairs(owned) do if data.planned then previews = previews + 1; else active = active + 1; end end
     OV.points:SetText((s and s.spent or 0) .. " of " .. (s and s.earned or 0) .. " points spent, " .. Unspent() .. " unspent");
@@ -1062,8 +1063,7 @@ local function DrawHeader(animateFrom)
     C.level = level or 0;
     C.name:SetText(name or "");
     C.subtitle:SetText("Level " .. C.level .. " " .. (className or ""));
-    local t = D.TRAITS[s and s.trait or 0] or D.TRAITS[0];
-    C.trait.label:SetText("BACKGROUND  ·  " .. string.upper(t.name));
+    C.trait.label:SetText(EsteriaPerksTraits.Label());
     C.trait:SetWidth(C.trait.label:GetStringWidth() + 18);
     if not s then
         C.unspent:SetText("-");

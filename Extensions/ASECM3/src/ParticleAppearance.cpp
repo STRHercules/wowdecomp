@@ -7,10 +7,13 @@ double Value(const MaterialRecord& record,const char* field,double fallback=0){c
 uint32_t UInt(const MaterialRecord& record,const char* field){const double v=Value(record,field);if(v<0||v>UINT32_MAX||std::floor(v)!=v)throw Error(std::string("Invalid particle appearance integer: ")+field);return uint32_t(v);}
 float Fraction(const MaterialRecord& record,const char* field,float fallback=.5f){const double v=Value(record,field,fallback);if(v<0||v>1)throw Error(std::string("Invalid particle lifespan midpoint: ")+field);return float(v);}
 float Random(uint32_t& state){if(!state)state=0x6d2b79f5u;state^=state<<13;state^=state>>17;state^=state<<5;return float(double(state)/4294967296.0);}
-float Curve(float a,float b,float c,double age,float midpoint,uint32_t mode){
+// shortcut: hold keeps the mid value from the midpoint for `hold` of the lifespan; SC2's exact hold placement is unverified.
+float Curve(float a,float b,float c,double age,float midpoint,uint32_t mode,float hold=0){
     if(mode>1)throw Error("Unsupported particle appearance smoothing/hold mode");
-    const bool first=age<midpoint;const double duration=first?midpoint:1-midpoint;
-    double t=duration>0?(first?age:age-midpoint)/duration:1;t=std::clamp(t,0.0,1.0);
+    const double end=std::min(1.0,double(midpoint)+hold);
+    if(age>=midpoint&&age<end)return b;
+    const bool first=age<midpoint;const double duration=first?midpoint:1-end;
+    double t=duration>0?(first?age:age-end)/duration:1;t=std::clamp(t,0.0,1.0);
     if(mode==1)t=t*t*(3-2*t);
     return float((first?a:b)*(1-t)+(first?b:c)*t);
 }
@@ -33,7 +36,7 @@ ParticleAppearance ParticleAppearance::Capture(const MaterialRecord& source,cons
     out.m_sizeMid=Fraction(source,"size_anim_mid");out.m_rotationMid=Fraction(source,"rotation_anim_mid");out.m_colorMid=Fraction(source,"color_anim_mid");out.m_alphaMid=Fraction(source,"alpha_anim_mid");
     out.m_sizeMode=UInt(source,"size_smoothing");out.m_rotationMode=UInt(source,"rotation_smoothing");out.m_colorMode=UInt(source,"color_smoothing");
     if(out.m_sizeMode>1||out.m_rotationMode>1||out.m_colorMode>1)throw Error("Particle Bezier/hold interpolation requires further decoding");
-    for(const char* field:{"size_hold","rotation_hold","color_hold","alpha_hold"})if(Value(source,field)!=0)throw Error("Particle nonzero lifespan hold requires further decoding");
+    out.m_sizeHold=Fraction(source,"size_hold",0);out.m_rotationHold=Fraction(source,"rotation_hold",0);out.m_colorHold=Fraction(source,"color_hold",0);out.m_alphaHold=Fraction(source,"alpha_hold",0);
     out.m_alpha=(UInt(source,"flags")&0x200000)!=0;
     out.m_columns=std::max(1u,UInt(source,"uv_flipbook_cols"));out.m_rows=std::max(1u,UInt(source,"uv_flipbook_rows"));
     if(out.m_columns>1024||out.m_rows>1024)throw Error("Particle atlas exceeds 1024 rows/columns");
@@ -46,8 +49,8 @@ ParticleAppearance ParticleAppearance::Capture(const MaterialRecord& source,cons
 }
 ParticleVisual ParticleAppearance::At(double age)const{
     if(!std::isfinite(age))throw Error("Non-finite particle normalized age");age=std::clamp(age,0.0,1.0);
-    ParticleVisual out;out.size=Curve(m_size[0],m_size[1],m_size[2],age,m_sizeMid,m_sizeMode);out.rotation=Curve(m_rotation[0],m_rotation[1],m_rotation[2],age,m_rotationMid,m_rotationMode);
-    for(unsigned c=0;c<4;++c)out.color[c]=c==3&&!m_alpha?1:Curve(m_colors[0][c],m_colors[1][c],m_colors[2][c],age,c==3?m_alphaMid:m_colorMid,m_colorMode);
+    ParticleVisual out;out.size=Curve(m_size[0],m_size[1],m_size[2],age,m_sizeMid,m_sizeMode,m_sizeHold);out.rotation=Curve(m_rotation[0],m_rotation[1],m_rotation[2],age,m_rotationMid,m_rotationMode,m_rotationHold);
+    for(unsigned c=0;c<4;++c)out.color[c]=c==3&&!m_alpha?1:Curve(m_colors[0][c],m_colors[1][c],m_colors[2][c],age,c==3?m_alphaMid:m_colorMid,m_colorMode,c==3?m_alphaHold:m_colorHold);
     const bool first=age<m_uvMid;const double duration=first?m_uvMid:1-m_uvMid;
     const double t=duration>0?std::clamp((first?age:age-m_uvMid)/duration,0.0,1.0):1;
     const uint32_t start=m_frames[first?0:2],stop=m_frames[first?1:3];

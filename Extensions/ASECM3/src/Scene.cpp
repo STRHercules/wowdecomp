@@ -66,11 +66,18 @@ std::shared_ptr<const Scene> Scene::Parse(std::vector<uint8_t> bytes,bool embedd
 std::shared_ptr<const Scene> Scene::FromDocument(Document document,bool embeddedEffects){
     document.ValidateReferences();return std::shared_ptr<const Scene>(new Scene(std::move(document),embeddedEffects));
 }
-std::shared_ptr<const Scene> Scene::WithAnimationBank(std::vector<uint8_t> bytes,const std::string& source) const {
+std::shared_ptr<const Scene> Scene::WithAnimationBank(std::vector<uint8_t> bytes,const std::string& source,bool meshLocalTracks) const {
     auto bank=Parse(std::move(bytes));
-    auto binding=BindAnimationBank(m_model,bank->m_model,bank->m_animation);
+    auto binding=BindAnimationBank(m_model,bank->m_model,bank->m_animation,meshLocalTracks);
     auto out=std::shared_ptr<Scene>(new Scene(*this));
     out->m_externalBank=std::move(bank);out->m_binding=std::move(binding);out->m_animationSource=source;
+    if(meshLocalTracks)for(size_t i=0;i<out->m_model.skeleton.size();++i){
+        const auto index=out->m_binding.meshToBank[i];if(index<0)continue;
+        auto& target=out->m_model.skeleton[i];const auto& authored=out->m_externalBank->m_model.skeleton.at(size_t(index));
+        target.translation.interpolation=authored.translation.interpolation;
+        target.rotation.interpolation=authored.rotation.interpolation;
+        target.scale.interpolation=authored.scale.interpolation;
+    }
     out->m_model.animations=out->m_externalBank->m_model.animations;
     out->m_sequenceGroups=out->m_externalBank->m_sequenceGroups;
     bool playable=false;for(auto group:out->m_sequenceGroups)playable|=group>=0;
@@ -170,12 +177,12 @@ SceneFrame Scene::EvaluateGroup(int32_t group,int32_t sourceTime,uint32_t divisi
     // External skeletal banks never animate a mesh material by ID coincidence.
     out.materialGroup=m_externalBank?-1:group;out.sourceTime=sourceTime;
     const bool bound=bool(m_externalBank)&&group>=0;
-    const auto& animationModel=bound?m_externalBank->m_model:m_model;
+    const auto& animationModel=bound&&!m_binding.meshLocalTracks?m_externalBank->m_model:m_model;
     const auto& animationBank=bound?m_externalBank->m_animation:m_animation;
     auto source=EvaluatePoseAtSourceTime(animationModel,animationBank,group,sourceTime);
     if(blendFrom)source=BlendLocalPoses(animationModel,*blendFrom,std::move(source),blend);
     out.animationLocals=std::move(source.local);
-    out.pose=bound?BindEvaluatedPose(m_model,m_binding,source):std::move(source);
+    out.pose=bound&&!m_binding.meshLocalTracks?BindEvaluatedPose(m_model,m_binding,source):std::move(source);
     if(m_model.divisions.empty())return out;
     if(division>=m_model.divisions.size())throw Error("M3 scene division is unavailable");
     const auto skinned=SkinModel(m_model,out.pose);

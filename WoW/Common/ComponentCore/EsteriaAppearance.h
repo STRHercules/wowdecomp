@@ -50,6 +50,7 @@ void EsteriaCreateExtra(CDataStore* packet);
 // Set returns false for a trait that cannot be picked. The footer is the last thing on CMSG_CHAR_CREATE and clears
 // the pick, so a later creation that never visits the step goes out Unmarked.
 bool EsteriaSetCreateTrait(uint32_t trait);
+bool EsteriaSetCreateTraits(const uint16_t* ids, uint32_t count);
 uint32_t EsteriaGetCreateTrait();
 void EsteriaCreateTraitFooter(CDataStore* packet);
 

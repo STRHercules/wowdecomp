@@ -17,6 +17,7 @@
 #endif
 #include "Engine/Source/Model2/M2Model.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
+#include "Extensions/ASECM3/client/AttachmentRegistry.h"
 #include "Engine/Source/Retail/BodyShape.h"
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Retail/Centaur.h"
@@ -2167,6 +2168,8 @@ void CM2Model::SetBoneProceduralTransformByIndex(uint32_t index, const C44Matrix
 // VERIFY: 9445f766 auto
 // OFFSET: 0x008273D0
 int32_t CM2Model::HasAttachment(uint32_t id) {
+    ASECM3::Client::NativeAttachment point;
+    if (ASECM3::Client::ModelAttachment(this, id, false, point)) return point.present;
     if (!(this->m_fFlags & 1)) {
         this->WaitForLoad(nullptr);
     }
@@ -2183,6 +2186,8 @@ int32_t CM2Model::HasAttachment(uint32_t id) {
 // VERIFY: f01becc2 manual
 // OFFSET: 0x00827460
 C3Vector CM2Model::GetAttachmentPivot(uint32_t id) {
+    ASECM3::Client::NativeAttachment point;
+    if (ASECM3::Client::ModelAttachment(this, id, false, point)) return point.present ? point.pivot : C3Vector(0,0,0);
     if (!(this->m_fFlags & 1)) {
         this->WaitForLoad(nullptr);
     }
@@ -2892,7 +2897,9 @@ void CM2Model::AnimateST() {
     for (CM2Model* child = this->m_attachList; child; child = child->m_attachNext) {
         bool hidden;
 
-        if (child->m_attachmentIndex == 0xFFFF) {
+        if (ASECM3::Client::ModelAttachmentHidden(this,child,hidden)) {
+            // Source attachments are published independently of the M2 placeholder.
+        } else if (child->m_attachmentIndex == 0xFFFF) {
             hidden = !(child->m_fFlags & 0x40000);
         } else {
             hidden = this->m_attachments[child->m_attachmentIndex].m_currentValue == 0;
@@ -5134,6 +5141,7 @@ void CM2Model::AnimateMTSimple(const C44Matrix* view, const C3Vector& diffuse, c
 // VERIFY: 932496a8 manual
 // OFFSET: 0x0082E550
 void CM2Model::AnimateAttachmentsMT() {
+    if (ASECM3::Client::AnimateModelAttachments(this)) return;
     M2Data* data = this->m_shared->m_data;
 
     for (uint32_t i = 0; i < data->m_attachments.m_count; i++) {
@@ -6308,6 +6316,8 @@ uint32_t CM2Model::ProcessEventCallbacks(uint32_t boneIndex, uint32_t sequenceIn
 // VERIFY: 4c99f6ab manual
 // OFFSET: 0x00831330
 C3Vector CM2Model::GetAttachmentPosition(uint32_t id) {
+    C44Matrix frame; bool ready = false;
+    if (ASECM3::Client::ModelAttachmentWorldFrame(this,id,frame,ready)) return ready ? C3Vector(frame.d0,frame.d1,frame.d2) : C3Vector(0,0,0);
     if (!(this->m_fFlags & 1)) {
         this->WaitForLoad(nullptr);
     }
@@ -6328,6 +6338,8 @@ C3Vector CM2Model::GetAttachmentPosition(uint32_t id) {
 // VERIFY: 726b46b5 manual
 // OFFSET: 0x00831410
 C44Matrix CM2Model::GetAttachmentWorldTransform(uint32_t id) {
+    C44Matrix frame; bool ready = false;
+    if (ASECM3::Client::ModelAttachmentWorldFrame(this,id,frame,ready)) return frame;
     if (!(this->m_fFlags & 1)) {
         this->WaitForLoad(nullptr);
     }
@@ -6359,6 +6371,8 @@ C44Matrix CM2Model::GetAttachmentWorldTransform(uint32_t id) {
 // VERIFY: fbe80c3c auto
 // OFFSET: 0x00831550
 float CM2Model::GetAttachmentWorldScale(uint32_t id) {
+    C44Matrix frame; bool ready = false;
+    if (ASECM3::Client::ModelAttachmentCameraFrame(this,id,true,frame,ready)) return ready ? sqrtf(frame.a0*frame.a0+frame.a1*frame.a1+frame.a2*frame.a2) : 0;
     if (!(this->m_fFlags & 1)) {
         this->WaitForLoad(nullptr);
     }
@@ -6404,7 +6418,11 @@ void CM2Model::AttachToParent(CM2Model* parent, uint32_t id, const C3Vector* pos
 
     uint32_t index;
 
-    if (parent->m_fFlags & 1) {
+    ASECM3::Client::NativeAttachment sourcePoint;
+    if (ASECM3::Client::ModelAttachment(parent,id,attachToRoot!=0,sourcePoint)) {
+        if (!sourcePoint.present && !attachToRoot) return;
+        index = 0xFFFF;
+    } else if (parent->m_fFlags & 1) {
         M2Data* data = parent->m_shared->m_data;
         index = id < data->m_attachmentIndicesById.m_count ? data->m_attachmentIndicesById[id] : 0xFFFF;
 
@@ -7000,7 +7018,9 @@ void CM2Model::ProcessCallbacksRecursive() {
         for (CM2Model* child = this->m_attachList; child; child = child->m_attachNext) {
             bool hidden;
 
-            if (child->m_attachmentIndex == 0xFFFF) {
+            if (ASECM3::Client::ModelAttachmentHidden(this,child,hidden)) {
+                // Source attachments are published independently of the M2 placeholder.
+            } else if (child->m_attachmentIndex == 0xFFFF) {
                 hidden = !(child->m_fFlags & 0x40000);
             } else {
                 hidden = this->m_attachments[child->m_attachmentIndex].m_currentValue == 0;
@@ -7994,6 +8014,12 @@ int32_t CM2Model::InitializeLoaded() {
         uint32_t id = child->m_attachmentId;
         M2Data* current = this->m_shared->m_data;
         uint16_t index = id < current->m_attachmentIndicesById.m_count ? current->m_attachmentIndicesById[id] : 0xFFFF;
+        ASECM3::Client::NativeAttachment sourcePoint;
+        if (ASECM3::Client::ModelAttachment(this,id,(child->m_fFlags&0x40000)!=0,sourcePoint)&&sourcePoint.present) {
+            child->m_attachmentIndex=0xFFFF;
+            link=&(*link)->m_attachNext;
+            continue;
+        }
 
         if (index != 0xFFFF || (child->m_fFlags & 0x40000)) {
             child->m_attachmentIndex = index;

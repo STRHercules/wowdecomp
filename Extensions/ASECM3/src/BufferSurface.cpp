@@ -4,6 +4,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstring>
+#include <map>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -51,6 +52,41 @@ bool BuildVoidCapeFallback(Material& material){
     material.bufferSurfaceError="MADD partial surface; known Void_Cape gradient/opacity textures reconstructed; source shader blocks remain approximate";
     if(!material.bufferDecodeError.empty())material.bufferSurfaceError+="; decode error="+material.bufferDecodeError;
     material.bufferSurface=std::move(surface);return true;
+}
+bool BuildMountSurface(Material& material){
+    // shortcut: named HotS texture sets approximate unsupported shader graphs; replace with decoded shader inputs for parity.
+    std::map<std::string,std::string> selected;
+    for(const auto& path:material.bufferTextures){
+        const auto key=NormalizeTexturePath(path);
+        if(key.find("storm_mount_")==std::string::npos&&key.find("storm_fx_")==std::string::npos&&key.find("storm_hero_")==std::string::npos&&key.find("storm_morph_")==std::string::npos)continue;
+        for(const auto& entry:{std::pair<const char*,const char*>{"_diff.dds","layer_diff"},{"_norm.dds","layer_norm"},{"_spec.dds","layer_spec"},{"_emis.dds","layer_emis1"}}){
+            const std::string suffix=entry.first;
+            if(key.size()<suffix.size()||key.compare(key.size()-suffix.size(),suffix.size(),suffix)!=0)continue;
+            const auto found=selected.find(entry.second);if(found!=selected.end()&&NormalizeTexturePath(found->second)!=key)return false;
+            selected[entry.second]=path;
+        }
+    }
+    if(!selected.count("layer_diff")){
+        // Celestial mounts draw a starfield in screen space through an otherwise undecoded shell shader.
+        for(const auto& path:material.bufferTextures)if(NormalizeTexturePath(path).find("starfield")!=std::string::npos){
+            auto surface=std::make_shared<Material>();surface->type=1;surface->name=material.name;surface->record.tag="ASEC_HOTS_MOUNT_SURFACE";
+            F(surface->record,"hdr_emis",1);U(surface->record,"blend_mode_emis1",2);
+            MaterialLayer layer;layer.role="layer_emis1";layer.image=path;layer.record.tag="ASEC_HOTS_MOUNT_LAYER";
+            U(layer.record,"flags",12);U(layer.record,"uv_source",15);U(layer.record,"color_channels",0);surface->layers.push_back(std::move(layer));
+            material.bufferSurface=std::move(surface);
+            material.bufferSurfaceError="HotS celestial starfield approximation; original shader graph retained but not fully implemented";
+            return true;
+        }
+        return false;
+    }
+    auto surface=std::make_shared<Material>();surface->type=1;surface->name=material.name;surface->record.tag="ASEC_HOTS_MOUNT_SURFACE";
+    F(surface->record,"hdr_spec",1);F(surface->record,"hdr_emis",1);
+    U(surface->record,"blend_mode_emis1",2); // _Emis maps are glow added on top; the default 0 multiplies the body to black
+    for(const auto& entry:selected){MaterialLayer layer;layer.role=entry.first;layer.image=entry.second;layer.record.tag="ASEC_HOTS_MOUNT_LAYER";
+        U(layer.record,"flags",12);U(layer.record,"uv_source",0);U(layer.record,"color_channels",0);surface->layers.push_back(std::move(layer));}
+    material.bufferSurface=std::move(surface);
+    material.bufferSurfaceError="HotS mount named-texture surface approximation; original shader graph retained but not fully implemented";
+    return true;
 }
 uint32_t UInt(const BufferParameter& p,size_t at=0){
     if(at>p.bytes.size()||p.bytes.size()-at<4)throw Error("Truncated MADD surface parameter");
@@ -126,7 +162,7 @@ void BuildBufferSurface(Material& material){
     // opaque neutral sheet. The regular graph decoder is retained for every
     // other material.
     if(BuildVoidCapeFallback(material))return;
-    if(!material.bufferDecodeError.empty()){material.bufferSurfaceError=material.bufferDecodeError;return;}
+    if(!material.bufferDecodeError.empty()){if(!BuildMountSurface(material))material.bufferSurfaceError=material.bufferDecodeError;return;}
     try{
         for(const auto& payload:material.bufferPayloads)if(payload.role=="unknown3"&&!payload.bytes.empty())throw Error("MADD dynamic parameter payload requires further decoding");
         auto surface=std::make_shared<Material>();surface->type=1;surface->name=material.name;surface->record.tag="ASEC_MADD_SURFACE";
@@ -181,7 +217,7 @@ void BuildBufferSurface(Material& material){
         }
         material.bufferSurface=std::move(surface);
     }catch(const Error& e){
-        if(!BuildVoidCapeFallback(material))material.bufferSurfaceError=e.what();
+        if(!BuildVoidCapeFallback(material)&&!BuildMountSurface(material))material.bufferSurfaceError=e.what();
     }
 }
 }

@@ -3,6 +3,7 @@
 #include "WoW/Common/ComponentCore/ComponentUtils.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/CharSectionsRec.h"
@@ -246,7 +247,9 @@ bool ComponentValidateFacialFeature(st_race* lookup, uint32_t* facialFeatures, i
 
     int32_t index = raceID * 2 + sexID;
 
-    if (static_cast<uint32_t>(variationIndex) > facialFeatures[index]) {
+    // Upright undead features sit at Upright::Base and up, past the stock count, and only go with upright hair colours.
+    if (!Upright::FacialInRange(raceID, sexID, variationIndex, facialFeatures[index])
+        || Upright::Index(raceID, variationIndex) != Upright::Index(raceID, colorIndex)) {
         return false;
     }
 

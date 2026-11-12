@@ -40,15 +40,26 @@ void RegisterModelAttachments(CM2Model* model,const AttachmentData& data,const C
     if(data.error.empty())for(const auto& point:data.points)if(point.wowId>=0){NativeAttachment out;out.id=uint32_t(point.wowId);out.present=true;out.local.Identity();out.pivot=point.bindValid?C3Vector(point.bindPivot.x,point.bindPivot.y,point.bindPivot.z)*basis:C3Vector(0,0,0);snapshot->points.push_back(out);}
     std::unique_lock<std::shared_mutex> lock(State().mutex);State().snapshots[model]=std::move(snapshot);
 }
-void PublishModelAttachments(CM2Model* model,const AttachmentPose& pose,const C44Matrix& basis){
+void PublishModelAttachments(CM2Model* model,const AttachmentPose& pose,const C44Matrix& basis,const C3Vector* rider){
     auto snapshot=std::make_shared<Snapshot>();snapshot->root.Identity();
     const auto inverse=basis.Inverse(basis.Determinant());GxGeometryTransform validateBasis(basis);
     // Conjugation adapts source attachment frames to native child-model axes.
     // For an M3 child its own source basis cancels this inverse as intended.
     if(pose.rootReady){snapshot->root=inverse*Native(pose.root)*basis;GxGeometryTransform validate(snapshot->root);snapshot->rootReady=true;}
-    for(const auto& point:pose.points){NativeAttachment out;out.id=point.id;out.present=true;out.ready=point.ready;out.local.Identity();out.pivot=C3Vector(0,0,0);
+    for(const auto& point:pose.points){if(rider&&point.id==0)continue;NativeAttachment out;out.id=point.id;out.present=true;out.ready=point.ready;out.local.Identity();out.pivot=C3Vector(0,0,0);
         if(point.ready){out.local=inverse*Native(point.transform)*basis;GxGeometryTransform validate(out.local);out.pivot=C3Vector(point.bindPivot.x,point.bindPivot.y,point.bindPivot.z)*basis;}
         snapshot->points.push_back(out);
+    }
+    if(rider){
+        if(!std::isfinite(rider->x)||!std::isfinite(rider->y)||!std::isfinite(rider->z))throw Error("Nonfinite mount rider position");
+        NativeAttachment seat;seat.id=0;seat.present=true;seat.ready=pose.rootReady;seat.local.Identity();seat.pivot=*rider;
+        C3Vector position=*rider;
+        for(const auto& point:pose.points)if(point.id==0&&point.ready){
+            const auto animated=Native(point.transform)*basis;
+            const auto bind=C3Vector(point.bindPivot.x,point.bindPivot.y,point.bindPivot.z)*basis;
+            position=C3Vector(animated.d0,animated.d1,animated.d2)+*rider-bind;seat.ready=true;break;
+        }
+        seat.local.d0=position.x;seat.local.d1=position.y;seat.local.d2=position.z;snapshot->points.push_back(seat);
     }
     std::unique_lock<std::shared_mutex> lock(State().mutex);
     const auto it=State().snapshots.find(model);if(it!=State().snapshots.end())it->second=std::move(snapshot);

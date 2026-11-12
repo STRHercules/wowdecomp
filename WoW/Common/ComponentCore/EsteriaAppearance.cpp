@@ -1,6 +1,7 @@
 #include <functional>
 #include <memory>
 #include <unordered_set>
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "WoW/Source/DB/Rec/ItemDisplayInfoRec.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "Engine/Source/Retail/RetailLookWire.h"
@@ -1891,6 +1892,9 @@ int EsteriaCycleCommand(lua_State* L, CCharacterComponent* character, const char
 
         st_race* table = CCharacterComponent::s_chrVarArray;
         const COMPONENT_SELECTION selection = GetSelectionFromContext(COMPONENT_CONTEXT_0, prefs.m_classId);
+        // Upright undead: its choices sit at Upright::Base and up; values and counts are reported from there.
+        const Upright::Scope uprightScope(prefs);
+        const int32_t base = Upright::Index(race, static_cast<int32_t>(prefs.m_skinID)) ? Upright::Base : 0;
         auto allowed = [&](COMPONENT_VARIATIONS variation, int32_t index, int32_t color) {
             CharSectionsRec* rec = ComponentGetSectionsRecord(table, race, gender, variation, index, color, nullptr);
             return rec && ComponentFlagsMatch(rec->m_flags, selection);
@@ -1926,9 +1930,9 @@ int EsteriaCycleCommand(lua_State* L, CCharacterComponent* character, const char
                 value = prefs.m_facialHairId;
                 count = ComponentGetNumVariations(table, race, gender, VARIATION_FACIAL_HAIR);
 
-                if (!count) {
+                if (!count || base) {
                     noRecords = true;
-                    count = CCharacterComponent::s_characterFacialHairStylesList[race * 2 + gender];
+                    count = base ? base + Upright::FacialCount(race, gender, base) : CCharacterComponent::s_characterFacialHairStylesList[race * 2 + gender];
                 }
 
                 valid = [&](int32_t v) { return noRecords || allowed(VARIATION_FACIAL_HAIR, v, prefs.m_hairColorId); };
@@ -1940,16 +1944,16 @@ int EsteriaCycleCommand(lua_State* L, CCharacterComponent* character, const char
         }
 
         if (!strcmp(command, "EA_STOCK_GET")) {
-            lua_pushnumber(L, value);
-            lua_pushnumber(L, count);
+            lua_pushnumber(L, value - base);
+            lua_pushnumber(L, count - base);
             return 2;
         }
 
         std::string choices;
 
         for (int32_t v = 0; v < count; v++) {
-            if (valid(v)) {
-                choices += std::to_string(v) + ",";
+            if (valid(v) && !Upright::Other(prefs, v)) {
+                choices += std::to_string(v - base) + ",";
             }
         }
 
@@ -2373,33 +2377,60 @@ void EsteriaCreateExtra(CDataStore* packet) {
     }
 }
 
-static uint8_t g_createTrait = CharacterPerkTrait::Unmarked;
+static CharacterPerkTrait::Selection g_createTraits;
 
+// The whole starting build for the next create: ascending, unique ids, at most eight. The server decides whether
+// the build is allowed; this only refuses a list it could not frame.
+bool EsteriaSetCreateTraits(const uint16_t* ids, uint32_t count) {
+    CharacterPerkTrait::Selection next;
+    if (count > CharacterPerkTrait::MaxTraits || (count && !ids)) {
+        return false;
+    }
+    next.count = static_cast<uint8_t>(count);
+    for (uint32_t i = 0; i < count; i++) {
+        next.ids[i] = ids[i];
+    }
+    if (!CharacterPerkTrait::Canonical(next)) {
+        return false;
+    }
+    g_createTraits = next;
+    return true;
+}
+
+// The one-trait call older glue makes: 0 clears, 1-8 picks that background alone.
 bool EsteriaSetCreateTrait(uint32_t trait) {
     if (trait > 255 || !CharacterPerkTrait::Selectable(static_cast<uint8_t>(trait))) {
         return false;
     }
-    g_createTrait = static_cast<uint8_t>(trait);
-    return true;
+    const uint16_t id = static_cast<uint16_t>(trait);
+    return EsteriaSetCreateTraits(&id, trait ? 1 : 0);
 }
 
 uint32_t EsteriaGetCreateTrait() {
-    return g_createTrait;
+    return g_createTraits.count == 1 && g_createTraits.ids[0] < CharacterPerkTrait::Count ? g_createTraits.ids[0] : 0;
 }
 
 void EsteriaCreateTraitFooter(CDataStore* packet) {
     if (!packet) {
         return;
     }
-    uint8_t payload[CharacterPerkTrait::PayloadSize];
-    CharacterPerkTrait::WritePayload(payload, g_createTrait);
-    for (uint8_t byte : payload) {
-        packet->Put(byte);
+    uint8_t footer[CharacterPerkTrait::MaxFooter2Size];
+    size_t size = 0;
+    if (g_createTraits.count == 0 || EsteriaGetCreateTrait()) {
+        // Nothing, or one original background: the v1 footer says it, and servers from before v2 still read it.
+        CharacterPerkTrait::WritePayload(footer, static_cast<uint8_t>(EsteriaGetCreateTrait()));
+        size = CharacterPerkTrait::PayloadSize;
+        for (uint32_t shift = 0; shift < 32; shift += 8) {
+            footer[size++] = static_cast<uint8_t>(CharacterPerkTrait::FooterMagic >> shift);
+        }
+    } else {
+        size = CharacterPerkTrait::WriteFooter2(footer, g_createTraits);
     }
-    for (uint32_t shift = 0; shift < 32; shift += 8) {
-        packet->Put(static_cast<uint8_t>(CharacterPerkTrait::FooterMagic >> shift));
+    for (size_t i = 0; i < size; i++) {
+        packet->Put(footer[i]);
     }
-    g_createTrait = CharacterPerkTrait::Unmarked;
+    // Cleared per attempt; the glue sets the build again before every Accept, so a retry (name taken) resends it.
+    g_createTraits = CharacterPerkTrait::Selection();
 }
 
 static uint8_t g_createStartZone = CharacterStartZone::RaceDefault;

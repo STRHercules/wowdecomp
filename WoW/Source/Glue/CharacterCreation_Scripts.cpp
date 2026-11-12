@@ -5,6 +5,7 @@
 #include <iterator>
 #include <string>
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "Engine/Source/Frame/CScriptObject.h"
 #include "Engine/Source/Frame/CSimpleModel.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
@@ -16,6 +17,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
+#include "Engine/Source/Retail/PerkTraitWire.h"
 #include "WoW/Source/Glue/CharacterSelectionDisplay.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/ChrClassesRec.h"
@@ -341,6 +343,21 @@ static int32_t Script_SetCreateTrait(lua_State* L) {
     return 1;
 }
 
+// SetCreateTraitList(id, ...) -> ok: the whole starting-trait build sent with the next CMSG_CHAR_CREATE; no
+// arguments clears it. Ids must be whole numbers, ascending and unique, at most eight.
+static int32_t Script_SetCreateTraitList(lua_State* L) {
+    uint16_t ids[CharacterPerkTrait::MaxTraits];
+    const int32_t count = lua_gettop(L);
+    bool ok = count <= static_cast<int32_t>(CharacterPerkTrait::MaxTraits);
+    for (int32_t i = 0; ok && i < count; i++) {
+        const double id = lua_isnumber(L, i + 1) ? lua_tonumber(L, i + 1) : -1;
+        ok = id >= 1 && id <= 65535 && id == static_cast<double>(static_cast<uint16_t>(id));
+        ids[i] = ok ? static_cast<uint16_t>(id) : 0;
+    }
+    lua_pushboolean(L, ok && EsteriaSetCreateTraits(ids, static_cast<uint32_t>(count)));
+    return 1;
+}
+
 // SetCreateStartZone(id) -> ok: the starting zone sent with the next CMSG_CHAR_CREATE (0 = the race's own).
 static int32_t Script_SetCreateStartZone(lua_State* L) {
     const double zone = lua_isnumber(L, 1) ? lua_tonumber(L, 1) : -1;
@@ -373,6 +390,22 @@ static int32_t Script_CycleCharCustomization(lua_State* L) {
             if (onSelect) { CCharacterSelection::ResetPanCamera(); return 0; }
             CCharacterCreation::ResetPanCamera();
             return 0;
+        }
+        // EA_UPRIGHT -> 1/0 (upright / hunched undead), nil when the character has no upright body;
+        // EA_UPRIGHT, on -> switches the creator's character to that body.
+        if (!strcmp(lua_tolstring(L, 1, nullptr), "EA_UPRIGHT") && !onSelect) {
+            if (lua_isnumber(L, 2)) {
+                CCharacterCreation::SetUpright(lua_tonumber(L, 2) != 0);
+            }
+
+            const CCharacterComponent* character = CCharacterCreation::m_character;  // rebuilt by SetUpright
+
+            if (!character || !Upright::Available(character->m_data.m_preferences.m_raceID, character->m_data.m_preferences.m_sexID)) {
+                return 0;
+            }
+
+            lua_pushnumber(L, Upright::Index(character->m_data.m_preferences.m_raceID, static_cast<int32_t>(character->m_data.m_preferences.m_skinID)) ? 1 : 0);
+            return 1;
         }
         if (!strcmp(lua_tolstring(L, 1, nullptr), "EA_PREVIEW_SCALE") && lua_isnumber(L, 2)) {
             // Index 0 is the create-screen character, 1.. are character-select rows.
@@ -773,6 +806,7 @@ static FrameScript_Method s_scriptFunctions[] = {
     { "GetCreateBackgroundModel", &Script_GetCreateBackgroundModel },
     { "BodyShapeLoadExisting", &Script_BodyShapeLoadExisting },
     { "SetCreateTrait", &Script_SetCreateTrait },
+    { "SetCreateTraitList", &Script_SetCreateTraitList },
     { "GetCreateTrait", &Script_GetCreateTrait },
     { "SetCreateStartZone", &Script_SetCreateStartZone },
     BODY_SHAPE_SCRIPT_ENTRIES

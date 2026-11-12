@@ -384,6 +384,9 @@ void GxScene::DrawGeometry(const C3Vector& eye,const C3Vector& center,float mode
             if(!textured)continue;
         }
         const auto recovery=m_diffuseRecovery.find(pass.material);
+        // An undecoded MADD shader with no recoverable texture set is an effect layer (glows, shells, beams); drawn as a
+        // neutral opaque sheet it hides the body, so leave it out.
+        if(sourceMaterial.type==12&&!sourceMaterial.bufferSurface&&recovery==m_diffuseRecovery.end())continue;
         const auto& material=sourceMaterial.bufferSurface?*sourceMaterial.bufferSurface:recovery!=m_diffuseRecovery.end()?recovery->second:sourceMaterial;
         const auto before=m_surface.Draws(),beforeTextured=m_surface.TexturedDraws();
         // DiffuseRecovery deliberately replaces an opaque MADD shader with a

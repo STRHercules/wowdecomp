@@ -56,7 +56,7 @@ ActionMapping Automatic(const std::string& name,const std::string& model){
     std::string signature;for(const auto& token:values){if(!signature.empty())signature+=' ';signature+=token;}
     for(const auto& e:actorQueries)if(hero==e.hero&&signature==e.tokens){query=true;onlyWeapon&=e.weapon;}
     bool facial=has("portrait")||has("defaultface"),mounted=false;
-    for(const auto& t:values){if(t.size()>=4&&t.substr(t.size()-4)=="eyes")facial=true;if(Prefix(t,"ride"))mounted=true;}
+    for(const auto& t:values){if(t.size()>=4&&t.substr(t.size()-4)=="eyes")facial=true;if(Prefix(t,"ride")&&t!="ridenone")mounted=true;} // "Ridenone" is the unridden body clip (morph forms)
     std::string action;
     for(const auto* t:{"death","dead","spell","channel","attack","dance","victory","taunt","talk","dialogue","listen","work","gather","fidget","run","walk","stand"})if(has(t)){action=t;break;}
     ActionMapping result;bool mapped=true;

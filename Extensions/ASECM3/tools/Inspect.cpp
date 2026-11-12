@@ -215,6 +215,7 @@ int main(int argc,char** argv) {
             }
             std::cout<<']';
             if (geometry) {
+                // Detailed geometry remains opt-in; dependency metadata below is small and always emitted.
                 std::cout<<",\"vertexData\":["; bool comma=false;
                 for (const auto& v:model.vertices) {
                     if (comma) std::cout<<','; comma=true;
@@ -242,6 +243,17 @@ int main(int argc,char** argv) {
             for (const auto& division:model.divisions) for (const auto& region:division.regions) {
                 if (comma) std::cout<<','; comma=true; std::cout<<"{\"vertices\":"<<region.vertexCount<<",\"indices\":"<<region.indexCount<<'}';
             }
+            std::cout<<"],\"nativeLayers\":[";bool nativeComma=false;
+            const auto materials=ASECM3::DecodeMaterials(doc,model);
+            auto emitLayer=[&](const auto& layer){if(layer.image.empty())return;if(nativeComma)std::cout<<',';nativeComma=true;
+                std::cout<<"{\"role\":"<<Quote(layer.role)<<",\"bitmap\":"<<Quote(layer.image)<<'}';};
+            for(const auto& material:materials.materials){for(const auto& layer:material.layers)emitLayer(layer);
+                if(material.bufferSurface)for(const auto& layer:material.bufferSurface->layers)emitLayer(layer);
+                for(const auto& name:material.bufferTextures){if(nativeComma)std::cout<<',';nativeComma=true;std::cout<<"{\"role\":\"buffer\",\"bitmap\":"<<Quote(name)<<'}';}}
+            std::cout<<"],\"attachmentPoints\":[";bool pointComma=false;
+            const auto attachments=ASECM3::DecodeAttachments(doc);
+            for(const auto& point:attachments.points){if(pointComma)std::cout<<',';pointComma=true;
+                std::cout<<"{\"name\":"<<Quote(point.name)<<",\"wowId\":"<<point.wowId<<",\"pivot\":["<<point.bindPivot.x<<','<<point.bindPivot.y<<','<<point.bindPivot.z<<"]}";}
             std::cout<<"],\"animations\":["; comma=false;
             for (const auto& animation:model.animations) {
                 if (comma) std::cout<<','; comma=true;

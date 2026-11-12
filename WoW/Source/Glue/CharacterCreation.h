@@ -54,6 +54,7 @@ class CCharacterCreation {
     static bool IsClassAvailable(int32_t classID);
     static void OnHide();
     static void RandomizeCharCustomization();
+    static bool SetUpright(bool upright);
     static void ResetCharCustomizeInfo();
     static void SetCharacterFacing(float facing);
     static void ZoomCamera(float delta);

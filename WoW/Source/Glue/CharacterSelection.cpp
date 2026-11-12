@@ -1,5 +1,6 @@
 #include "Engine/Source/Retail/BodyShape.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
 #include "CharacterSelection.h"
 #include <cstring>
@@ -770,8 +771,9 @@ void CCharacterSelection::ShowCharacter() {
         data.m_preferences.m_hairColorId = info.m_hairColorID;
         data.m_preferences.m_facialHairId = info.m_facialHairStyleID;
         char retailPath[260];
-        const bool retailModel = RetailRaceModelPath(info.m_raceID, info.m_sexID, retailPath, sizeof(retailPath), RetailRaceLookForm(info.m_guid.m_guid));
-        data.m_model = CCharacterSelection::m_modelFrame->GetScene()->CreateModel(retailModel ? retailPath : playerRec->m_modelName, 0);
+        const char* uprightPath = Upright::ModelFor(info.m_raceID, info.m_sexID, info.m_skinColorID);
+        const bool retailModel = !uprightPath && RetailRaceModelPath(info.m_raceID, info.m_sexID, retailPath, sizeof(retailPath), RetailRaceLookForm(info.m_guid.m_guid));
+        data.m_model = CCharacterSelection::m_modelFrame->GetScene()->CreateModel(uprightPath ? uprightPath : retailModel ? retailPath : playerRec->m_modelName, 0);
         data.m_flags |= 0x2;
 
         CCharacterSelection::s_characterList[CCharacterSelection::s_selectionIndex].m_component->Init(&data, nullptr);

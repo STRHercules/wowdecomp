@@ -11,7 +11,7 @@ uint64_t Channel(const AnimatedValue& ref,uint32_t type){return (uint64_t(type)<
 std::vector<uint64_t> Channels(const Bone& b){return {Channel(b.translation,2),Channel(b.rotation,3),Channel(b.scale,2)};}
 Matrix Iref(const Bone& b){Matrix m;for(unsigned i=0;i<16;++i)m.values[i]=b.inverseBind[i];return m;}
 }
-BankBinding BindAnimationBank(const ModelData& mesh,const ModelData& bank,const AnimationBank& animation){
+BankBinding BindAnimationBank(const ModelData& mesh,const ModelData& bank,const AnimationBank& animation,bool meshLocalTracks){
     if(bank.animations.empty()||animation.groups.empty()||animation.collections.empty())throw Error("M3A has no complete source clip bank");
     std::unordered_map<std::string,uint32_t> names;
     std::unordered_set<std::string> meshNames;
@@ -19,8 +19,8 @@ BankBinding BindAnimationBank(const ModelData& mesh,const ModelData& bank,const 
     for(const auto& collection:animation.collections)for(const auto& track:collection.transforms)animated.insert(track.first);
     std::unordered_map<uint64_t,std::string> owners;
     for(uint32_t i=0;i<bank.skeleton.size();++i){const auto& bone=bank.skeleton[i];if(!names.emplace(bone.name,i).second)throw Error("M3A has duplicate bone names");for(auto id:Channels(bone))if(animated.count(id)&&!owners.emplace(id,bone.name).second&&owners[id]!=bone.name)throw Error("M3A has ambiguous typed channel ownership");}
-    BankBinding out;out.meshToBank.assign(mesh.skeleton.size(),-1);
-    const auto bankRest=EvaluatePoseAtSourceTime(bank,animation);
+    BankBinding out;out.meshLocalTracks=meshLocalTracks;out.meshToBank.assign(mesh.skeleton.size(),-1);
+    const auto bankRest=meshLocalTracks?Pose{}:EvaluatePoseAtSourceTime(bank,animation);
     auto restStatic=[&](uint32_t index){
         const auto& bone=bank.skeleton[index];
         for(unsigned k=0;k<16;++k)if(std::fabs(bankRest.skin[index].values[k]-(k%5==0?1.0:0.0))>1e-4)return false;
@@ -33,14 +33,14 @@ BankBinding BindAnimationBank(const ModelData& mesh,const ModelData& bank,const 
     // Banks can omit static scene/container nodes. Compare the nearest shared
     // ancestor, and omit unmatched static containers from the binding itself.
     bool changed;
-    do {
+    if(!meshLocalTracks)do {
         changed=false;std::unordered_set<std::string> shared;
         for(size_t i=0;i<out.meshToBank.size();++i)if(out.meshToBank[i]>=0)shared.insert(mesh.skeleton[i].name);
         auto parent=[&](const ModelData& model,int32_t p){while(p>=0){const auto& b=model.skeleton.at(p);if(shared.count(b.name))return b.name;p=b.parent;}return std::string();};
         for(size_t i=0;i<out.meshToBank.size();++i)if(out.meshToBank[i]>=0){const auto& a=mesh.skeleton[i];const auto& b=bank.skeleton[out.meshToBank[i]];if(parent(mesh,a.parent)!=parent(bank,b.parent)){if(!restStatic(uint32_t(out.meshToBank[i])))throw Error("M3A shared bone topology mismatch: "+a.name);out.meshToBank[i]=-1;changed=true;}}
     }while(changed);
     for(size_t i=0;i<out.meshToBank.size();++i)if(out.meshToBank[i]>=0){++out.matchedBones;bool moves=false;for(auto id:Channels(mesh.skeleton[i])){moves|=animated.count(id)!=0;auto owner=owners.find(id);if(owner!=owners.end()&&owner->second!=mesh.skeleton[i].name)throw Error("M3A channel belongs to another bone");}if(moves)++out.animatedBones;}
-    if(out.animatedBones<3)throw Error("M3A lacks three verified animated mesh bones");
+    if(out.animatedBones<(meshLocalTracks?1u:3u))throw Error("M3A lacks verified animated mesh bones");
     std::vector<int32_t> ancestor(mesh.skeleton.size(),-1);
     for(size_t i=0;i<ancestor.size();++i){int32_t p=static_cast<int32_t>(i);while(p>=0&&out.meshToBank[p]<0)p=mesh.skeleton[p].parent;ancestor[i]=p;}
     uint64_t total=0,covered=0,direct=0;
@@ -48,11 +48,12 @@ BankBinding BindAnimationBank(const ModelData& mesh,const ModelData& bank,const 
     out.influencedWeightCoverage=total?double(covered)/total:0;
     if(out.influencedWeightCoverage<0.90)throw Error("M3A does not cover 90 percent of mesh skin weights through verified ancestors");
     uint32_t bankAnimated=0;for(const auto& bone:bank.skeleton){bool used=false;for(auto id:Channels(bone))used|=animated.count(id)!=0;if(used)++bankAnimated;}
-    if((!bankAnimated||double(out.animatedBones)/bankAnimated<0.75)&&(!total||double(direct)/total<0.90))throw Error("M3A lacks sufficient direct armature or source-bank coverage");
+    if(!meshLocalTracks&&(!bankAnimated||double(out.animatedBones)/bankAnimated<0.75)&&(!total||double(direct)/total<0.90))throw Error("M3A lacks sufficient direct armature or source-bank coverage");
     return out;
 }
 Pose EvaluateBoundPose(const ModelData& mesh,const ModelData& bank,const AnimationBank& animation,const BankBinding& binding,int32_t group,int32_t time){
     if(binding.meshToBank.size()!=mesh.skeleton.size())throw Error("M3A binding does not match mesh skeleton");
+    if(binding.meshLocalTracks)return EvaluatePoseAtSourceTime(mesh,animation,group,time);
     const auto source=EvaluatePoseAtSourceTime(bank,animation,group,time);
     return BindEvaluatedPose(mesh,binding,source);
 }

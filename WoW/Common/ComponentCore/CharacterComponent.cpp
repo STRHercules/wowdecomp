@@ -5,6 +5,9 @@
 #include <emmintrin.h>
 #include <new>
 #include <typeinfo>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #if defined(_MSC_VER)
 #include <malloc.h>
 #else
@@ -13,6 +16,7 @@
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "Engine/Source/Retail/RacePolicy.h"
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/Base/ObjectAlloc.h"
@@ -718,6 +722,11 @@ int32_t CCharacterComponent::GetNumFacesForSkin(int32_t raceID, int32_t sexID, i
 // VERIFY: 4a05dc36 manual
 // OFFSET: 0x004E7DF0
 int32_t CCharacterComponent::GetNumFacialFeaturesForHairColor(int32_t raceID, int32_t sexID, int32_t classID, int32_t hairColorID, COMPONENT_CONTEXT context) {
+    // Upright undead features have no CharSections rows: count that body's CharacterFacialHairStyles rows.
+    if (Upright::Index(raceID, hairColorID)) {
+        return Upright::FacialCount(raceID, sexID, hairColorID);
+    }
+
     COMPONENT_SELECTION selection = GetSelectionFromContext(context, classID);
     int32_t numVariations = ComponentGetNumVariations(CCharacterComponent::s_chrVarArray, raceID, sexID, VARIATION_FACIAL_HAIR);
 
@@ -845,6 +854,10 @@ static int32_t ComponentGetFaceVariation(int32_t raceID, int32_t sexID, int32_t 
 // VERIFY: 99eac5a5 manual
 // OFFSET: 0x004E80E0
 int32_t CCharacterComponent::GetNthFacialFeatureIndex(int32_t raceID, int32_t sexID, int32_t classID, int32_t hairColorID, int32_t facialHairID, int32_t index, COMPONENT_SELECTION selection) {
+    if (Upright::Index(raceID, hairColorID)) {
+        return index >= 0 && index < Upright::FacialCount(raceID, sexID, hairColorID) ? Upright::Base + index : -1;
+    }
+
     bool found;
     ComponentGetSectionsRecord(CCharacterComponent::s_chrVarArray, raceID, sexID, VARIATION_FACIAL_HAIR, facialHairID, hairColorID, &found);
 
@@ -1656,6 +1669,7 @@ static void ComputeMipLevels(MipBits* src, MipBits* dst) {
 void CCharacterComponent::ValidateComponentData(ComponentData* data, COMPONENT_CONTEXT context) {
     CharacterPreferences& prefs = data->m_preferences;
     COMPONENT_SELECTION selection = GetSelectionFromContext(context, prefs.m_classId);
+    Upright::Scope upright(prefs);
 
     if (!ComponentValidateSkin(CCharacterComponent::s_chrVarArray, prefs.m_raceID, prefs.m_sexID, prefs.m_classId, prefs.m_skinID, context)) {
         int32_t numSkins = CCharacterComponent::GetNumSkins(prefs.m_raceID, prefs.m_sexID, prefs.m_classId, context);
@@ -1973,7 +1987,7 @@ void CCharacterComponent::SetFace(int32_t faceID, bool loadHair, const char* deb
 // OFFSET: 0x004EA590
 void CCharacterComponent::SetBeardStyle(int32_t facialHairID, bool loadVariation, const char* debug) {
     EsteriaSetContext(this);
-    if (facialHairID < 0 || facialHairID > static_cast<int32_t>(CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID])) {
+    if (!Upright::FacialInRange(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, facialHairID, CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID])) {
         return;
     }
 
@@ -2010,6 +2024,7 @@ void CCharacterComponent::SetBeardStyle(int32_t facialHairID, bool loadVariation
 void CCharacterComponent::SetSkinColor(int32_t skinID, bool loadHair, bool renderAll, const char* debug) {
     EsteriaSetContext(this);
     this->m_data.m_preferences.m_skinID = skinID;
+    Upright::Scope upright(this->m_data.m_preferences);
 
     bool esteria = EsteriaOwnsRace(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID);
 
@@ -2439,7 +2454,22 @@ bool CCharacterComponent::SetPrevSkin(COMPONENT_CONTEXT context) {
 bool CCharacterComponent::SetRandomSkin(COMPONENT_CONTEXT context) {
     COMPONENT_SELECTION selection = GetSelectionFromContext(context, this->m_data.m_preferences.m_classId);
     int32_t numSkins = CCharacterComponent::GetNumSkins(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, this->m_data.m_preferences.m_classId, context);
-    int32_t index = numSkins > 0 ? CRandom::dice_(numSkins, g_rndSeed) : 0;
+    int32_t first = 0;
+
+    // Upright undead: only the skins of the body shown (they list in index order, so each body's run is contiguous).
+    if (this->m_data.m_preferences.m_raceID == Upright::Race) {
+        int32_t same = 0;
+
+        for (int32_t i = 0; i < numSkins; i++) {
+            if (!Upright::Other(this->m_data.m_preferences, ComponentGetSkinColor(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, i, selection)) && !same++) {
+                first = i;
+            }
+        }
+
+        numSkins = same;
+    }
+
+    int32_t index = numSkins > 0 ? first + CRandom::dice_(numSkins, g_rndSeed) : 0;
     int32_t skinID = ComponentGetSkinColor(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, index, selection);
 
     if (skinID < 0) {
@@ -2594,7 +2624,8 @@ bool CCharacterComponent::SetNextFace(COMPONENT_CONTEXT context, int32_t colorOf
     int32_t skinID;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACE, faceID);
+        // Upright undead: a face of the other body is skipped (no colours to try).
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, faceID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACE, faceID);
         bool matched = false;
 
         for (int32_t i = 0; i < numColors; i = skinID + 1) {
@@ -2658,7 +2689,8 @@ bool CCharacterComponent::SetPrevFace(COMPONENT_CONTEXT context, int32_t colorOf
     int32_t skinID;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACE, faceID);
+        // Upright undead: a face of the other body is skipped (no colours to try).
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, faceID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACE, faceID);
         bool matched = false;
 
         for (int32_t i = 0; i < numColors; i = skinID + 1) {
@@ -2724,9 +2756,11 @@ bool CCharacterComponent::SetNextFacialFeature(COMPONENT_CONTEXT context) {
     ComponentGetSectionsRecord(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, this->m_data.m_preferences.m_facialHairId, this->m_data.m_preferences.m_hairColorId, &found);
 
     if (!found) {
-        int32_t count = CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID];
+        // Features without CharSections rows; upright undead ones continue at Upright::Base, each body its own run.
+        const int32_t base = Upright::FacialBase(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_hairColorId);
+        const int32_t count = Upright::FacialCount(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, this->m_data.m_preferences.m_hairColorId);
         int32_t facialHairID = this->m_data.m_preferences.m_facialHairId + 1;
-        this->SetBeardStyle(facialHairID >= count ? 0 : facialHairID, true, nullptr);
+        this->SetBeardStyle(facialHairID < base || facialHairID >= base + count ? base : facialHairID, true, nullptr);
 
         return true;
     }
@@ -2750,7 +2784,7 @@ bool CCharacterComponent::SetNextFacialFeature(COMPONENT_CONTEXT context) {
     CharSectionsRec* rec = nullptr;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, facialHairID);
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, facialHairID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, facialHairID);
         int32_t color;
 
         for (color = 0; color < numColors; color++) {
@@ -2794,9 +2828,10 @@ bool CCharacterComponent::SetPrevFacialFeature(COMPONENT_CONTEXT context) {
     ComponentGetSectionsRecord(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, this->m_data.m_preferences.m_facialHairId, this->m_data.m_preferences.m_hairColorId, &found);
 
     if (!found) {
-        uint32_t count = CCharacterComponent::s_characterFacialHairStylesList[this->m_data.m_preferences.m_raceID * 2 + this->m_data.m_preferences.m_sexID];
+        const int32_t base = Upright::FacialBase(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_hairColorId);
+        const int32_t count = Upright::FacialCount(this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, this->m_data.m_preferences.m_hairColorId);
         int32_t facialHairID = this->m_data.m_preferences.m_facialHairId - 1;
-        this->SetBeardStyle(facialHairID >= 0 ? facialHairID : count - 1, true, nullptr);
+        this->SetBeardStyle(facialHairID >= base && facialHairID < base + count ? facialHairID : base + count - 1, true, nullptr);
 
         return true;
     }
@@ -2820,7 +2855,7 @@ bool CCharacterComponent::SetPrevFacialFeature(COMPONENT_CONTEXT context) {
     CharSectionsRec* rec = nullptr;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, facialHairID);
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, facialHairID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_FACIAL_HAIR, facialHairID);
         int32_t color;
 
         for (color = 0; color < numColors; color++) {
@@ -4697,7 +4732,8 @@ bool CCharacterComponent::SetNextHairStyle(COMPONENT_CONTEXT context) {
     CharSectionsRec* rec = nullptr;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID);
+        // Upright undead: a hair style of the other body is skipped.
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, hairStyleID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID);
         int32_t color;
 
         for (color = 0; color < numColors; color++) {
@@ -4763,7 +4799,8 @@ bool CCharacterComponent::SetPrevHairStyle(COMPONENT_CONTEXT context) {
     CharSectionsRec* rec = nullptr;
 
     while (true) {
-        int32_t numColors = ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID);
+        // Upright undead: a hair style of the other body is skipped.
+        int32_t numColors = Upright::Other(this->m_data.m_preferences, hairStyleID) ? 0 : ComponentGetNumColors(CCharacterComponent::s_chrVarArray, this->m_data.m_preferences.m_raceID, this->m_data.m_preferences.m_sexID, VARIATION_HAIR, hairStyleID);
         int32_t color;
 
         for (color = 0; color < numColors; color++) {
@@ -5633,6 +5670,13 @@ const Retail::MountSkin* EsteriaMountSkin(uint32_t display) {
         }
         if (loaded && !parsed)
             Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Invalid mount skin catalog\n");
+        // HotS rider poses (bikes) ship loose beside MountRiders.csv; archive rows win on a shared display.
+        std::ifstream hots(std::filesystem::path(SFile::m_basePath) / "Data" / "HotS" / "MountSkins.csv", std::ios::binary);
+        std::map<uint32_t, Retail::MountSkin> extra;
+        if (hots && Retail::ParseMountSkins(std::string(std::istreambuf_iterator<char>(hots), {}), extra))
+            result.insert(extra.begin(), extra.end());
+        else if (hots)
+            Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Invalid HotS mount skin catalog\n");
         return result;
     }();
     const auto found = skins.find(display);

@@ -58,12 +58,11 @@ BufferMaterial DecodeBufferMaterial(const std::vector<uint8_t>& bytes,
     BufferMaterial result;
     result.groups.reserve(size_t(count));
     uint64_t totalFields=0;
-    std::unordered_set<uint32_t> groupIds;
     for(uint64_t i=0;i<count;++i) {
         BufferParameterGroup group;
         group.id=uint32_t(read.UInt(ids+i*4,4));group.sourceOffset=starts[size_t(i)];
-        if(group.id!=expectedGroupIds[size_t(i)] || !groupIds.insert(group.id).second)
-            throw Error("MADD parameter group identifier mismatch or duplicate");
+        if(group.id!=expectedGroupIds[size_t(i)])
+            throw Error("MADD parameter group identifier mismatch");
         const auto next=std::upper_bound(sorted.begin(),sorted.end(),group.sourceOffset);
         const uint64_t end=next==sorted.end()?bytes.size():*next;
         read.Range(group.sourceOffset,36,rootEnd,end);
@@ -87,8 +86,10 @@ BufferMaterial DecodeBufferMaterial(const std::vector<uint8_t>& bytes,
                 BufferParameter field;
                 field.id=uint32_t(read.UInt(keys+j*4,4));field.byteWidth=uint16_t(read.UInt(widths+j*2,2));
                 field.flags=uint8_t(read.UInt(flags+j,1));field.sourceOffset=read.UInt(values+j*8,8);
+                if(!field.id&&!field.byteWidth&&!field.flags&&!field.sourceOffset)continue; // absent optional slot, retained in the original payload
                 if(!fieldIds.insert(field.id).second)throw Error("Duplicate MADD parameter identifier");
-                read.Claim(spans,field.sourceOffset,field.byteWidth,group.sourceOffset,end);
+                // HotS stores absent optional inputs as a zero-width/null-offset entry.
+                if(field.byteWidth||field.sourceOffset)read.Claim(spans,field.sourceOffset,field.byteWidth,group.sourceOffset,end);
                 field.bytes.assign(bytes.begin()+size_t(field.sourceOffset),bytes.begin()+size_t(field.sourceOffset)+field.byteWidth);
                 group.parameters.push_back(std::move(field));
             }

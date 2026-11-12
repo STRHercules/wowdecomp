@@ -9,7 +9,7 @@ HERE = Path(__file__).parent
 HARNESS = re.search(r"HARNESS = r'''(.*?)'''", (HERE / "test_creator_skin.py").read_text(encoding="utf-8"), re.S).group(1)
 NATIVES = r'''
 zones, okays, backs = {}, 0, 0
-function SetCreateTrait(id) return true end
+function SetCreateTraitList(...) return true end
 function SetCreateStartZone(id)
     if id < 0 or id > 8 then return false end
     zones[#zones + 1] = id; zone = id; return true
@@ -28,7 +28,8 @@ CharCreateOkayButton:SetText("Accept")
 L = LuaRuntime()
 L.execute(HARNESS)
 L.execute(NATIVES)
-for name in ("esteria_style.lua", "creator_skin.lua", "fate_page.lua", "start_zone_page.lua"):
+for name in ("esteria_style.lua", "creator_skin.lua", "fate_traits.lua", "fate_picker.lua", "fate_page.lua",
+             "start_zone_page.lua"):
     L.execute((HERE / name).read_text(encoding="utf-8"))
 L.execute(r'''
 local function check(cond, msg) if not cond then error("FAIL: " .. msg, 2) end print("ok  " .. msg) end

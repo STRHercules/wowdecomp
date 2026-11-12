@@ -158,19 +158,6 @@ D.CARDS = {
 };
 for _, card in pairs(D.CARDS) do card.icon = I .. card.icon; end
 
--- Background traits (ids: PerkTraitWire.h).
-D.TRAITS = {
-    [0] = { name = "Unmarked", up = "No advantage", down = "No drawback" },
-    [1] = { name = "Wanderer", up = "+5% movement outdoors, on foot", down = "-10% reputation from quests" },
-    [2] = { name = "Glass Cannon", up = "+2% damage against creatures", down = "-4% maximum health in PvE" },
-    [3] = { name = "Ironbound", up = "+4% maximum health in PvE", down = "-2% damage against creatures" },
-    [4] = { name = "Artisan Soul", up = "+10% profession skill-ups", down = "-10% discovery rewards" },
-    [5] = { name = "Curious Mind", up = "+10% discovery rewards", down = "-10% profession skill-ups" },
-    [6] = { name = "Folk Hero", up = "+10% reputation from quests", down = "-10% gold from humanoids" },
-    [7] = { name = "Outlaw Heart", up = "+10% gold from humanoids", down = "-10% reputation from quests" },
-    [8] = { name = "Frugal Survivor", up = "+15% non-combat buff duration", down = "-10% healing from your potions" },
-};
-
 -- Result codes (PerkWire.h), as a sentence for the player.
 D.RESULTS = {
     [1] = "That perk does not exist.",

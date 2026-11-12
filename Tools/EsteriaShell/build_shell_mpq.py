@@ -244,6 +244,10 @@ def main():
     # The Codex draws with the character creator's style kit: one file, shipped in both places.
     entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
+    # So does its trait picker and the generated trait catalog (Tools/FateTraits/generate.py).
+    for shared in ("fate_traits.lua", "fate_picker.lua"):
+        entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + shared] = (
+            REPO / "Tools" / "RetailAssets" / "glue" / shared).read_bytes()
     entries.update(tree(REPO / "Addons" / "EsteriaMountCustomize", "Interface" + B + "AddOns" + B + "EsteriaMountCustomize" + B))
     entries["Interface" + B + "AddOns" + B + "EsteriaMountCustomize" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()

@@ -18,7 +18,7 @@ uint64_t Checksum(const std::vector<uint8_t>& bytes) {
 }
 bool ReadDecodedCache(const std::filesystem::path& path, std::vector<uint8_t>& bytes) {
     bytes.clear();
-    std::ifstream input(path, std::ios::binary | std::ios::ate);
+    std::ifstream input(AssetDiskPath(path), std::ios::binary | std::ios::ate);
     const auto size = input.tellg();
     if (!input || size < 16 || size > uint64_t(limit) + 16) return false;
     input.seekg(0);
@@ -35,7 +35,8 @@ bool ReadDecodedCache(const std::filesystem::path& path, std::vector<uint8_t>& b
     }
     return true;
 }
-bool WriteDecodedCache(const std::filesystem::path& path, const std::vector<uint8_t>& bytes, std::string& error) {
+bool WriteDecodedCache(const std::filesystem::path& destination, const std::vector<uint8_t>& bytes, std::string& error) {
+    const auto path = AssetDiskPath(destination);
     if (bytes.size() > limit) { error = "Decoded asset exceeds cache size limit"; return false; }
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);

@@ -1,0 +1,3837 @@
+{
+  "version": 1,
+  "target": "Esteria Paths of Fate",
+  "point_rules": {
+    "base": 4,
+    "max_flaw_points": 8,
+    "max_merits": 3,
+    "max_flaws": 3,
+    "max_quirks": 2,
+    "max_selected": 8
+  },
+  "traits": [
+    {
+      "id": 0,
+      "kind": "neutral",
+      "category": "Unmarked",
+      "name": "Unmarked",
+      "benefit": "None",
+      "drawback": "None",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "verify_existing",
+      "effect_handlers": []
+    },
+    {
+      "id": 1,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Wanderer",
+      "benefit": "+5% outdoor movement speed while on foot and out of combat",
+      "drawback": "−10% quest reputation",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveOutdoorOoc",
+          0.05
+        ],
+        [
+          "QuestRep",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 2,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Glass Cannon",
+      "benefit": "+2% damage against non-player enemies",
+      "drawback": "−4% maximum health in PvE",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgAll",
+          0.02
+        ],
+        [
+          "MaxHealth",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 3,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Ironbound",
+      "benefit": "+4% maximum health in PvE",
+      "drawback": "−2% damage against non-player enemies",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MaxHealth",
+          0.04
+        ],
+        [
+          "DmgAll",
+          -0.02
+        ]
+      ]
+    },
+    {
+      "id": 4,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Artisan Soul",
+      "benefit": "+10% profession skill-gain chance",
+      "drawback": "−10% first-discovery exploration rewards",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Skill",
+          0.1
+        ],
+        [
+          "ExploreXp",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 5,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Curious Mind",
+      "benefit": "+10% first-discovery exploration rewards",
+      "drawback": "−10% profession skill-gain chance",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "ExploreXp",
+          0.1
+        ],
+        [
+          "Skill",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 6,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Folk Hero",
+      "benefit": "+10% quest reputation",
+      "drawback": "−10% gold looted from humanoids",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestRep",
+          0.1
+        ],
+        [
+          "GoldHumanoid",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 7,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Outlaw Heart",
+      "benefit": "+10% gold looted from humanoids",
+      "drawback": "−10% quest reputation",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GoldHumanoid",
+          0.1
+        ],
+        [
+          "QuestRep",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 8,
+      "kind": "quirk",
+      "category": "Legacy Backgrounds",
+      "name": "Frugal Survivor",
+      "benefit": "+15% duration of food, drink, and other non-combat buffs",
+      "drawback": "−10% healing from your own potions",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "FoodDuration",
+          0.15
+        ],
+        [
+          "ElixirDuration",
+          0.15
+        ],
+        [
+          "PotionHeal",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 9,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Opening Strike",
+      "benefit": "+4% damage against PvE enemies above 90% health",
+      "drawback": "−3% damage against enemies below 30% health",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgTargetAbove90",
+          0.04
+        ],
+        [
+          "DmgTargetBelow30",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 10,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Executioner",
+      "benefit": "+5% damage against enemies below 25% health",
+      "drawback": "−3% damage against enemies above 75% health",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgTargetBelow25",
+          0.05
+        ],
+        [
+          "DmgTargetAbove75",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 11,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Relentless",
+      "benefit": "+3% damage after fighting the same enemy for 8 seconds",
+      "drawback": "−3% damage during the first 5 seconds",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgFightLong",
+          0.03
+        ],
+        [
+          "DmgFightEarly",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 12,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Ambusher",
+      "benefit": "First damaging attack after 10 seconds out of combat deals +6% damage",
+      "drawback": "−3% damage for the next 6 seconds",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Ambush",
+          0.06
+        ],
+        [
+          "AmbushAfter",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 13,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Beastbreaker",
+      "benefit": "+5% damage against beasts",
+      "drawback": "−3% damage against humanoids",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgBeast",
+          0.05
+        ],
+        [
+          "DmgHumanoid",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 14,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Gravebane",
+      "benefit": "+5% damage against undead",
+      "drawback": "−3% damage against elementals",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgUndead",
+          0.05
+        ],
+        [
+          "DmgElemental",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 15,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Elemental Grudge",
+      "benefit": "+5% damage against elementals",
+      "drawback": "−3% damage against undead",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgElemental",
+          0.05
+        ],
+        [
+          "DmgUndead",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 16,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Duelist",
+      "benefit": "+3% damage when fighting a single enemy",
+      "drawback": "−4% damage when fighting three or more",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSingle",
+          0.03
+        ],
+        [
+          "DmgCrowd",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 17,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Crowd Fighter",
+      "benefit": "+4% damage when fighting three or more enemies",
+      "drawback": "−3% damage when fighting only one",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgCrowd",
+          0.04
+        ],
+        [
+          "DmgSingle",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 18,
+      "kind": "quirk",
+      "category": "Combat & Fighting Styles",
+      "name": "Heavy Handed",
+      "benefit": "+5% damage from basic weapon attacks",
+      "drawback": "−3% damage from special weapon abilities",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgAuto",
+          0.05
+        ],
+        [
+          "DmgSpecial",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 19,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Thick Hide",
+      "benefit": "−3% physical damage received from NPCs",
+      "drawback": "+3% magical damage received from NPCs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenPhysical",
+          -0.03
+        ],
+        [
+          "TakenMagic",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 20,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Spellscarred",
+      "benefit": "−3% magical damage received from NPCs",
+      "drawback": "+3% physical damage received from NPCs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenMagic",
+          -0.03
+        ],
+        [
+          "TakenPhysical",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 21,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Death Defiant",
+      "benefit": "−5% damage received below 30% health",
+      "drawback": "+3% damage received above 70% health",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenLowHealth",
+          -0.05
+        ],
+        [
+          "TakenHighHealth",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 22,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Soft Landing",
+      "benefit": "−30% fall damage",
+      "drawback": "+10% damage from other environmental hazards",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Fall",
+          -0.3
+        ],
+        [
+          "EnvOther",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 23,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Stubborn",
+      "benefit": "−15% duration of ordinary enemy movement slows",
+      "drawback": "+15% duration of ordinary enemy roots",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SlowDuration",
+          -0.15
+        ],
+        [
+          "RootDuration",
+          0.15
+        ]
+      ]
+    },
+    {
+      "id": 24,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Quickstep",
+      "benefit": "+3% movement speed during PvE combat",
+      "drawback": "−3% maximum health in PvE",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveCombat",
+          0.03
+        ],
+        [
+          "MaxHealth",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 25,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Stonewall",
+      "benefit": "−4% damage received after standing still for 3 seconds",
+      "drawback": "+4% damage received while moving",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenStill",
+          -0.04
+        ],
+        [
+          "TakenMoving",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 26,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Nimble",
+      "benefit": "−4% damage from non-boss area attacks",
+      "drawback": "+4% damage from direct physical attacks",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenArea",
+          -0.04
+        ],
+        [
+          "TakenMelee",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 27,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Second Skin",
+      "benefit": "+6% armor from equipped gear",
+      "drawback": "−4% movement speed during combat",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "ArmorGear",
+          0.06
+        ],
+        [
+          "MoveCombat",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 28,
+      "kind": "quirk",
+      "category": "Defensive & Physical Traits",
+      "name": "Unbreakable Spirit",
+      "benefit": "−10% duration of ordinary enemy fear effects",
+      "drawback": "+10% duration of ordinary enemy stuns",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "FearDuration",
+          -0.1
+        ],
+        [
+          "StunDuration",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 29,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Mana Miser",
+      "benefit": "−5% mana cost of damaging spells",
+      "drawback": "−3% spell damage against NPCs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SpellCost",
+          -0.05
+        ],
+        [
+          "DmgSpell",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 30,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Overcharged",
+      "benefit": "+3% spell damage against NPCs",
+      "drawback": "+5% mana cost of damaging spells",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpell",
+          0.03
+        ],
+        [
+          "SpellCost",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 31,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Deep Focus",
+      "benefit": "+4% spell damage after standing still for 3 seconds",
+      "drawback": "−3% spell damage while moving",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpellStill",
+          0.04
+        ],
+        [
+          "DmgSpellMoving",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 32,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Restless Spark",
+      "benefit": "+4% instant-spell damage shortly after moving",
+      "drawback": "−3% spell damage while stationary",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpellInstantMoved",
+          0.04
+        ],
+        [
+          "DmgSpellStill",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 33,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Ritualist",
+      "benefit": "+4% damage from spells with cast times above 1.5 seconds",
+      "drawback": "+5% casting time for those spells",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpellSlow",
+          0.04
+        ],
+        [
+          "CastTimeSlow",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 34,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Quick Study",
+      "benefit": "−4% casting time for non-instant damaging spells",
+      "drawback": "−5% damage from those spells",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CastTimeDamaging",
+          -0.04
+        ],
+        [
+          "DmgSpellCast",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 35,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Hex-Touched",
+      "benefit": "+5% periodic spell damage (DoTs)",
+      "drawback": "−4% direct spell damage",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpellPeriodic",
+          0.05
+        ],
+        [
+          "DmgSpellDirect",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 36,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Flashfire",
+      "benefit": "+4% direct spell damage",
+      "drawback": "−5% periodic spell damage",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSpellDirect",
+          0.04
+        ],
+        [
+          "DmgSpellPeriodic",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 37,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Mana Hoarder",
+      "benefit": "+6% maximum mana",
+      "drawback": "−5% passive mana regeneration during combat",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MaxMana",
+          0.06
+        ],
+        [
+          "ManaRegenCombat",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 38,
+      "kind": "quirk",
+      "category": "Magical & Spellcasting Traits",
+      "name": "Volatile Focus",
+      "benefit": "+2 percentage points spell critical chance against NPCs",
+      "drawback": "−4% maximum mana",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CritSpellNpc",
+          0.02
+        ],
+        [
+          "MaxMana",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 39,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Lone Wolf",
+      "benefit": "+3% PvE damage while not grouped",
+      "drawback": "−3% PvE damage while grouped",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgSolo",
+          0.03
+        ],
+        [
+          "DmgGrouped",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 40,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Pack Mentality",
+      "benefit": "+3% PvE damage while grouped",
+      "drawback": "−3% PvE damage when solo",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgGrouped",
+          0.03
+        ],
+        [
+          "DmgSolo",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 41,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Guardian Spirit",
+      "benefit": "−3% PvE damage received while grouped",
+      "drawback": "+3% PvE damage received when solo",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenGrouped",
+          -0.03
+        ],
+        [
+          "TakenSolo",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 42,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Solitary Defender",
+      "benefit": "−3% PvE damage received when solo",
+      "drawback": "+3% PvE damage received while grouped",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenSolo",
+          -0.03
+        ],
+        [
+          "TakenGrouped",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 43,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Beast Bond",
+      "benefit": "+5% maximum health for your combat pet",
+      "drawback": "−3% damage dealt by you while the pet is active",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetMaxHealth",
+          0.05
+        ],
+        [
+          "OwnerDmgPet",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 44,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Feral Pact",
+      "benefit": "+5% combat pet damage",
+      "drawback": "−5% maximum pet health",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetDmg",
+          0.05
+        ],
+        [
+          "PetMaxHealth",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 45,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Protective Handler",
+      "benefit": "−5% damage received by your pet",
+      "drawback": "−3% damage dealt by your pet",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetTaken",
+          -0.05
+        ],
+        [
+          "PetDmg",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 46,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Wild Handler",
+      "benefit": "+5% combat pet movement speed",
+      "drawback": "−4% your movement speed while your pet is active",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetSpeed",
+          0.05
+        ],
+        [
+          "OwnerMovePet",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 47,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Battle Medic",
+      "benefit": "+5% healing on party members below 40% health",
+      "drawback": "−4% healing you receive from your own spells",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires meaningful class healing spells",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HealLowParty",
+          0.05
+        ],
+        [
+          "HealSelf",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 48,
+      "kind": "quirk",
+      "category": "Companions, Parties & Teamwork",
+      "name": "Self-Reliant",
+      "benefit": "+5% healing from your own healing spells",
+      "drawback": "−4% healing you provide to other players",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires meaningful class healing spells",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HealSelf",
+          0.05
+        ],
+        [
+          "HealOthers",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 49,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Night Owl",
+      "benefit": "+4% out-of-combat foot speed at night",
+      "drawback": "−4% during daytime",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveNight",
+          0.04
+        ],
+        [
+          "MoveDay",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 50,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Early Riser",
+      "benefit": "+4% out-of-combat foot speed during daytime",
+      "drawback": "−4% at night",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveDay",
+          0.04
+        ],
+        [
+          "MoveNight",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 51,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Cave Dweller",
+      "benefit": "+5% out-of-combat foot speed in caves",
+      "drawback": "−4% in outdoor wilderness",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveCave",
+          0.05
+        ],
+        [
+          "MoveWild",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 52,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Riverborn",
+      "benefit": "+15% swimming speed",
+      "drawback": "−4% out-of-combat running speed",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Swim",
+          0.15
+        ],
+        [
+          "MoveOoc",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 53,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Mountain Goat",
+      "benefit": "−25% fall damage",
+      "drawback": "−10% swimming speed",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Fall",
+          -0.25
+        ],
+        [
+          "Swim",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 54,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Longstride",
+      "benefit": "+6% foot speed after 15 seconds of continuous out-of-combat travel",
+      "drawback": "−3% foot speed during the first 15 seconds",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveTravelLong",
+          0.06
+        ],
+        [
+          "MoveTravelEarly",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 55,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Underbrush",
+      "benefit": "−10% detection radius of ordinary outdoor hostile NPCs while on foot",
+      "drawback": "−4% out-of-combat foot speed",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Aggro",
+          -0.1
+        ],
+        [
+          "MoveOoc",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 56,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Hearthbound",
+      "benefit": "−20% Hearthstone cooldown",
+      "drawback": "+10% flightmaster travel costs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Hearth",
+          -0.2
+        ],
+        [
+          "Taxi",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 57,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Hitchhiker",
+      "benefit": "−10% flightmaster travel costs",
+      "drawback": "+20% Hearthstone cooldown",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Taxi",
+          -0.1
+        ],
+        [
+          "Hearth",
+          0.2
+        ]
+      ]
+    },
+    {
+      "id": 58,
+      "kind": "quirk",
+      "category": "Exploration, Traveling & Movement",
+      "name": "Stormborn",
+      "benefit": "+5% outdoor foot speed during rain or snow",
+      "drawback": "−3% during clear weather",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.WeatherTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveRain",
+          0.05
+        ],
+        [
+          "MoveClear",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 59,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Green Thumb",
+      "benefit": "+10% chance to gather bonus herbs",
+      "drawback": "+10% herb-gathering time",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "BonusHerb",
+          0.1
+        ],
+        [
+          "HerbTime",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 60,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Ore Whisperer",
+      "benefit": "+10% chance to gather bonus ore",
+      "drawback": "+10% mining time",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "BonusOre",
+          0.1
+        ],
+        [
+          "MineTime",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 61,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Leatherwise",
+      "benefit": "+10% chance for bonus leather from skinning",
+      "drawback": "+10% skinning time",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "BonusSkin",
+          0.1
+        ],
+        [
+          "SkinTime",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 62,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Threadpicker",
+      "benefit": "+8% cloth drops from humanoids",
+      "drawback": "−5% gold looted from humanoids",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "ClothDrop",
+          0.08
+        ],
+        [
+          "GoldHumanoid",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 63,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Hasty Hands",
+      "benefit": "−15% item-crafting time",
+      "drawback": "−10% profession skill-gain chance",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CraftTime",
+          -0.15
+        ],
+        [
+          "Skill",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 64,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Careful Hands",
+      "benefit": "+10% profession skill-gain chance while crafting",
+      "drawback": "−5% quest gold rewards",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SkillCraft",
+          0.1
+        ],
+        [
+          "QuestGold",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 65,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Early Apprentice",
+      "benefit": "+15% profession skill-gain chance below skill 150",
+      "drawback": "−10% skill-gain chance at skill 150+",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SkillLow",
+          0.15
+        ],
+        [
+          "SkillHigh",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 66,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Late Bloomer",
+      "benefit": "+10% profession skill-gain chance at skill 150+",
+      "drawback": "−15% skill-gain chance below 150",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SkillHigh",
+          0.1
+        ],
+        [
+          "SkillLow",
+          -0.15
+        ]
+      ]
+    },
+    {
+      "id": 67,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Tinker's Mind",
+      "benefit": "+15% Engineering skill-gain chance",
+      "drawback": "+10% equipment repair costs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SkillEngineering",
+          0.15
+        ],
+        [
+          "Repair",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 68,
+      "kind": "quirk",
+      "category": "Crafting, Gathering & Professions",
+      "name": "Resourceful Salvager",
+      "benefit": "+8% chance of extra common materials from milling, prospecting, or disenchanting",
+      "drawback": "−5% general profession skill-gain chance",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Salvage",
+          0.08
+        ],
+        [
+          "Skill",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 69,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Copper Counter",
+      "benefit": "−5% NPC vendor purchase prices",
+      "drawback": "+10% equipment repair costs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Buy",
+          -0.05
+        ],
+        [
+          "Repair",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 70,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Scrap Dealer",
+      "benefit": "+15% vendor sale value of gray items",
+      "drawback": "−5% quest gold rewards",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SellGray",
+          0.15
+        ],
+        [
+          "QuestGold",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 71,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Chest Rat",
+      "benefit": "+15% gold found inside treasure chests",
+      "drawback": "−8% gold looted from humanoids",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GoldChest",
+          0.15
+        ],
+        [
+          "GoldHumanoid",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 72,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Bounty Earner",
+      "benefit": "+10% gold rewards from kill quests",
+      "drawback": "−10% gold rewards from delivery quests",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestGoldKill",
+          0.1
+        ],
+        [
+          "QuestGoldDelivery",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 73,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Burdened Purse",
+      "benefit": "+10% gold looted from humanoids",
+      "drawback": "+12% equipment repair costs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GoldHumanoid",
+          0.1
+        ],
+        [
+          "Repair",
+          0.12
+        ]
+      ]
+    },
+    {
+      "id": 74,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Repair Savant",
+      "benefit": "−12% equipment repair costs",
+      "drawback": "+8% NPC vendor purchase prices",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Repair",
+          -0.12
+        ],
+        [
+          "Buy",
+          0.08
+        ]
+      ]
+    },
+    {
+      "id": 75,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Market Broker",
+      "benefit": "−10% Auction House listing deposits",
+      "drawback": "+10% Auction House sale commission",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "AhDeposit",
+          -0.1
+        ],
+        [
+          "AhCut",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 76,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Hoarder",
+      "benefit": "+10% money found inside lootable containers",
+      "drawback": "−4% foot speed when inventory is at least 80% full",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GoldChest",
+          0.1
+        ],
+        [
+          "MoveFullBags",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 77,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Junk Magnet",
+      "benefit": "+12% chance of an extra gray item from eligible humanoid kills",
+      "drawback": "−5% gold looted from humanoids",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GrayExtra",
+          0.12
+        ],
+        [
+          "GoldHumanoid",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 78,
+      "kind": "quirk",
+      "category": "Gold, Loot & Commerce",
+      "name": "Gilded Tongue",
+      "benefit": "+8% vendor sale prices for ordinary items",
+      "drawback": "−8% quest reputation gains",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Sell",
+          0.08
+        ],
+        [
+          "QuestRep",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 79,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Iron Stomach",
+      "benefit": "+20% health restored by eating food",
+      "drawback": "−20% mana restored by drinking",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires ability to benefit from drinking mana; else disable or reprice",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "FoodHeal",
+          0.2
+        ],
+        [
+          "DrinkMana",
+          -0.2
+        ]
+      ]
+    },
+    {
+      "id": 80,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Thirsty Mind",
+      "benefit": "+20% mana restored by drinking",
+      "drawback": "−20% health restored by eating",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires mana pool",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DrinkMana",
+          0.2
+        ],
+        [
+          "FoodHeal",
+          -0.2
+        ]
+      ]
+    },
+    {
+      "id": 81,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Potion Affinity",
+      "benefit": "+12% healing from your own health potions",
+      "drawback": "−10% healing received from bandages",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PotionHeal",
+          0.12
+        ],
+        [
+          "BandageHeal",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 82,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Field Dresser",
+      "benefit": "+15% healing received from bandages",
+      "drawback": "−10% healing from your own health potions",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "BandageHeal",
+          0.15
+        ],
+        [
+          "PotionHeal",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 83,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Well Fed",
+      "benefit": "+20% duration of food-provided stat buffs",
+      "drawback": "−10% duration of elixir buffs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "FoodDuration",
+          0.2
+        ],
+        [
+          "ElixirDuration",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 84,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Alchemical Blood",
+      "benefit": "+15% duration of elixir buffs",
+      "drawback": "−10% duration of food-provided stat buffs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "ElixirDuration",
+          0.15
+        ],
+        [
+          "FoodDuration",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 85,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Poison-Bred",
+      "benefit": "−15% poison-effect duration from ordinary enemies",
+      "drawback": "+15% disease-effect duration",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PoisonDuration",
+          -0.15
+        ],
+        [
+          "DiseaseDuration",
+          0.15
+        ]
+      ]
+    },
+    {
+      "id": 86,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Plagueproof",
+      "benefit": "−15% disease-effect duration from ordinary enemies",
+      "drawback": "+15% poison-effect duration",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DiseaseDuration",
+          -0.15
+        ],
+        [
+          "PoisonDuration",
+          0.15
+        ]
+      ]
+    },
+    {
+      "id": 87,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Restless Sleeper",
+      "benefit": "+20% rested experience accumulation",
+      "drawback": "−5% monster-kill experience while not rested",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Rest",
+          0.2
+        ],
+        [
+          "KillXpUnrested",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 88,
+      "kind": "quirk",
+      "category": "Survival, Food, Medicine & Rest",
+      "name": "Tipsy Brawler",
+      "benefit": "+5 percentage points dodge chance against NPCs while intoxicated",
+      "drawback": "−5 percentage points hit chance while intoxicated",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DodgeDrunk",
+          0.05
+        ],
+        [
+          "HitDrunk",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 89,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Story Seeker",
+      "benefit": "+5% quest experience",
+      "drawback": "−5% monster-kill experience",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestXp",
+          0.05
+        ],
+        [
+          "KillXp",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 90,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Monster Hunter",
+      "benefit": "+5% monster-kill experience",
+      "drawback": "−5% quest experience",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "KillXp",
+          0.05
+        ],
+        [
+          "QuestXp",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 91,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Local Legend",
+      "benefit": "+10% reputation gains with your racial home-city faction",
+      "drawback": "−8% reputation gains with other capital-city factions",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "RepHome",
+          0.1
+        ],
+        [
+          "RepCapital",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 92,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Foreign Soul",
+      "benefit": "+10% reputation gains with other capital-city factions",
+      "drawback": "−8% reputation gains with your home-city faction",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "RepCapital",
+          0.1
+        ],
+        [
+          "RepHome",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 93,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Outsider's Friend",
+      "benefit": "+10% reputation gains with neutral factions",
+      "drawback": "−8% reputation gains with your home-city faction",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "NeutralRep",
+          0.1
+        ],
+        [
+          "RepHome",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 94,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Guild Loyalist",
+      "benefit": "+5% experience from eligible kills while grouped with guild members",
+      "drawback": "−5% experience from kills outside guild groups",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "KillXpGuild",
+          0.05
+        ],
+        [
+          "KillXpNoGuild",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 95,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Errand Runner",
+      "benefit": "+10% experience from delivery quests",
+      "drawback": "−8% experience from kill quests",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestXpDelivery",
+          0.1
+        ],
+        [
+          "QuestXpKill",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 96,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Bounty Pursuer",
+      "benefit": "+10% experience from kill quests",
+      "drawback": "−8% experience from delivery quests",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestXpKill",
+          0.1
+        ],
+        [
+          "QuestXpDelivery",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 97,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Dungeon Disciple",
+      "benefit": "+8% reputation from dungeon quests",
+      "drawback": "−8% reputation from outdoor quests",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "RepDungeon",
+          0.08
+        ],
+        [
+          "RepOutdoor",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 98,
+      "kind": "quirk",
+      "category": "Reputation, Experience & Background",
+      "name": "Open Road",
+      "benefit": "+8% reputation from outdoor quests",
+      "drawback": "−8% reputation from dungeon quests",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "RepOutdoor",
+          0.08
+        ],
+        [
+          "RepDungeon",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 99,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Bloodscent",
+      "benefit": "+5% PvE damage while below 35% health",
+      "drawback": "−5% healing received while below 35% health",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgLowHealth",
+          0.05
+        ],
+        [
+          "HealTakenLow",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 100,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Grave Feeder",
+      "benefit": "Killing an experience-eligible enemy restores 1.5% maximum health (10-second internal cooldown)",
+      "drawback": "−20% natural out-of-combat health regeneration",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "KillHeal",
+          0.015
+        ],
+        [
+          "HealthRegen",
+          -0.2
+        ]
+      ]
+    },
+    {
+      "id": 101,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Moon-Cursed",
+      "benefit": "+5% PvE damage at night",
+      "drawback": "−5% PvE damage during daytime",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgNight",
+          0.05
+        ],
+        [
+          "DmgDay",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 102,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Fearless Fool",
+      "benefit": "+4% damage against elite NPCs",
+      "drawback": "+5% damage received from elite NPCs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgElite",
+          0.04
+        ],
+        [
+          "TakenElite",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 103,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Run Rabbit Run",
+      "benefit": "Gain +8% foot speed for 5 seconds when falling below 25% health (60-second internal cooldown)",
+      "drawback": "−4% maximum health in PvE",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveLowHealthProc",
+          0.08
+        ],
+        [
+          "MaxHealth",
+          -0.04
+        ]
+      ]
+    },
+    {
+      "id": 104,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "High Roller",
+      "benefit": "+10% quest gold if completing without dying since accepting",
+      "drawback": "−10% quest gold if you died during that quest",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestGoldClean",
+          0.1
+        ],
+        [
+          "QuestGoldDied",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 105,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Fractured Luck",
+      "benefit": "+10% critical-strike bonus damage against NPCs",
+      "drawback": "−2 percentage points critical-strike chance against NPCs",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CritDamage",
+          0.1
+        ],
+        [
+          "CritChanceNpc",
+          -0.02
+        ]
+      ]
+    },
+    {
+      "id": 106,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Haunted",
+      "benefit": "−5% damage received from undead enemies",
+      "drawback": "+5% damage received from living enemies",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenUndead",
+          -0.05
+        ],
+        [
+          "TakenLiving",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 107,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Frenzied",
+      "benefit": "+4% attack speed for 8 seconds after killing an experience-eligible NPC",
+      "drawback": "−3% attack speed while bonus is inactive",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "AttackSpeedFrenzy",
+          0.04
+        ],
+        [
+          "AttackSpeedIdle",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 108,
+      "kind": "quirk",
+      "category": "Strange, Cursed & Unusual",
+      "name": "Wild Card",
+      "benefit": "Every 2 minutes, next PvE combat randomly grants +5% damage for 10 seconds",
+      "drawback": "Or applies −5% damage for 10 seconds",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "WildUp",
+          0.05
+        ],
+        [
+          "WildDown",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 109,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Homebody",
+      "benefit": "+20% rested XP accumulation inside your own home",
+      "drawback": "−10% rested XP accumulation in ordinary inns",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "RestHome",
+          0.2
+        ],
+        [
+          "RestInn",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 110,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Wandering Tenant",
+      "benefit": "−20% personal housing teleport cooldown",
+      "drawback": "+20% Hearthstone cooldown",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HouseHearth",
+          -0.2
+        ],
+        [
+          "Hearth",
+          0.2
+        ]
+      ]
+    },
+    {
+      "id": 111,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Shopkeeper",
+      "benefit": "−10% commission on sales through your offline player shop",
+      "drawback": "+10% Auction House sales commission",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 112,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Market Merchant",
+      "benefit": "−10% Auction House sales commission",
+      "drawback": "+10% player-shop sales commission",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 113,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Interior Artisan",
+      "benefit": "+15% skill-gain chance when crafting housing decorations",
+      "drawback": "−8% skill-gain chance for other crafting recipes",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "requires housing decor recipe system",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 114,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Neighborhood Regular",
+      "benefit": "+8% out-of-combat foot speed in housing neighborhoods",
+      "drawback": "−3% out-of-combat foot speed in capital cities",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveHousing",
+          0.08
+        ],
+        [
+          "MoveCapital",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 115,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Tavernkeeper",
+      "benefit": "+8% proceeds from services provided by your player-owned tavern",
+      "drawback": "−8% proceeds from ordinary player-shop sales",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 116,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Antique Dealer",
+      "benefit": "+10% sales proceeds from housing decorations sold in your shop",
+      "drawback": "−5% proceeds from other shop merchandise",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 117,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Guild Steward",
+      "benefit": "−10% required contributions toward guild-hall upkeep",
+      "drawback": "+10% upkeep costs for your personal home",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 118,
+      "kind": "quirk",
+      "category": "Esteria Housing & Community",
+      "name": "Generous Host",
+      "benefit": "+15% duration of food buffs you serve to guests at your property",
+      "drawback": "−10% duration of food buffs you consume outside your property",
+      "cost": 0,
+      "grant": 0,
+      "eligibility": "",
+      "feature_flag": "Esteria.Fate.HousingTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "not_implemented",
+      "effect_handlers": []
+    },
+    {
+      "id": 119,
+      "kind": "merit",
+      "category": "Combat",
+      "name": "Vigorous",
+      "benefit": "+5% maximum health versus NPCs",
+      "drawback": "None",
+      "cost": 4,
+      "grant": 0,
+      "eligibility": "PvE only",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MaxHealth",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 120,
+      "kind": "merit",
+      "category": "Combat",
+      "name": "Keen Edge",
+      "benefit": "+3% damage dealt to non-player enemies",
+      "drawback": "None",
+      "cost": 4,
+      "grant": 0,
+      "eligibility": "PvE only",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgAll",
+          0.03
+        ]
+      ]
+    },
+    {
+      "id": 121,
+      "kind": "merit",
+      "category": "Magic",
+      "name": "Calm Mind",
+      "benefit": "+5% maximum mana",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "mana users",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MaxMana",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 122,
+      "kind": "merit",
+      "category": "Survival",
+      "name": "Natural Healer",
+      "benefit": "+5% healing from your own spells cast on yourself",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "healing-capable classes",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HealSelf",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 123,
+      "kind": "merit",
+      "category": "Progression",
+      "name": "Experienced Adventurer",
+      "benefit": "+4% quest experience rewards",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestXp",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 124,
+      "kind": "merit",
+      "category": "Progression",
+      "name": "Experienced Hunter",
+      "benefit": "+4% eligible monster-kill experience",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "KillXp",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 125,
+      "kind": "merit",
+      "category": "Professions",
+      "name": "Swift Gatherer",
+      "benefit": "−8% gathering interaction time",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "gathering-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GatherTime",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 126,
+      "kind": "merit",
+      "category": "Professions",
+      "name": "Fast Learner",
+      "benefit": "+8% relative profession skill-gain chance",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "profession-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Skill",
+          0.08
+        ]
+      ]
+    },
+    {
+      "id": 127,
+      "kind": "merit",
+      "category": "Professions",
+      "name": "Lucky Scrounger",
+      "benefit": "+4% chance of extra common gather material, max 4/day",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "gathering-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "BonusGather",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 128,
+      "kind": "merit",
+      "category": "Economy",
+      "name": "Gold Nose",
+      "benefit": "+5% eligible humanoid gold loot, capped at 10 gold bonus/day",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GoldHumanoidCapped",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 129,
+      "kind": "merit",
+      "category": "Reputation",
+      "name": "Friend of Factions",
+      "benefit": "+6% reputation from quests",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestRep",
+          0.06
+        ]
+      ]
+    },
+    {
+      "id": 130,
+      "kind": "merit",
+      "category": "Survival",
+      "name": "Deep Sleeper",
+      "benefit": "+10% rested XP accumulation",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Rest",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 131,
+      "kind": "merit",
+      "category": "Exploration",
+      "name": "Lightfoot",
+      "benefit": "−8% ordinary fall damage",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Fall",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 132,
+      "kind": "merit",
+      "category": "Exploration",
+      "name": "River Runner",
+      "benefit": "+10% swim speed",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Swim",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 133,
+      "kind": "merit",
+      "category": "Companions",
+      "name": "Pet Trainer",
+      "benefit": "+4% combat pet damage to NPCs",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetDmg",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 134,
+      "kind": "merit",
+      "category": "Companions",
+      "name": "Party Medic",
+      "benefit": "+4% healing on other group members",
+      "drawback": "None",
+      "cost": 3,
+      "grant": 0,
+      "eligibility": "healing-capable classes",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HealOthers",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 135,
+      "kind": "merit",
+      "category": "Economy",
+      "name": "Mercantile",
+      "benefit": "+4% sale prices for ordinary vendorable goods",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Sell",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 136,
+      "kind": "merit",
+      "category": "Economy",
+      "name": "Durable Tools",
+      "benefit": "−6% repair costs",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Repair",
+          -0.06
+        ]
+      ]
+    },
+    {
+      "id": 137,
+      "kind": "merit",
+      "category": "Progression",
+      "name": "Dungeon Regular",
+      "benefit": "+4% experience from eligible dungeon quests",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "quest categories enabled",
+      "feature_flag": "Esteria.Fate.QuestCategoryTraits.Enable",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DungeonQuestXp",
+          0.04
+        ]
+      ]
+    },
+    {
+      "id": 138,
+      "kind": "merit",
+      "category": "Exploration",
+      "name": "Hearth Attuned",
+      "benefit": "−10% Hearthstone cooldown",
+      "drawback": "None",
+      "cost": 2,
+      "grant": 0,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Hearth",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 139,
+      "kind": "flaw",
+      "category": "Combat",
+      "name": "Frail",
+      "benefit": "None",
+      "drawback": "−5% maximum health versus NPCs",
+      "cost": 0,
+      "grant": 3,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MaxHealth",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 140,
+      "kind": "flaw",
+      "category": "Combat",
+      "name": "Pacifist's Hesitation",
+      "benefit": "None",
+      "drawback": "−3% damage dealt to NPCs",
+      "cost": 0,
+      "grant": 3,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DmgAll",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 141,
+      "kind": "flaw",
+      "category": "Combat",
+      "name": "Unsteady Hands",
+      "benefit": "None",
+      "drawback": "−2 percentage points critical chance against NPCs",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "attack-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CritChanceNpc",
+          -0.02
+        ]
+      ]
+    },
+    {
+      "id": 142,
+      "kind": "flaw",
+      "category": "Professions",
+      "name": "Slow Learner",
+      "benefit": "None",
+      "drawback": "−7% relative profession skill-gain chance",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "profession-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Skill",
+          -0.07
+        ]
+      ]
+    },
+    {
+      "id": 143,
+      "kind": "flaw",
+      "category": "Reputation",
+      "name": "Unpopular",
+      "benefit": "None",
+      "drawback": "−8% reputation from quests",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "QuestRep",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 144,
+      "kind": "flaw",
+      "category": "Economy",
+      "name": "Poor Negotiator",
+      "benefit": "None",
+      "drawback": "+8% NPC vendor purchase prices",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Buy",
+          0.08
+        ]
+      ]
+    },
+    {
+      "id": 145,
+      "kind": "flaw",
+      "category": "Exploration",
+      "name": "Clumsy Climber",
+      "benefit": "None",
+      "drawback": "+20% ordinary fall damage",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Fall",
+          0.2
+        ]
+      ]
+    },
+    {
+      "id": 146,
+      "kind": "flaw",
+      "category": "Survival",
+      "name": "Picky Eater",
+      "benefit": "None",
+      "drawback": "−15% food buff duration",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "FoodDuration",
+          -0.15
+        ]
+      ]
+    },
+    {
+      "id": 147,
+      "kind": "flaw",
+      "category": "Combat",
+      "name": "Thin Blood",
+      "benefit": "None",
+      "drawback": "+6% physical damage received from NPCs",
+      "cost": 0,
+      "grant": 3,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenPhysical",
+          0.06
+        ]
+      ]
+    },
+    {
+      "id": 148,
+      "kind": "flaw",
+      "category": "Combat",
+      "name": "Arcane Sensitivity",
+      "benefit": "None",
+      "drawback": "+6% magical damage received from NPCs",
+      "cost": 0,
+      "grant": 3,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "TakenMagic",
+          0.06
+        ]
+      ]
+    },
+    {
+      "id": 149,
+      "kind": "flaw",
+      "category": "Exploration",
+      "name": "Sluggish",
+      "benefit": "None",
+      "drawback": "−3% out-of-combat foot speed",
+      "cost": 0,
+      "grant": 3,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "MoveOoc",
+          -0.03
+        ]
+      ]
+    },
+    {
+      "id": 150,
+      "kind": "flaw",
+      "category": "Survival",
+      "name": "Slow Recovery",
+      "benefit": "None",
+      "drawback": "−15% natural out-of-combat health regeneration",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "HealthRegen",
+          -0.15
+        ]
+      ]
+    },
+    {
+      "id": 151,
+      "kind": "flaw",
+      "category": "Survival",
+      "name": "Butterfingers",
+      "benefit": "None",
+      "drawback": "+15% equipment durability loss on PvE death",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "DeathDurability",
+          0.15
+        ]
+      ]
+    },
+    {
+      "id": 152,
+      "kind": "flaw",
+      "category": "Economy",
+      "name": "Wasteful",
+      "benefit": "None",
+      "drawback": "+10% equipment repair cost",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Repair",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 153,
+      "kind": "flaw",
+      "category": "Survival",
+      "name": "Restless Mind",
+      "benefit": "None",
+      "drawback": "−15% rested XP accumulation",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Rest",
+          -0.15
+        ]
+      ]
+    },
+    {
+      "id": 154,
+      "kind": "flaw",
+      "category": "Professions",
+      "name": "Clumsy Gatherer",
+      "benefit": "None",
+      "drawback": "+10% gathering interaction time",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "gathering-capable",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "GatherTime",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 155,
+      "kind": "flaw",
+      "category": "Survival",
+      "name": "Shaky Potioner",
+      "benefit": "None",
+      "drawback": "−10% healing from your own potions",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PotionHeal",
+          -0.1
+        ]
+      ]
+    },
+    {
+      "id": 156,
+      "kind": "flaw",
+      "category": "Exploration",
+      "name": "Poor Sense of Direction",
+      "benefit": "None",
+      "drawback": "+10% taxi flight costs",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Taxi",
+          0.1
+        ]
+      ]
+    },
+    {
+      "id": 157,
+      "kind": "flaw",
+      "category": "Exploration",
+      "name": "Short Breath",
+      "benefit": "None",
+      "drawback": "−12% swim speed",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Swim",
+          -0.12
+        ]
+      ]
+    },
+    {
+      "id": 158,
+      "kind": "flaw",
+      "category": "Reputation",
+      "name": "Sour Reputation",
+      "benefit": "None",
+      "drawback": "−5% reputation from neutral factions",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "NeutralRep",
+          -0.05
+        ]
+      ]
+    },
+    {
+      "id": 159,
+      "kind": "flaw",
+      "category": "Economy",
+      "name": "Shy Vendor",
+      "benefit": "None",
+      "drawback": "−8% vendor sale price for ordinary goods",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "all",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "Sell",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 160,
+      "kind": "flaw",
+      "category": "Companions",
+      "name": "Weak Bond",
+      "benefit": "None",
+      "drawback": "−8% max combat pet health",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "compatible combat pet",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "PetMaxHealth",
+          -0.08
+        ]
+      ]
+    },
+    {
+      "id": 161,
+      "kind": "flaw",
+      "category": "Magic",
+      "name": "Unfocused Mage",
+      "benefit": "None",
+      "drawback": "+5% mana cost of damaging spells",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "mana-using spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "SpellCost",
+          0.05
+        ]
+      ]
+    },
+    {
+      "id": 162,
+      "kind": "flaw",
+      "category": "Magic",
+      "name": "Slow Incantation",
+      "benefit": "None",
+      "drawback": "+4% cast time on damaging spells with cast times over 1.5 sec",
+      "cost": 0,
+      "grant": 2,
+      "eligibility": "casting spellcaster",
+      "feature_flag": "",
+      "conflict_family": "",
+      "implementation_status": "implemented",
+      "effect_handlers": [
+        [
+          "CastTimeSlow",
+          0.04
+        ]
+      ]
+    }
+  ],
+  "conflict_sets": [
+    [
+      "Wanderer",
+      "Folk Hero",
+      "Outlaw Heart",
+      "Gilded Tongue",
+      "Unpopular",
+      "Friend of Factions"
+    ],
+    [
+      "Glass Cannon",
+      "Ironbound",
+      "Vigorous",
+      "Frail",
+      "Keen Edge",
+      "Pacifist's Hesitation"
+    ],
+    [
+      "Artisan Soul",
+      "Curious Mind",
+      "Fast Learner",
+      "Slow Learner",
+      "Careful Hands"
+    ],
+    [
+      "Night Owl",
+      "Early Riser",
+      "Moon-Cursed"
+    ],
+    [
+      "Beastbreaker",
+      "Gravebane",
+      "Elemental Grudge"
+    ],
+    [
+      "Duelist",
+      "Crowd Fighter"
+    ],
+    [
+      "Mana Miser",
+      "Overcharged",
+      "Unfocused Mage"
+    ],
+    [
+      "Hex-Touched",
+      "Flashfire"
+    ],
+    [
+      "Deep Focus",
+      "Restless Spark"
+    ],
+    [
+      "Lone Wolf",
+      "Pack Mentality",
+      "Guardian Spirit",
+      "Solitary Defender"
+    ],
+    [
+      "Green Thumb",
+      "Ore Whisperer",
+      "Leatherwise"
+    ],
+    [
+      "Hearthbound",
+      "Hitchhiker",
+      "Hearth Attuned",
+      "Wandering Tenant"
+    ],
+    [
+      "Copper Counter",
+      "Repair Savant",
+      "Poor Negotiator",
+      "Wasteful",
+      "Durable Tools"
+    ],
+    [
+      "Story Seeker",
+      "Monster Hunter",
+      "Experienced Adventurer",
+      "Experienced Hunter"
+    ],
+    [
+      "Errand Runner",
+      "Bounty Pursuer",
+      "Bounty Earner"
+    ],
+    [
+      "Dungeon Disciple",
+      "Open Road",
+      "Dungeon Regular"
+    ],
+    [
+      "Iron Stomach",
+      "Thirsty Mind"
+    ],
+    [
+      "Potion Affinity",
+      "Field Dresser",
+      "Shaky Potioner"
+    ],
+    [
+      "Poison-Bred",
+      "Plagueproof"
+    ],
+    [
+      "Thick Hide",
+      "Spellscarred",
+      "Thin Blood",
+      "Arcane Sensitivity"
+    ],
+    [
+      "Restless Sleeper",
+      "Deep Sleeper",
+      "Restless Mind"
+    ],
+    [
+      "Homebody",
+      "Restless Sleeper",
+      "Deep Sleeper"
+    ],
+    [
+      "Shopkeeper",
+      "Market Merchant"
+    ],
+    [
+      "Riverborn",
+      "River Runner",
+      "Short Breath"
+    ],
+    [
+      "Beast Bond",
+      "Feral Pact",
+      "Protective Handler",
+      "Wild Handler",
+      "Pet Trainer",
+      "Weak Bond"
+    ],
+    [
+      "Gilded Tongue",
+      "Shy Vendor",
+      "Mercantile",
+      "Scrap Dealer"
+    ],
+    [
+      "Local Legend",
+      "Foreign Soul",
+      "Outsider's Friend",
+      "Sour Reputation"
+    ],
+    [
+      "Frenzied",
+      "Heavy Handed",
+      "Unsteady Hands"
+    ]
+  ]
+}

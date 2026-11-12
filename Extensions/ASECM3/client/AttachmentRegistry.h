@@ -13,7 +13,7 @@ struct AttachmentCounters {uint64_t reads=0,publishes=0,children=0,positions=0;}
 AttachmentCounters GetAttachmentCounters();
 void RecordAttachmentChild();
 void RegisterModelAttachments(CM2Model* model,const AttachmentData& data,const C44Matrix& sourceBasis);
-void PublishModelAttachments(CM2Model* model,const AttachmentPose& pose,const C44Matrix& sourceBasis);
+void PublishModelAttachments(CM2Model* model,const AttachmentPose& pose,const C44Matrix& sourceBasis,const C3Vector* rider=nullptr);
 void UnregisterModelAttachments(CM2Model* model);
 void ClearModelAttachments();
 bool HasModelAttachments(const CM2Model* model);

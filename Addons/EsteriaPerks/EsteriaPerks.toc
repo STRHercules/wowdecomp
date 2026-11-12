@@ -5,5 +5,8 @@
 ## SavedVariables: EsteriaPerksDB
 
 esteria_style.lua
+fate_traits.lua
+fate_picker.lua
 Data.lua
 Codex.lua
+Traits.lua

@@ -36,7 +36,10 @@ BODY_PAGE = Path(__file__).with_name("body_page.lua")
 STYLE_MARKER = "-- Esteria style kit (wowdecomp)"
 STYLE = Path(__file__).with_name("esteria_style.lua")
 FATE = Path(__file__).with_name("fate_page.lua")
+# The Fate page's catalog (generated: Tools/FateTraits/generate.py) and picker, loaded before it.
+FATE_PARTS = (Path(__file__).with_name("fate_traits.lua"), Path(__file__).with_name("fate_picker.lua"), FATE)
 START_ZONE = Path(__file__).with_name("start_zone_page.lua")
+UPRIGHT = Path(__file__).with_name("upright_toggle.lua")
 SKIN_MARKER = "-- Creator skin (wowdecomp)"
 SKIN = Path(__file__).with_name("creator_skin.lua")
 
@@ -195,9 +198,10 @@ def patch_skin(text):
     if SKIN_MARKER in text:
         text = text[:text.index(SKIN_MARKER)].rstrip("\n") + "\n"
     skin = SKIN.read_text(encoding="utf-8").replace("\r\n", "\n")
-    fate = FATE.read_text(encoding="utf-8").replace("\r\n", "\n")
+    fate = "\n".join(part.read_text(encoding="utf-8").replace("\r\n", "\n") for part in FATE_PARTS)
     zone = START_ZONE.read_text(encoding="utf-8").replace("\r\n", "\n")
-    return (text + "\n" + skin + "\n" + fate + "\n" + zone).replace("\n", nl)
+    upright = UPRIGHT.read_text(encoding="utf-8").replace("\r\n", "\n")
+    return (text + "\n" + skin + "\n" + fate + "\n" + zone + "\n" + upright).replace("\n", nl)
 
 
 def patch_rows(text):

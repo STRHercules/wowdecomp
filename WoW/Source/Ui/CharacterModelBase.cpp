@@ -1,4 +1,5 @@
 #include "CharacterModelBase.h"
+#include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include <new>
 #include <typeinfo>
 #include "Engine/Source/Frame/CScriptObject.h"
@@ -305,7 +306,8 @@ void CGCharacterModelBase::SetUpModel(CreatureStats_C* stats) {
         return;
     }
 
-    CM2Model* model = this->GetScene()->CreateModel(modelRec->m_modelName, 0);
+    CM2Model* model = ASECM3::Client::CreatePreviewModel(this->GetScene(),modelRec->m_modelName);
+    if (!model) model = this->GetScene()->CreateModel(modelRec->m_modelName, 0);
 
     if (!model) {
         return;

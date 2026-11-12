@@ -16,7 +16,7 @@ WorldInstance::WorldInstance(std::shared_ptr<const Scene> source,const std::stri
     // Use the same evidence-based action mapping as the viewer. Absence of
     // Stand leaves the source bind pose; it never guesses a clip by ordinal.
     const auto stand=SelectAction(m_renderer.Actions(),0);
-    if(stand>=0){m_renderer.SetSequence(stand);m_action=0;}
+    if(stand>=0){m_renderer.SetSequence(stand,true);m_action=0;}
     m_hasBounds=m_renderer.FrameBounds(m_lower,m_upper);
     m_maxLower=m_lower;m_maxUpper=m_upper;
 }
@@ -39,7 +39,7 @@ bool WorldInstance::SetWoWAction(uint32_t action,bool restart){
         if(clip<0)throw Error("No eligible M3 source clip maps to WoW action "+std::to_string(action));
         // Persistent /dance repeats its source take, even when the HotS actor
         // originally controlled looping outside the sequence's one-shot flag.
-        m_renderer.SetSequence(clip,action==69);m_action=int32_t(action);m_error.clear();return true;
+        m_renderer.SetSequence(clip,action==69||action==0||action==4||action==5);m_action=int32_t(action);m_error.clear();return true;
     }
     catch(const std::exception& e){m_error=e.what();return false;}
 }

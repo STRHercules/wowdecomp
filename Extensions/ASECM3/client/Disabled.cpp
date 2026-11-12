@@ -17,6 +17,12 @@ void UpdateWorldBindings(uint32_t){}
 const char* PrepareUnitModel(CGUnit_C*,const char* path){return path;}
 void AttachUnitModel(CGUnit_C*){}
 void RemoveUnitModel(CGUnit_C*){}
+const char* PrepareMountModel(CGUnit_C*,const char* path,int32_t,int32_t){return path;}
+void AttachMountModel(CGUnit_C*){}
+void RemoveMountModel(CGUnit_C*,CM2Model*){}
+CM2Model* CreatePreviewModel(CM2Scene*,const char*){return nullptr;}
+void UpdatePreviewModel(CM2Model*){}
+void RemovePreviewModel(CM2Model*){}
 void SetUnitAction(CGUnit_C*,uint32_t){}
 void OnUnitBaseAnimation(CGUnit_C*,uint32_t,int32_t){}
 void OnUnitSwing(CGUnit_C*,uint32_t){}
@@ -37,7 +43,7 @@ NativeAttachment SnapshotAttachment(const NativeAttachmentSnapshot&,uint32_t id,
 AttachmentCounters GetAttachmentCounters(){return {};}
 void RecordAttachmentChild(){}
 void RegisterModelAttachments(CM2Model*,const AttachmentData&,const C44Matrix&){}
-void PublishModelAttachments(CM2Model*,const AttachmentPose&,const C44Matrix&){}
+void PublishModelAttachments(CM2Model*,const AttachmentPose&,const C44Matrix&,const C3Vector*){}
 void UnregisterModelAttachments(CM2Model*){}
 void ClearModelAttachments(){}
 bool HasModelAttachments(const CM2Model*){return false;}

@@ -1640,6 +1640,8 @@ int main(int argc, char** argv) {
         Check(Retail::ParseMountSkins("201;r;1490;91\n", skins) && skins.at(201).riderAnim == 1490
             && skins.at(201).riderFallback == 91 && !Retail::ParseMountSkins("201;r;120;600\n", skins)
             && !Retail::ParseMountSkins("201;r;120;0\n201;r;97;0\n", skins), "rider pose rows");
+        Check(Retail::ParseMountSkins("202;h;0;0\n", skins) && skins.at(202).hideRider && skins.at(202).riderAnim < 0
+            && !Retail::ParseMountSkins("202;h;1;0\n", skins), "hidden rider rows");
         std::map<uint32_t, Retail::MountKit> kits;
         Check(Retail::ParseMountKits("# c\r\n300;m;-1;7507893;0.5;-1;0;0\r\n300;m;17;7507894;0.12;0.03;-0.17;0.43\n300;e;0.273;0.133;0.231\n", kits)
             && kits.at(300).models.size() == 2 && kits.at(300).models[0].attachment == -1 && kits.at(300).models[1].offset[1] < 0

@@ -76,6 +76,9 @@ Document Document::Parse(std::vector<uint8_t> bytes,bool validateReferences) {
     for (auto& section:out.m_sections) {
         auto end=std::upper_bound(boundaries.begin(),boundaries.end(),section.offset);
         section.span=end==boundaries.end()?0:*end-section.offset;
+        // Eleven original HotS mount meshes have one 128-byte v2 record, not the conjectured 136-byte layout.
+        if(out.m_mdVersion==34&&section.tag=="PHCL"&&section.version==2&&section.count==1&&section.span==128)
+            section.layout=FindLayout("PHC2",2,34);
         if (section.layout) {
             const uint64_t required=uint64_t(section.layout->size)*section.count;
             if (required>section.span) throw Error("Truncated/overlapping M3 section "+section.tag+" v"+std::to_string(section.version));

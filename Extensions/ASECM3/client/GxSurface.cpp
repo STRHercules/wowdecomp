@@ -40,6 +40,15 @@ constexpr unsigned PixelBase=16,PixelShadowRows=PixelBase+PixelVectors;
 const char* roles[]={"layer_diff","layer_decal","layer_emis1","layer_emis2","layer_alpha1","layer_alpha2","layer_light","layer_ao","layer_norm","layer_spec","layer_gloss","layer_envi","layer_envi_mask"};
 double Value(const MaterialRecord& r,const std::string& n,double f){const auto* p=r.Find(n);return p?std::visit([](auto v){return double(v);},p->value):f;}
 int UV(uint32_t n){switch(n){case 0:return 0;case 1:return 1;case 9:return 2;case 10:return 3;default:return -1;}}
+// Planar (4,5,11..14), screen (15) and triplanar (16..18) sources are computed per vertex into a spare UV channel.
+bool GeneratedUV(uint32_t n){return n==4||n==5||(n>=11&&n<=18);}
+// shortcut: world planar/triplanar use the model's local axes and screen space is per-vertex NDC; exact SC2 projections are unverified.
+C2Vector GeneratedUVValue(uint32_t source,const C3Vector& local,const C3Vector& view,const C44Matrix& viewProjection){
+    if(source==15){C4Vector p;p.x=view.x;p.y=view.y;p.z=view.z;p.w=1;p=p*viewProjection;if(p.w<=1e-6f)return C2Vector(0,0);return C2Vector(.5f+.5f*p.x/p.w,.5f-.5f*p.y/p.w);}
+    if(source==11||source==13)return C2Vector(local.y,local.z);
+    if(source==12||source==14)return C2Vector(local.x,local.z);
+    return C2Vector(local.x,local.y);
+}
 struct Vertex{C3Vector p,n;CImVector c;C2Vector uv[4];C3Vector tangent;float sign;};
 static_assert(sizeof(Vertex)==76,"M3 shader declaration stride changed");
 bool ClippedTriangleDepth(const C3Vector& a,const C3Vector& b,const C3Vector& c,const C44Matrix& viewProjection,float& depth,bool& visible){
@@ -158,6 +167,16 @@ bool GxSurface::Draw(const SceneRegion& region,const Material& material,const Ma
     constants[14]=float(Value(material.record,"specularity",20));constants[15]=float(Value(material.record,"hdr_spec",1));constants[7]=float(Value(material.record,"spec_mode",0));
     CGxTex* native[LayerCount]={};GxDDS* owners[LayerCount]={};uint32_t wraps[LayerCount]={};
     bool cube=false;
+    uint32_t channelSource[4]={}; // nonzero: generated source written into that UV channel
+    unsigned spareChannel=region.vertices.empty()?4u:unsigned(std::min<size_t>(4,region.vertices.front().uv.size()/2));
+    const auto channelOf=[&](uint32_t source)->int{
+        const int direct=UV(source);if(direct>=0)return direct;
+        if(source==6)return 0; // animated particle UVs outside a particle system read UV0
+        if(!GeneratedUV(source))return -1;
+        for(unsigned i=0;i<4;++i)if(channelSource[i]==source)return int(i);
+        if(spareChannel>=4)return -1;
+        channelSource[spareChannel]=source;return int(spareChannel++);
+    };
     for(unsigned slot=0;slot<LayerCount;++slot){
         if((slot==9||slot==10)&&constants[1]<.5f)continue; // unlit passes do not consume specular inputs
         if(slot==12&&constants[16+11*20]<.5f)continue;
@@ -165,14 +184,17 @@ bool GxSurface::Draw(const SceneRegion& region,const Material& material,const Ma
         if(!layer)continue;
         const auto layerFlags=uint32_t(Value(layer->record,"flags",0));const bool color=(layerFlags&0x400)!=0;
         if(!color&&layer->image.empty())continue;
-        const auto source=uint32_t(Value(layer->record,"uv_source",0));const int channel=UV(source);
+        auto source=uint32_t(Value(layer->record,"uv_source",0));
+        if(slot==11&&source==8)source=3; // sphere environment uses the existing sphere projection
+        const int channel=slot==11&&(source==2||source==3)?-1:channelOf(source);
+        const bool spare=channel>=0&&channelSource[channel]!=0;
         const bool generated=slot==11&&(source==2||source==3);
         if(slot==11&&!color&&source==2)cube=true;
         if(slot==8&&(color||channel!=0)){m_error="Normal layer requires a BC3N bitmap on the source tangent UV0";return false;}
         if(channel<0&&!color&&!generated){m_error="Standard layer uses an unsupported generated UV source";return false;}
-        if(!color&&!generated&&!region.vertices.empty()&&size_t(channel*2+1)>=region.vertices.front().uv.size()){m_error="Standard layer references an absent source UV channel";return false;}
+        if(!color&&!generated&&!spare&&!region.vertices.empty()&&size_t(channel*2+1)>=region.vertices.front().uv.size()){m_error="Standard layer references an absent source UV channel";return false;}
         const unsigned base=16+slot*20;float* p=constants+base;
-        p[0]=1;p[1]=color?0.0f:1.0f;p[2]=float(Value(layer->record,"color_channels",0));p[3]=slot==11?float(source):float(std::max(0,channel));
+        p[0]=1;p[1]=color?0.0f:1.0f;p[2]=float(Value(layer->record,"color_channels",0));const float codes[]={0,1,9,10};p[3]=slot==11?(generated?float(source):codes[std::max(0,channel)]):float(std::max(0,channel));
         if(p[2]<0||p[2]>6){m_error="Standard layer has an unknown color-channel operation";return false;}
         const auto rgba=values.Sample(layer->record,"color_value",4,{255,255,255,255});for(unsigned i=0;i<4;++i)p[4+i]=rgba[i]/255.0f;
         p[8]=values.Scalar(layer->record,"color_multiply",1);p[9]=values.Scalar(layer->record,"color_add",0);p[10]=values.Scalar(layer->record,"color_brightness",1);
@@ -237,7 +259,8 @@ bool GxSurface::Draw(const SceneRegion& region,const Material& material,const Ma
     // (GxFormatColor, the geometry transforms) cost milliseconds per draw.
     std::vector<Vertex> staged(vertexCount);Vertex* vertices=staged.data();
     for(uint32_t i=0;i<vertexCount;++i){const auto& source=region.vertices[i];auto& v=vertices[i];v.p=(C3Vector(source.position.x,source.position.y,source.position.z)-center)*scale-eye;v.n={source.normal.x,source.normal.y,source.normal.z};v.c.r=source.color[0];v.c.g=source.color[1];v.c.b=source.color[2];v.c.a=source.color[3];GxFormatColor(v.c);v.tangent={source.tangent.x,source.tangent.y,source.tangent.z};v.sign=source.tangentSign;if(geometry){v.p=geometry->Position(C3Vector(source.position.x,source.position.y,source.position.z));v.n=geometry->Normal(v.n);v.tangent=geometry->Tangent(v.tangent,v.n);if(geometry->Mirrored())v.sign=-v.sign;}
-        for(unsigned u=0;u<4;++u)v.uv[u]=u*2+1<source.uv.size()?C2Vector(source.uv[u*2],source.uv[u*2+1]):C2Vector(0,0);}
+        for(unsigned u=0;u<4;++u)v.uv[u]=u*2+1<source.uv.size()?C2Vector(source.uv[u*2],source.uv[u*2+1]):C2Vector(0,0);
+        for(unsigned u=0;u<4;++u)if(channelSource[u])v.uv[u]=GeneratedUVValue(channelSource[u],C3Vector(source.position.x,source.position.y,source.position.z),v.p,matrix);}
     std::memcpy(m_device->BufLock(vb),staged.data(),size_t(vertexCount)*sizeof(Vertex));
     GxBufUnlock(vb,0);m_verticesPacked+=vertexCount;
     const uint16_t* drawIndices=region.indices.data();std::vector<uint16_t> sortedIndices;size_t drawIndexCount=region.indices.size();

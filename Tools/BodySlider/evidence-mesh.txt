@@ -1,0 +1,102 @@
+Stock mesh hook evidence (offline; does not establish live visual acceptance)
+Input D:/Wow.exe SHA256 aa63a5750d60ef16746c686b3d5e26876d98953eab08b1c026cd0faf78e88cb8
+Method: repository OFFSET/source annotations checked against exact-input PE bytes
+and x86 Capstone disassembly. REA was unavailable in the parent session; its
+configuration was not changed. All addresses are fixed preferred virtual addresses.
+
+GPU batch hook:
+  0x81F700 CM2SceneRender::SetBatchVertices, void __thiscall(render,int shared)
+  Ten whole relocation-free prolog bytes: 55 8b ec 83 3d 20 30 d4 00 00
+  This is push ebp;mov ebp,esp;cmp dword[0xD43020],0.
+  Original return cleans four bytes (ret4). 0xD43020 is shader-enabled int.
+  render+0x60 current model,+0x64 previous model,+0x68 current shared,
+  +0x6C previous shared,+0x90 current skin section.
+  Original shader path calls shared SetVertices only when type/shared changes;
+  merely binding private geometry once per model is insufficient when models
+  share one CM2Shared. Runtime always rebinds the current private or default
+  shared buffer after this function, so reset/state erasure cannot retain a
+  previous model's custom stream.
+
+Stock graphics interfaces verified in callsites and implementations:
+  Device pointer global 0xC5DF88.
+  0x6876D0 void* __thiscall PoolCreate(device,target,usage,size,hint,name)
+    prolog 55 8b ec 56 57 33 f6 56; ret0x14.
+    Vertex target=0, static usage=0, hint=1, size=48*skinVertexCount.
+  0x687660 void* __thiscall BufCreate(device,pool,itemSize,itemCount,index)
+    prolog 55 8b ec 53 56 57 33 db; ret0x10; itemSize48,index0.
+  0x688290 void __thiscall BufDestroy(device,void*& buffer)
+    prolog 55 8b ec 57 8b 7d 08; ret4. Argument is ADDRESS OF pointer.
+  PoolDestroy must use device vtable byte offset0xD4, not base0x688340:
+    derived D3D/OpenGL destructors release backend resources first. Verified in
+    shared DestroyBuffers0x8368B0, calls through [device.vtable+0xD4].
+  0x4829D0 void* __cdecl GxBufLock(buffer): wrapper calls virtual+0xD8.
+    prolog 55 8b ec 8b 0d 88 df c5 00.
+  0x4829F0 void __cdecl GxBufUnlock(buffer,size): calls virtual+0xDC and sets
+    buffer.hasData+0x1C=1. Same first nine prolog bytes.
+  0x681B00 void __cdecl GxPrimVertexPtr(buffer,format), format PBNT2=12.
+    prolog55 8b ec 53 8b 5d 08. Binds attributes/mask/stream through device.
+  0x8362B0 int __thiscall CM2Shared::SetVertices(shared,uint texCoord)
+    prolog55 8b ec 83 ec 14; ret4. Default shader texCoord=0.
+  0x8360A0 int __thiscall CM2Shared::SetIndices(shared).
+
+Layouts:
+  CM2Model+0x2C shared, +0x98 boneMatrices; source model remains stock layout.
+  CM2Shared+0x150 M2Data,+0x170 M2SkinProfile.
+  M2Data+0x3C vertex count,+0x40 M2Vertex*.
+  M2Vertex48 bytes: positionfloat3+0,weightsuint8[4]+12,boneindicesuint8[4]+16,
+    normalfloat3+20,uvfloat4+32.
+  SkinProfile vertex count+4,uint16*remap+8; bone count+0x14,packeduint32*bones+0x18;
+    section count+0x1C,section pointer+0x20. SkinSection stride48,
+    vertexStartuint16+4,vertexCountuint16+6,boneCountuint16+0xC,
+    boneComboIndexuint16+0xE,boneInfluencesuint16+0x10.
+  GPU copies private vertices[skin.remap[i]] and replaces their boneindices with
+  skin.bones[i], exactly stock hardware palette encoding for instance0.
+  CGxBuf itemCount+0x10,hasData+0x1C,valid+0x1D. Engine reset invalidates valid;
+  rebuild content when either hasData/valid is false. Pool remains engine-managed.
+  Only release through the same owning device; never call a replacement device
+  on stale backend resources.
+
+Software transforms:
+  0x82A210 void __cdecl(model,section,out,texCoord), general CPP.
+    prolog55 8b ec 83 ec 68, safe6 bytes.
+  0x82A4E0 void __cdecl(model,section,out,texCoord), one-bone CPP.
+    prolog55 8b ec 8b 45 08, safe6 bytes.
+  0x82A600 general SSE and0x82AC10 one-bone SSE, same four-argument ABI.
+    prolog53 8b dc 83 ec 08, safe6 bytes; these dynamically realign their stacks.
+  0x829F40 void __cdecl(model,section,out), NoUVSelect_CPP (two UV sets).
+    prolog55 8b ec 83 ec 64, safe6 bytes; out stride40 instead of32.
+  All five consume model+0x98 matrices and model+0x2C->shared+0x150->data+0x40
+  vertices. They write only caller out. SSE uses original aligned bone matrix
+  arrays; unaligned output falls back to CPP, with the same model argument.
+  Frame-local clones modelprefix0xA0/sharedprefix0x154/dataprefix0x44 suffice;
+  redirect only the three pointers above to immutable per-instance vertices.
+  Original arrays/object graph are never overwritten, even transiently.
+  Nested SSE->CPP hook sees an unregistered clone and passes it straight through.
+  Software vertex array is already skin-reordered with actual boneindices:
+  loader0xM2Shared::InitializeSkin code rewrites indices through each section's
+  bone palette and changes skin remap to identity when !(cache.flags&8).
+  Fingerprint profiles must accept explicit audited software variants, not
+  assume source-file byte order/count after load.
+
+Shadow geometry:
+  0x829BA0 RenderBatchShadowMap void __thiscall(model,int untextured,void*batch,
+    const BatchList*,uint index,void*section,void*prevSection).
+    prolog55 8b ec 83 ec 24, safe6 bytes, ret0x18.
+  BatchEntry12 bytes{model,batchIndex,count}; BatchList{ptr,count,maxCount}.
+  Optimize0x832DD0 combines only equal shared geometry/batch and no optGeo;
+  helper CanCombine0x824C60 enforces matching shared,batchIndex,optGeo,influences.
+  For total>1, stock shader draws use instance geometry shared across models.
+  If any model in a group is shaped, split into caller-owned single-entry lists
+  without editing original list. Bind shared indices once for grouped case;
+  bind each model's private/default vertices; call original with index0,
+  prevSection=null. With total1 the original does not call SetVertices and
+  nullprev forces matrices/shaders upload. This preserves texture handling,
+  material setup and draw implementation while preventing wrong instancing.
+
+Boundaries:
+  Main shader rendering, all five software routines and shadow batch geometry
+  are covered. Projected-texture helper0x829AA0 calls shared SetVertices directly
+  and is not hooked here. Full in-game equipment, animation, renderer/reset,
+  shadows, packed skin variants and concurrent model-lifecycle acceptance is
+  still required; source/static disassembly and fake-device tests are not live
+  rendering evidence.

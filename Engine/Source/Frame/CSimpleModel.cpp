@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "Engine/Source/Frame/CSimpleModel.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Base/Handle.h"
@@ -105,6 +106,7 @@ int32_t CSimpleModel::AdvanceTime() {
 // VERIFY: d4b291b5 auto
 // OFFSET: [0x0095F3A0, 0x0095F670, 0x0095F7D0]
 CSimpleModel::~CSimpleModel() {
+    ASECM3::Client::RemovePreviewModel(this->m_model);
     if (this->m_camera) {
         HandleClose(reinterpret_cast<HOBJECT>(this->m_camera));
     }
@@ -318,7 +320,8 @@ void CSimpleModel::SetModel(const char* fileName) {
     CM2Model* model = nullptr;
 
     if (fileName && *fileName) {
-        model = this->GetScene()->CreateModel(fileName, 1);
+        model = ASECM3::Client::CreatePreviewModel(this->GetScene(),fileName);
+        if (!model) model = this->GetScene()->CreateModel(fileName, 1);
     }
 
     this->SetModel(model);
@@ -507,6 +510,7 @@ void CSimpleModel::RenderModelImpl(CSimpleModel* simpleModel, bool offscreen) {
 
     CShaderEffect::UpdateProjMatrix();
     simpleModel->UpdateModel();
+    ASECM3::Client::UpdatePreviewModel(simpleModel->m_model);
 
     if (simpleModel->m_pendingCameraIndex == 0xFFFFFFFF) {
         simpleModel->GetScene()->Animate(cameraPos);
@@ -537,6 +541,7 @@ void CSimpleModel::LightingCallback(CM2Model* model, CM2Lighting* lighting, void
 // VERIFY: 45e34e76 manual
 // OFFSET: 0x009600E0
 void CSimpleModel::SetModel(CM2Model* model) {
+    if (model != this->m_model) ASECM3::Client::RemovePreviewModel(this->m_model);
     if (model) {
         model->m_refCount++;
     }

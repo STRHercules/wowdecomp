@@ -3,9 +3,12 @@
 #include <initializer_list>
 
 namespace Retail {
-enum class SourceKind { Retail, Forever };
+enum class SourceKind { Retail, Forever, HotS };
 inline thread_local SourceKind currentSource = SourceKind::Retail;
-inline const char* SourcePrefix() { return currentSource == SourceKind::Forever ? "forever/" : "retail/"; }
+inline const char* SourcePrefix(SourceKind kind) {
+    return kind == SourceKind::HotS ? "hots/" : kind == SourceKind::Forever ? "forever/" : "retail/";
+}
+inline const char* SourcePrefix() { return SourcePrefix(currentSource); }
 class SourceScope {
     SourceKind previous;
 public:
@@ -16,7 +19,7 @@ public:
 };
 inline bool IsCdnPath(const char* name) {
     if (!name) return false;
-    for (const char* prefix : {"retail/", "forever/"}) {
+    for (const char* prefix : {"retail/", "forever/", "hots/"}) {
         const char* p = name;
         const char* q = prefix;
         while (*q && *p) {

@@ -77,10 +77,11 @@ struct MountSkin
     std::vector<std::pair<uint32_t, uint32_t>> textures, geosets;
     int32_t riderAnim = -1;       // retail rider animation; may be newer than the client's list
     uint32_t riderFallback = 91;  // client animation used when the rider model lacks riderAnim
+    bool hideRider = false;       // the mount is the player's body (morph forms): the rider is not drawn
 };
 
 // Rows: display;t;textureType;fileDataId  or  display;g;geosetGroup;geosetValue (group 0 keeps mesh 0)
-//   or  display;r;riderAnim;fallbackAnim
+//   or  display;r;riderAnim;fallbackAnim  or  display;h;0;0 (hide the rider)
 inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSkin>& output)
 {
     std::map<uint32_t, MountSkin> parsed;
@@ -115,6 +116,8 @@ inline bool ParseMountSkins(const std::string& input, std::map<uint32_t, MountSk
             parsed[display].riderAnim = static_cast<int32_t>(first);
             parsed[display].riderFallback = second;
         }
+        else if (fields[1] == "h" && !first && !second)
+            parsed[display].hideRider = true;
         else
             return false;
     }

@@ -1,0 +1,78 @@
+Stock native ABI evidence (offline; no runtime acceptance)
+Input D:/Wow.exe SHA256 aa63a5750d60ef16746c686b3d5e26876d98953eab08b1c026cd0faf78e88cb8
+PE32 x86 image base 0x400000. Addresses below are preferred virtual addresses.
+Method: repository OFFSET annotations corroborated with pefile+Capstone disassembly
+of the exact input. REA doctor reported no configured analysis engine; no REA
+configuration was changed. These observations establish static ABI, not execution.
+
+FrameScript_Initialize: 0x819BB0, int __cdecl(int profile)
+  prolog 55 8b ec 83 ec 08 (6 whole bytes, no relative operands)
+  creates context and returns 1. FrameScript_Flush invokes it on ReloadUI.
+  source Engine/Source/FrameScript/FrameScript.cpp
+FrameScript_RegisterFunction: 0x817F90, void __cdecl(const char*, lua_CFunction)
+  prolog 55 8b ec 8b 45 0c. Context global 0xD3F78C.
+  Registering at Initialize completion also registers in glue's Lua context;
+  an in-game-only addon and world-state checks must enforce in-game operation.
+
+Lua 5.1 API entry points (all __cdecl, lua_Number is double):
+  lua_gettop       0x84DBD0  55 8b ec 8b 4d 08
+  lua_type         0x84DEB0  55 8b ec 8b 45 0c
+  lua_tonumber     0x84E030  55 8b ec 8b 45 0c
+  lua_tolstring    0x84E0E0  55 8b ec 56 8b 75 08
+  lua_pushnumber   0x84E2A0  55 8b ec 8b 4d 08
+  lua_pushlstring  0x84E300  55 8b ec 56 8b 75 08
+  lua_pushstring   0x84E350  55 8b ec 8b 55 0c
+  lua_pushboolean  0x84E4D0  55 8b ec 8b 15 9c 13 d4 00
+  lua_createtable  0x84E6E0  55 8b ec 56 8b 75 08
+  lua_setfield     0x84E900  55 8b ec 83 ec 10
+  lua_rawseti      0x84EA00  55 8b ec 8b 45 0c
+  source Engine/Source/lua-5.1/src/lapi.c
+
+Object manager:
+  0x4D3790 uint64 __cdecl ClntObjMgrGetActivePlayer(void): returns EDX:EAX,
+    zero without object manager. TLS index global0xD439BC -> tls slot +8 manager.
+  0x4D4DB0 void* __cdecl ClntObjMgrObjectPtr(uint64,mask,file,line):
+    player type mask0x10; null manager/guid safely returns null.
+    Reads object+8 -> object data; object data+8 is type mask.
+  0x4D4B30 int __cdecl ClntObjMgrEnumVisibleObjects(callback,param):
+    callback is int __cdecl(uint64 guid,void*param), returning 1 continues.
+    It does NOT guard null manager; call only while manager is valid.
+    GUID loaded from visible object+0x30/+0x34.
+  0x72A000 const char* __thiscall CGUnit_C::GetUnitName(const char**realm,
+    int followOverride): use followOverride=0 for actual player identity.
+    Function can request ordinary player-name cache lookup when uncached.
+  source WoW/Source/ObjectMgrClient/ObjectMgrClient.cpp,
+    WoW/Source/Object/ObjectClient/Unit_C.cpp
+
+CGUnit_C::PreAnimate 0x73DAB0, void __thiscall(unit,CGWorldFrame*)
+  safe 6-byte prolog 55 8b ec 83 ec 60.
+  unit+0xB4 is world model (multiple loads in original function).
+  unit+8 object data -> GUID+0, type mask+8.
+CM2Model destructor 0x832640, void __thiscall(model)
+  safe 5-byte prolog 53 56 8b f1 57.
+
+Stock model layout relevant to skeletal deformation:
+  CM2Model+0x10 loaded bit1; +0x2C CM2Shared*; shared+0x150 M2Data*.
+  M2Data+0x2C bone count; +0x30 M2CompBone*; +0x34 key-bone count;
+    +0x38 uint16 key-bone indices (0xFFFF absent).
+  M2CompBone stride0x58, id+0, flags+4, parent uint16+8, pivot float3+0x4C.
+  CM2Model+0x94 M2ModelBone*, +0x98 C44Matrix* bone matrices.
+  M2ModelBone stride0xAC, procedural matrix pointer+0x88, flags+0x8C.
+  These are STOCK layouts; reconstructed model adds fields at its end and
+  must not be used as a binary-compatible allocation/replacement structure.
+
+CM2Model::AnimateMT 0x82F0F0, __thiscall(model,view,diffuse,emissive,alpha,alpha2)
+  function prolog 55 8b ec 81 ec 9c 01 00 00.
+  Target callsite0x82FE4F bytes e8 ac20c9ff calls matrix multiply0x4C1F00.
+  At call: ESI=model, EDI=current M2ModelBone*, [EBP+0x18]=bone index,
+    [EBP+0x14]=M2CompBone*, [EBP-0xD4]=local matrix, EBX=parent matrix.
+  Cdecl multiply arguments: (out=&[EBP-0x19C], local=&[EBP-0xD4], parent=EBX),
+    caller cleans 12 bytes. Return EAX points to output.
+  This is after local animation/procedural/translation and negative-pivot
+  adjustment, immediately before boneMatrix=local*parent.
+  Scaling local basis here needs translation compensation to keep bind pivot
+  fixed: row_i*=scale_i; translation_j-=sum(pivot_i*(new-old)_ij), then move.
+  Nonanimated path0x82FECB copies parent directly and skips this call. Changed
+  per-instance bones must be marked animated (0x80 suffices); preserve/reset
+  game-owned procedural flags and do not alter shared bone definitions.
+  Billboard adjustment follows at0x82FF3A; support/calibration remains untested.

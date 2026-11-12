@@ -29,6 +29,11 @@ int main() {
             cursor+=widths[i];
         }
         ++cases;
+        auto optional=fixture;Put(optional,68,0,4);Put(optional,84,0,2);Put(optional,92,0,1);Put(optional,96,0,8);
+        if(DecodeBufferMaterial(optional,{0x1234}).groups[0].parameters.size()!=3)throw Error("Absent optional MADD slot was treated as a value");++cases;
+        std::vector<uint8_t> repeated(116);Put(repeated,0,2,4);Put(repeated,4,20,8);Put(repeated,12,28,8);
+        Put(repeated,20,0x1234,4);Put(repeated,24,0x1234,4);Put(repeated,28,44,8);Put(repeated,36,80,8);
+        if(DecodeBufferMaterial(repeated,{0x1234,0x1234}).groups.size()!=2)throw Error("Separate instances of one shader group were rejected");++cases;
         auto reject=[&](std::vector<uint8_t> bytes,const std::vector<uint32_t>& ids) {
             bool failed=false;try{DecodeBufferMaterial(bytes,ids);}catch(const Error&){failed=true;}
             if(!failed)throw Error("Malformed parameter buffer was accepted");++cases;

@@ -139,11 +139,12 @@ struct CascSource::Impl {
         if (auto reader = packedAssetReader.load()) return reader(name, bytes, error, size);
         return packed.Read(name, bytes, error, size);
     }
-    std::string Prefix() const { return kind == SourceKind::Forever ? "forever/" : "retail/"; }
+    std::string Prefix() const { return SourcePrefix(kind); }
     uint32_t locale = CASC_LOCALE_ENUS;
     bool online = true, configured = false, files = false;
     std::string configurationError = "RetailCasc.ini has not been configured";
     std::map<std::string, uint32_t> names;
+    std::map<std::string, std::string> sourcePaths;
     std::map<std::string, Reference> dependencies;
     std::map<std::string, std::array<uint32_t, 2>> terrainTiles; // <map>_<x>_<y>.adt -> obj0, tex0 (root is the dependency)
     std::map<uint32_t, TileTextures> terrainEdges; // by _tex0 FileDataID
@@ -181,6 +182,8 @@ struct CascSource::Impl {
 
     bool Resolve(const std::string& name, Reference& ref, std::string& internal, std::string& error) {
         if (!SafeName(name)) return Failure(error, "Invalid Retail virtual path");
+        const auto sourcePath = sourcePaths.find(name);
+        if (sourcePath != sourcePaths.end()) { internal = sourcePath->second; return true; }
         const auto dep = dependencies.find(name);
         if (dep != dependencies.end()) { ref = dep->second; return true; }
         const auto alias = names.find(name);
@@ -190,6 +193,8 @@ struct CascSource::Impl {
         if (kind == SourceKind::Retail && (ref.id = Ethereal::PathModel(name))) return true;
         if (name.compare(0, Prefix().size(), Prefix()) != 0) return Failure(error, "No CDN alias for this path");
         internal = name.substr(Prefix().size());
+        // HotS uses named CASC roots, not WoW FileDataIDs (including numeric filenames).
+        if (kind == SourceKind::HotS) return true;
         const auto dot = internal.find('.');
         const auto stem = internal.substr(0, dot);
         if (Number(stem, ref.id)) { internal.clear(); return true; }
@@ -223,8 +228,8 @@ struct CascSource::Impl {
             }
         }
         if (files) {
-            if (!configured || !ref.id) return Failure(error, "Offline Retail packs require configured FileDataID references");
-            std::ifstream input(std::filesystem::path(path) / (std::to_string(ref.id) + ".bin"), std::ios::binary | std::ios::ate);
+            if (!configured || (!ref.id && kind != SourceKind::HotS)) return Failure(error, "Offline Retail packs require configured FileDataID references");
+            std::ifstream input(AssetDiskPath(std::filesystem::path(path) / (ref.id ? std::to_string(ref.id) + ".bin" : internal)), std::ios::binary | std::ios::ate);
             if (!input) return Failure(error, "Missing original asset in offline Retail pack");
             const auto size = input.tellg();
             if (size < 0 || size > 128 * 1024 * 1024) return Failure(error, "Invalid offline Retail asset size");
@@ -240,7 +245,8 @@ struct CascSource::Impl {
         if (!cached.empty() && ReadDecodedCache(cached, bytes)) { ++stats.reused; return true; }
         // CascLib may satisfy a miss from its encoded disk cache or a local installation.
         // Do not claim every read is a network download.
-        auto const* notice = online
+        auto const* notice = kind == SourceKind::HotS
+            ? (online ? "HotS: accessing CDN/cache" : "HotS: reading local files") : online
             ? (kind == SourceKind::Forever ? "Forever: accessing CDN/cache" : "Retail: accessing CDN/cache")
             : (kind == SourceKind::Forever ? "Forever: reading local files" : "Retail: reading local files");
         BusyNotice busy(notice, 1);
@@ -325,7 +331,8 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
     // Failed configuration is retained for the client's diagnostic log.
     struct Remember { Impl& state; std::string& error; ~Remember() { state.configurationError = error; } } remember{s, error};
     std::ifstream input(configPath);
-    if (!input) return Failure(error, s.kind == SourceKind::Forever
+    if (!input) return Failure(error, s.kind == SourceKind::HotS
+        ? "Cannot read HotSCasc.ini; set WOW_HOTS_CONFIG" : s.kind == SourceKind::Forever
         ? "Cannot read ForeverCasc.ini; set WOW_FOREVER_CONFIG"
         : "Cannot read RetailCasc.ini; set WOW_RETAIL_CONFIG");
     std::map<std::string, std::string> values;
@@ -340,7 +347,7 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
     }
     for (const auto& value : values) {
         if (value.first != "mode" && value.first != "path" && value.first != "product" && value.first != "region" &&
-            value.first != "build" && value.first != "locale" && value.first != "aliases" && value.first != "listfile" && value.first != "keys" && value.first != "equipment" && value.first != "tables" && value.first != "cache" && value.first != "cdn" && value.first != "version")
+            value.first != "build" && value.first != "locale" && value.first != "aliases" && value.first != "listfile" && value.first != "keys" && value.first != "equipment" && value.first != "tables" && value.first != "cache" && value.first != "cdn" && value.first != "version" && value.first != "paths")
             return Failure(error, "Unknown Retail CASC config key");
     }
     if (values["mode"] != "online" && values["mode"] != "local" && values["mode"] != "files") return Failure(error, "mode must be online, local or files");
@@ -349,8 +356,10 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
     if (!values["product"].empty()) s.product = values["product"];
     if (!values["region"].empty()) s.region = values["region"];
     if (s.kind == SourceKind::Forever && values["product"].empty()) s.product = "wow_classic_beta";
-    if (s.product != "wow" && s.product != "wowt" && s.product != "wow_beta" &&
-        !(s.kind == SourceKind::Forever && s.product == "wow_classic_beta")) return Failure(error, "Unsupported CDN product for this source");
+    if (s.kind == SourceKind::HotS && values["product"].empty()) s.product = "hero";
+    if (s.kind == SourceKind::HotS ? s.product != "hero" :
+        (s.product != "wow" && s.product != "wowt" && s.product != "wow_beta" &&
+        !(s.kind == SourceKind::Forever && s.product == "wow_classic_beta"))) return Failure(error, "Unsupported CDN product for this source");
     if (s.region.find_first_not_of("abcdefghijklmnopqrstuvwxyz0123456789_") != std::string::npos || s.region.empty())
         return Failure(error, "Invalid Retail region");
     s.build = Normalize(values["build"]);
@@ -446,6 +455,23 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
         }
     }
     std::map<uint32_t, HandItemAppearance> handItems;
+    std::map<std::string, std::string> sourcePaths;
+    if (!values["paths"].empty()) {
+        if (s.kind != SourceKind::HotS) return Failure(error, "Named source paths require the HotS provider");
+        std::ifstream mappings(absolute(values["paths"]));
+        if (!mappings) return Failure(error, "Cannot read HotS source path mapping");
+        while (std::getline(mappings, line)) {
+            line = Trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            const auto separator = line.find(';');
+            if (separator == std::string::npos) return Failure(error, "HotS paths require virtual;source rows");
+            const auto name = Normalize(Trim(line.substr(0, separator)));
+            const auto target = Normalize(Trim(line.substr(separator + 1)));
+            if (!SafeName(name) || name.compare(0, 5, "hots/") != 0 || !SafeName(target))
+                return Failure(error, "Unsafe HotS source path mapping");
+            if (!sourcePaths.emplace(name, target).second) return Failure(error, "Duplicate HotS virtual path");
+        }
+    }
     if (!values["equipment"].empty()) {
         std::ifstream csv(absolute(values["equipment"]));
         if (!csv) return Failure(error, "Cannot read Retail equipment mapping");
@@ -464,6 +490,7 @@ bool CascSource::Configure(const char* configPath, std::string& error) {
         }
     }
     s.names = std::move(names);
+    s.sourcePaths = std::move(sourcePaths);
     s.handItems = std::move(handItems);
     if (!packedAssetReader.load() && !s.packed.Open(base, path, error)) return false;
     s.configured = true;
@@ -562,7 +589,8 @@ bool CascSource::Exists(const char* name, std::string& error) {
         if (found)
             return found > 0;
     }
-    if (m_impl->files) return ref.id && std::filesystem::is_regular_file(std::filesystem::path(m_impl->path) / (std::to_string(ref.id) + ".bin"));
+    if (m_impl->files) return (ref.id || m_impl->kind == SourceKind::HotS) && std::filesystem::is_regular_file(
+        std::filesystem::path(m_impl->path) / (ref.id ? std::to_string(ref.id) + ".bin" : internal));
     std::vector<uint8_t> cached;
     const auto path = m_impl->CachePath(ref, internal, false);
     if (!path.empty() && ReadDecodedCache(path, cached)) return true;
@@ -578,6 +606,24 @@ bool CascSource::Inspect(const char* name, std::vector<uint8_t>& bytes, std::str
     return m_impl->Resolve(Normalize(name ? name : ""), ref, internal, error) && m_impl->Fetch(ref, internal, bytes, error);
 }
 
+bool CascSource::List(const char* mask, std::vector<std::string>& names, std::string& error) {
+    std::lock_guard<std::mutex> lock(m_impl->mutex);
+    names.clear();
+    error.clear();
+    if (!mask || !*mask || m_impl->files) return Failure(error, "List requires a CASC storage and nonempty mask");
+    CacheLock cacheLock(m_impl->cacheMutex);
+    if (!m_impl->Open(error)) return false;
+    CASC_FIND_DATA found = {};
+    HANDLE search = CascFindFirstFile(m_impl->storage, mask, &found, nullptr);
+    if (search == INVALID_HANDLE_VALUE) return CascFailure(error, "Cannot enumerate CASC source");
+    struct CloseSearch { HANDLE handle; ~CloseSearch() { CascFindClose(handle); } } close{search};
+    do {
+        if (found.szFileName[0]) names.push_back(found.szFileName);
+        if (names.size() > 2000000) return Failure(error, "CASC name list exceeds two million entries");
+    } while (CascFindNextFile(search, &found));
+    return true;
+}
+
 bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string& error) {
     SourceScope scope(m_impl->kind);
     error.clear();
@@ -589,6 +635,15 @@ bool CascSource::Read(const char* name, std::vector<uint8_t>& bytes, std::string
     auto& s = *m_impl;
     if (!s.Resolve(key, ref, internal, error) || !s.Fetch(ref, internal, bytes, error)) return false;
     const auto ext = Extension(key);
+    if (s.kind == SourceKind::HotS) {
+        // ASECM3 owns M3/M3A/DDS parsing. Never pass HotS bytes through WoW M2 conversion.
+        if (ext != ".m3" && ext != ".m3a" && ext != ".dds") {
+            bytes.clear();
+            return Failure(error, "HotS runtime supports native M3, M3A and DDS assets only");
+        }
+        s.cachedSizes[key] = static_cast<uint32_t>(bytes.size());
+        return true;
+    }
     bool success = true;
     if (ext == ".m2" || ext == ".mdx") {
         auto model = std::make_shared<Model>();
@@ -793,8 +848,9 @@ bool CascSource::CachedOriginalSize(const char* name, uint32_t& size) {
     }
     if (m_impl->files) {
         std::error_code ec;
-        const auto length = std::filesystem::file_size(std::filesystem::path(m_impl->path) / (std::to_string(ref.id) + ".bin"), ec);
-        if (!ref.id || ec || length > 128 * 1024 * 1024) return false;
+        const auto length = std::filesystem::file_size(std::filesystem::path(m_impl->path) /
+            (ref.id ? std::to_string(ref.id) + ".bin" : internal), ec);
+        if ((!ref.id && m_impl->kind != SourceKind::HotS) || ec || length > 128 * 1024 * 1024) return false;
         size = static_cast<uint32_t>(length);
         return true;
     }
@@ -822,13 +878,14 @@ CascSource::Statistics CascSource::Stats() {
 }
 
 CascSource& Source() {
-    static CascSource retail, forever(SourceKind::Forever);
-    static std::once_flag retailOnce, foreverOnce;
+    static CascSource retail, forever(SourceKind::Forever), hots(SourceKind::HotS);
+    static std::once_flag retailOnce, foreverOnce, hotsOnce;
     const bool isForever = currentSource == SourceKind::Forever;
-    auto& source = isForever ? forever : retail;
-    std::call_once(isForever ? foreverOnce : retailOnce, [&] {
-        const char* path = std::getenv(isForever ? "WOW_FOREVER_CONFIG" : "WOW_RETAIL_CONFIG");
-        const char* filename = isForever ? "ForeverCasc.ini" : "RetailCasc.ini";
+    const bool isHotS = currentSource == SourceKind::HotS;
+    auto& source = isHotS ? hots : isForever ? forever : retail;
+    std::call_once(isHotS ? hotsOnce : isForever ? foreverOnce : retailOnce, [&] {
+        const char* path = std::getenv(isHotS ? "WOW_HOTS_CONFIG" : isForever ? "WOW_FOREVER_CONFIG" : "WOW_RETAIL_CONFIG");
+        const char* filename = isHotS ? "HotSCasc.ini" : isForever ? "ForeverCasc.ini" : "RetailCasc.ini";
         std::string error, fallback = filename;
 #ifdef _WIN32
         if (!path || !*path) {
@@ -837,7 +894,7 @@ CascSource& Source() {
             const DWORD length = GetModuleFileNameA(nullptr, exe, sizeof(exe));
             if (length && length < sizeof(exe)) {
                 const auto data = std::filesystem::path(exe).parent_path() / "Data";
-                const auto installed = data / "Retail" / filename;
+                const auto installed = data / (isHotS ? "HotS" : "Retail") / filename;
                 const auto legacy = data / "Forever" / filename;
                 std::error_code code;
                 if (std::filesystem::exists(installed, code)) fallback = installed.string();
@@ -846,7 +903,7 @@ CascSource& Source() {
         }
 #endif
         if (!source.Configure(path && *path ? path : fallback.c_str(), error))
-            std::fprintf(stderr, "%s CASC: %s\n", isForever ? "Forever" : "Retail", error.c_str());
+            std::fprintf(stderr, "%s CASC: %s\n", isHotS ? "HotS" : isForever ? "Forever" : "Retail", error.c_str());
     });
     return source;
 }
@@ -863,7 +920,8 @@ void SetPackedAssetReader(PackedAssetReader reader)
 
 CascSource& SourceForPath(const char* name) {
     const auto key = Normalize(name ? name : "");
-    SourceScope scope(key.compare(0, 8, "forever/") == 0 ? SourceKind::Forever : SourceKind::Retail);
+    SourceScope scope(key.compare(0, 5, "hots/") == 0 ? SourceKind::HotS :
+        key.compare(0, 8, "forever/") == 0 ? SourceKind::Forever : SourceKind::Retail);
     return Source();
 }
 }

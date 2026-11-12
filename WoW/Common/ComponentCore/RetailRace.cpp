@@ -1,6 +1,7 @@
 #include "Engine/Source/Retail/RetailLookWire.h"
 #include "Engine/Source/Retail/BodyShape.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 
@@ -2076,6 +2077,7 @@ int32_t RetailRaceSectionCount(int32_t race, int32_t sex, int32_t variation, boo
     if (Retail::Centaur::Race(uint32_t(race)) && sex >= 0 && sex < 2 && variation == VARIATION_HAIR && !colors)
         return int32_t(Retail::Centaur::VisibleHeads(uint32_t(sex)));
     if (InWorld()) return -1;
+    if (uint32_t(race) == Upright::Race && Upright::Scoped()) return -1; // the upright body counts its own rows
     const uint32_t retail = RetailRaceId(uint32_t(race));
     if (!retail || sex < 0 || sex > 1 || !app::ChrModelForRace(retail, uint32_t(sex))) return -1;
     if (variation == VARIATION_SKIN && !colors) return 1;   // one "variation" whose colours are the skins
@@ -2091,6 +2093,8 @@ int32_t RetailRaceSectionCount(int32_t race, int32_t sex, int32_t variation, boo
 // Stock CharSections lookups index Wrath rows that do not describe a Retail look; point them at row 0 so the
 // stock validation passes and the real choice is applied through the Retail tables.
 void RetailRaceSectionArguments(int32_t race, int32_t sex, int32_t* style, int32_t* color) {
+    // Upright rows (index Upright::Base and up) are real CharSections lookups, not Retail placeholders.
+    if (Upright::Index(uint32_t(race), *style) || Upright::Index(uint32_t(race), *color)) return;
     if (RetailRaceSectionCount(race, sex, VARIATION_FACE, false) < 0) return;
     *style = 0;
     *color = 0;

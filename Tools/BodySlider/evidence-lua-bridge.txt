@@ -1,0 +1,80 @@
+Lua callback crash and entry-bridge evidence
+
+Reported failure:
+  ERROR134 on entering the world, Invalid function pointer 69127790.
+  CurrentAddonFunction=BodySlider_Supported; loaded BodySlider base69120000.
+  Relative address69127790-69120000=7790.
+
+Exact packaged artifact corroboration:
+  build/body-slider/BodySlider-0.2.0-prototype.zip -> BodySlider.dll
+  DLL SHA256 bfb23ac8cf47850d55f8df496c42aa93baf384b54fea77f144d3a037832bac86
+  preferred image base10000000; RVA7790 disassembles to Supported:
+    10007790 push ebp;mov ebp,esp
+    10007793 cmp byte[10035AB4],0 (g_ready)
+    1000779D mov esi,4D3790;call esi (active player)
+    100077B5 mov eax,4D4DB0;call eax (player lookup)
+    100077D0 mov eax,84E4D0;call eax (Lua pushboolean)
+    100077DA mov eax,1;pop esi;pop ebp;ret
+  Later rebuilt DLLs have different function offsets; the original ZIP identity
+  above is essential to matching the user's reported runtime address.
+
+Stock validation mechanism (read-only disassembly):
+  Input D:/Wow.exe SHA256
+  aa63a5750d60ef16746c686b3d5e26876d98953eab08b1c026cd0faf78e88cb8.
+  OsValidateFunctionPointer86B5A0 obtains cached bounds D415B8/D415BC.
+  Initializer86B510 enumerates PE sections, finds .text, and caches
+  imageBase+section.VirtualAddress through start+section.VirtualSize.
+  The supplied executable's bounds are401000 <= callback < 9DE3B3.
+  86B5C9 loads callback from[ebp+8];86B5CC compares lower bound;
+  86B5D0 compares upper bound; invalid path86B5D4 formats the error then
+  86B5E9 calls fatal-error772AA0. The DLL callback69127790 lies outside.
+  No change to this validator, its cached bounds, or BotCheck is necessary.
+
+Six compiler-padding entry slots selected for runtime E9 rel32 bridges:
+  SlotVA    RVA       FileOffset  VerifiedCCrunends  Precedingbyte
+  84DBE1    44DBE1    44CFE1      84DBF0             C3(RET)
+  84DF17    44DF17    44D317      84DF20             C3(RET)
+  84DF55    44DF55    44D355      84DF60             C3(RET)
+  84DFD1    44DFD1    44D3D1      84DFE0             C3(RET)
+  84E022    44E022    44D422      84E030             C3(RET)
+  84E064    44E064    44D464      84E070             C3(RET)
+  Every selected first five bytes is CC CC CC CC CC. Each larger CC run
+  immediately follows a return and ends at the next 16-byte-aligned function.
+  First slot follows lua_gettop84DBD0, whose last instruction84DBE0 is RET.
+  Other neighbouring entries are annotated in Engine/Source/lua-5.1/src/lapi.c.
+
+Reference scan and boundaries:
+  PE section.text bytes were decoded with Capstone X86/MODE32, skipdata=True,
+  disasm_lite over the complete section VirtualSize5DD3B3 from401000.
+  For each call/j*/loop* whose operand is a direct hexadecimal address, the
+  target was checked against each ENTIRE larger CC run above, not only its
+  first five bytes. No direct branch/call targets entered any candidate run.
+  A separate full-file byte search for little-endian uint32 representations
+  of EVERY address inside each larger candidate run found no literals. This
+  conservatively checks stored absolute pointers/jump-table destinations too.
+  These scans establish static padding evidence; they cannot prove that no
+  obfuscated/computed runtime branch could ever target padding.
+
+Reproduction outline (Python pefile and Capstone; no writes):
+  p=pefile.PE('D:/Wow.exe');s=p.sections[0]
+  c=capstone.Cs(capstone.CS_ARCH_X86,capstone.CS_MODE_32);c.skipdata=True
+  code=s.get_data()[:s.Misc_VirtualSize]
+  for address,size,mnemonic,operand in c.disasm_lite(code,0x401000):
+    if (mnemonic.startswith('j') or mnemonic.startswith('loop') or
+        mnemonic=='call') and operand.startswith('0x'):
+      check(int(operand,16) not in any_candidate_range)
+  for candidate_address in every_address_of_each_candidate_range:
+    check(p.__data__.find(candidate_address.to_bytes(4,'little'))==-1)
+
+Bridge regression requirements:
+  Register the six original.text slot addresses as Lua C callbacks, each
+  containing E9 to the corresponding DLL implementation. A tail jump preserves
+  the original Lua callback cdecl stack/return convention. Validate five CC
+  bytes at every slot before installing any detour, restore original protection
+  and flush the instruction cache, and restore CC bytes on startup rollback.
+  Keep original validator and BotCheck bytes unchanged. The native patcher
+  and on-disk executable loader patch require no changes for this correction.
+  Test every entry's decoded destination, stock.text address validity, actual
+  tail-call forwarding and Lua API result; startup alone does not exercise a
+  Lua call from an addon. The initial prototype startup-only check missed this
+  in-world callback validation and was insufficient as acceptance.

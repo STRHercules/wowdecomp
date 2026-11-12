@@ -10,6 +10,7 @@ struct ParticleVisual {
 class ParticleAppearance final {
     KeyValue m_size{},m_rotation{},m_colors[3]{};
     float m_sizeMid=.5f,m_rotationMid=.5f,m_colorMid=.5f,m_alphaMid=.5f,m_uvMid=1;
+    float m_sizeHold=0,m_rotationHold=0,m_colorHold=0,m_alphaHold=0;
     uint32_t m_sizeMode=0,m_rotationMode=0,m_colorMode=0;
     uint32_t m_columns=1,m_rows=1,m_frames[4]={};
     bool m_alpha=true;

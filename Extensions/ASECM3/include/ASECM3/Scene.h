@@ -60,7 +60,7 @@ public:
     static std::shared_ptr<const Scene> Parse(std::vector<uint8_t> bytes,bool embeddedEffects=false);
     // Completes deferred reference validation before decoding any scene data.
     static std::shared_ptr<const Scene> FromDocument(Document document,bool embeddedEffects=false);
-    std::shared_ptr<const Scene> WithAnimationBank(std::vector<uint8_t> bytes,const std::string& source) const;
+    std::shared_ptr<const Scene> WithAnimationBank(std::vector<uint8_t> bytes,const std::string& source,bool meshLocalTracks=false) const;
     // Explicit actor/model dependency lane. It does not select clips, merge
     // material IDs, remap bones or alter the character's skeletal animation.
     std::shared_ptr<const Scene> WithEffectAnimationBank(std::vector<uint8_t> bytes,const std::string& source) const;

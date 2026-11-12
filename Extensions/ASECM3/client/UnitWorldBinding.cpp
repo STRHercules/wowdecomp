@@ -16,6 +16,7 @@
 #include "Engine/Source/lua-5.1/src/asecDiagnostics.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/ShaderEffect/ShaderEffect.h"
+#include "Engine/Source/Os/TimeManager.h"
 #include "WoW/Source/Object/ObjectClient/Unit_C.h"
 #include "WoW/Source/ObjectMgrClient/ObjectMgrClient.h"
 #include "WoW/Source/DB/Rec/CreatureModelDataRec.h"
@@ -31,6 +32,7 @@
 #include <mutex>
 #include <thread>
 #include <fstream>
+#include <sstream>
 #include <limits>
 #include <cmath>
 namespace ASECM3::Client {
@@ -54,7 +56,7 @@ class SourceParser {
  std::deque<std::shared_ptr<SourceJob>> queue;std::thread worker;
  void Run(){for(;;){std::shared_ptr<SourceJob> job;
   {std::unique_lock<std::mutex> lock(mutex);wake.wait(lock,[&]{return stop||!queue.empty();});if(stop)break;job=std::move(queue.front());queue.pop_front();}
-  try{job->scene=Scene::FromDocument(std::move(*job->document),job->effectBank.first.empty()&&job->effectBank.second.empty()&&job->effectError.empty());if(job->effectError.empty())job->effectError=job->scene->EffectSetupError();if(job->scene->Model().animations.empty())for(auto& bank:job->banks){try{job->scene=job->scene->WithAnimationBank(std::move(bank.second),bank.first);break;}catch(const std::exception&){}}
+  try{job->scene=Scene::FromDocument(std::move(*job->document),job->effectBank.first.empty()&&job->effectBank.second.empty()&&job->effectError.empty());if(job->effectError.empty())job->effectError=job->scene->EffectSetupError();if(job->scene->Model().animations.empty()||Key(job->path).rfind("hots\\mounts\\",0)==0)for(auto& bank:job->banks){try{job->scene=job->scene->WithAnimationBank(std::move(bank.second),bank.first,Key(job->path).rfind("hots\\mounts\\",0)==0);break;}catch(const std::exception&){}}
    if(!job->effectBank.second.empty())try{job->scene=job->scene->WithEffectAnimationBank(std::move(job->effectBank.second),job->effectBank.first);}catch(const std::exception& e){job->effectError=e.what();}
    try{SceneCameraBounds(*job->scene,job->cameraLower,job->cameraUpper);}catch(const std::exception& e){job->cameraLower=job->cameraUpper=0;job->cameraError=e.what();}
   }catch(const std::exception& e){job->error=e.what();}catch(...){job->error="Unknown world M3 parse failure";}
@@ -67,15 +69,17 @@ public:
  void Add(const std::shared_ptr<SourceJob>& job){std::lock_guard<std::mutex> lock(mutex);if(job->bytes>256u*1024*1024-queuedBytes)throw Error("World M3 queued snapshots exceed 256 MiB");queuedBytes+=job->bytes;queue.push_back(job);wake.notify_one();}
 };
 struct Binding {uint64_t guid=0;const CGUnit_C* identity=nullptr;std::string path,error,actionError,collisionError;std::shared_ptr<SourceJob> source;EmoteRequest emote;
- bool fromDBC=false;uint32_t objectType=0;int32_t displayId=0,modelId=0;
+ bool fromDBC=false,mount=false,preview=false,previewEffectTried=false,hasRider=false;C3Vector rider;uint32_t objectType=0;int32_t displayId=0,modelId=0;
  bool deviceWaiting=false;uint64_t deviceDeferrals=0;
  bool particleDrawReported=false,particleErrorReported=false,cameraMirrored=false,modelMirrored=false;
  RuntimeTiming tickTiming,queueTiming,drawTiming,pickTiming;uint64_t pickQueries=0,pickHits=0,collisionQueries=0,collisionHits=0;bool collisionReported=false;uint32_t perfTime=0;uint64_t perfQueued=0;double queueHz=0;bool restartEmote=false;
  std::unique_ptr<WorldInstance> instance;CM2Model* proxy=nullptr;uint32_t action=0,lastAttemptedAction=UINT32_MAX,lastFrame=UINT32_MAX,lastTime=0;uint64_t draws=0,queued=0,boundsQueries=0,boundsUpdates=0,opaquePackets=0,transparentPackets=0,splitPackets=0,phaseDraws[3]={};bool reported=false,publishedBounds=false;CAaBox spatialBounds;};
 std::map<uint64_t,std::unique_ptr<Binding>> bindings;
+std::map<uint64_t,std::unique_ptr<Binding>> mountBindings;
+std::map<CM2Model*,std::unique_ptr<Binding>> previewBindings;
 // Per-binding automatic effect state, kept beside the binding map so the Binding layout stays as it was.
 struct AutoEffects{int32_t followedClip=-2;bool userSelected=false;};
-std::map<uint64_t,AutoEffects> autoEffects;
+std::map<Binding*,AutoEffects> autoEffects;
 // One-shot body animations the native unit started (swings, casts, emotes). The M3 plays its matching clip once, from the
 // start, then returns to the continuous state; a new request while one plays is ignored.
 struct OneShot{int32_t action=-1;bool pending=false,active=false,clock=false;uint32_t started=0;};
@@ -86,7 +90,7 @@ bool IsOneShotAnim(uint32_t a){
     default:return a>=60&&a<=84;}
 }
 bool SameName(const std::string& a,const std::string& b){if(a.size()!=b.size())return false;for(size_t i=0;i<a.size();++i)if(std::tolower(static_cast<unsigned char>(a[i]))!=std::tolower(static_cast<unsigned char>(b[i])))return false;return true;}
-std::map<CM2Model*,uint64_t> proxies;
+std::map<CM2Model*,Binding*> proxies;
 std::map<std::string,std::weak_ptr<SourceJob>> sources;
 std::unique_ptr<SourceParser> parser;std::unique_ptr<WorldRenderContext> context;
 // Native M2 workers may query ordinary M2 bounds. They must not read the
@@ -116,6 +120,10 @@ std::shared_ptr<SourceJob> Load(const std::string& path){const auto key=Key(path
 }
 Bytes Texture(const Binding& b,const std::string& name){
  auto normalized=name;std::replace(normalized.begin(),normalized.end(),'/','\\');const auto lower=Key(normalized);
+ // Source references stay in the owning product; the HotS manifest resolves mod inheritance.
+ if(Key(b.path).rfind("hots\\mounts\\",0)==0)
+  return Read("hots\\variants\\"+std::filesystem::path(Key(b.path)).stem().string()+"\\"+normalized);
+ if(Key(b.path).rfind("hots\\",0)==0)return Read(lower.rfind("hots\\",0)==0?normalized:"hots\\"+normalized);
  const std::string prefix="assets\\textures\\";
  if(lower.rfind(prefix,0)==0){
   const std::filesystem::path relative(normalized);
@@ -177,8 +185,8 @@ SceneEnvironment Environment(const CM2Model& model,uint32_t flags,uint32_t pass)
  return out;
 }
 void Draw(CM2Model* model,int32_t packet,uint32_t flags,uint32_t pass){
- const auto proxy=proxies.find(model);if(proxy==proxies.end())return;const auto found=bindings.find(proxy->second);if(found==bindings.end())return;auto& b=*found->second;
- auto* unit=static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(WOWGUID{b.guid},TYPEMASK_UNIT,__FILE__,__LINE__));if(!unit||unit!=b.identity||unit->m_worldModel!=model)return;
+ const auto proxy=proxies.find(model);if(proxy==proxies.end())return;auto& b=*proxy->second;
+ if(!b.preview){auto* unit=static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(WOWGUID{b.guid},TYPEMASK_UNIT,__FILE__,__LINE__));if(!unit||unit!=b.identity||(b.mount?unit->m_mountModel:unit->m_worldModel)!=model)return;}
  TimeSample measured(b.drawTiming);
  if(!b.error.empty()||!b.source||!b.source->ready.load(std::memory_order_acquire))return;
  // m_context is cleared by the native D3D9/D3D9Ex reset path. Do not
@@ -209,10 +217,10 @@ void Disconnect(Binding& b,CGUnit_C*){if(b.proxy){UnregisterModelAttachments(b.p
 }
 bool QueueUnitWorldModel(CM2Scene* scene,CM2Model* model,uint32_t& elementIndex){
  const auto p=proxies.find(model);if(p==proxies.end())return false;
- const auto binding=bindings.find(p->second);if(binding==bindings.end()||binding->second->proxy!=model)return false;
- if(++binding->second->queued==1)Trace(*binding->second,"queued");
+ if(p->second->proxy!=model)return false;
+ if(++p->second->queued==1)Trace(*p->second,"queued");
  // Returning true suppresses native placeholder batches, even while loading.
- auto& b=*binding->second;
+ auto& b=*p->second;
  TimeSample measured(b.queueTiming);
  try{
   if(!Ready(b)||model->m_effectiveAlpha<.0001f)return true;
@@ -249,6 +257,31 @@ bool QueueUnitWorldModel(CM2Scene* scene,CM2Model* model,uint32_t& elementIndex)
  return true;
 }
 void DrawUnitWorldModel(CM2Model* model,int32_t packet,uint32_t flags,uint32_t pass){Draw(model,packet,flags,pass);}
+CM2Model* CreatePreviewModel(CM2Scene* scene,const char* path){
+ if(!scene||!IsM3(path))return nullptr;
+ auto* proxy=scene->CreateModel("Spells\\ErrorCube.mdx",1);if(!proxy)return nullptr;
+ bindingHostThread=true;auto b=std::make_unique<Binding>();b->preview=true;b->proxy=proxy;b->path=path;
+ try{b->source=Load(path);}catch(const std::exception& e){Report(*b,e.what());}
+ proxies[proxy]=b.get();previewBindings[proxy]=std::move(b);return proxy;
+}
+void UpdatePreviewModel(CM2Model* model){
+ const auto found=previewBindings.find(model);if(found==previewBindings.end())return;auto& b=*found->second;
+ try{if(!Ready(b))return;const auto now=OsGetAsyncTimeMs();const auto seconds=b.lastTime?double(uint32_t(now-b.lastTime))/1000:0;b.lastTime=now;
+  b.instance->SetWorldTransform(SourceBasis()*model->m_worldTransform);
+  if(!b.instance->Advance(seconds,{}))throw Error(b.instance->ErrorText());
+  auto& renderer=b.instance->Renderer();if(!b.previewEffectTried&&renderer.EffectSequence()<0&&!renderer.Data().EffectSequences().empty()&&
+      (!renderer.Data().EffectBinding().particles.empty()||!renderer.Data().Effects().ribbons.empty())){
+   b.previewEffectTried=true; // effects are optional: a clip without bound owners must not hide the body
+   const auto& clips=renderer.Data().EffectSequences();
+   try{for(size_t i=0;i<clips.size();++i)if(SameName(clips[i].name,"Stand")){renderer.SetEffectSequence(int32_t(i));break;}}
+   catch(const std::exception& e){const auto detail="M3 preview effects not started for "+b.path+": "+e.what();ASEC_LuaDiagnostic(nullptr,detail.c_str(),0,0,0,__FILE__,__LINE__);}
+  }
+ }catch(const std::exception& e){Report(b,e.what());}
+}
+void RemovePreviewModel(CM2Model* model){
+ const auto found=previewBindings.find(model);if(found==previewBindings.end())return;
+ autoEffects.erase(found->second.get());Disconnect(*found->second,nullptr);previewBindings.erase(found);
+}
 bool UnitCameraBounds(const CGUnit_C* unit,float& lower,float& upper,bool& pending){
  lower=upper=0;pending=false;if(!unit||!unit->m_obj)return false;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);
  if(found==bindings.end()||found->second->identity!=unit)return false;const auto& source=found->second->source;
@@ -262,7 +295,7 @@ bool HasUnitWorldModel(const CGUnit_C* unit){
 bool UnitModelBounds(const CM2Model* model,CAaBox& box,bool worldSpace,bool maximum){
  if(!bindingHostThread)return false;
  const auto proxy=proxies.find(const_cast<CM2Model*>(model));if(proxy==proxies.end())return false;
- const auto found=bindings.find(proxy->second);if(found==bindings.end())return false;auto& b=*found->second;
+ auto& b=*proxy->second;
  if(b.proxy!=model||!b.instance||!b.error.empty())return false;
  try{
   auto transform=SourceBasis();
@@ -287,7 +320,7 @@ bool UnitModelSphere(const CM2Model* model,CAaSphere& sphere,bool worldSpace,boo
 bool UnitPickingSphere(const CM2Model* model,CAaSphere& sphere){
  if(!bindingHostThread||!model)return false;
  const auto proxy=proxies.find(const_cast<CM2Model*>(model));if(proxy==proxies.end())return false;
- const auto found=bindings.find(proxy->second);if(found==bindings.end()||found->second->proxy!=model)return false;auto& b=*found->second;
+ if(proxy->second->proxy!=model)return false;auto& b=*proxy->second;
  sphere.c=C3Vector(0,0,0);sphere.r=0;
  if(!b.instance||!b.error.empty())return true;
  try{WorldBounds bounds;bool found=false;
@@ -302,7 +335,7 @@ bool UnitPickingSphere(const CM2Model* model,CAaSphere& sphere){
 bool UnitPickGeometry(const CM2Model* model,const C3Vector& start,const C3Vector& dir,float maximum,float& distance,bool& hit,bool worldSpace){
  if(!bindingHostThread||!model)return false;
  const auto proxy=proxies.find(const_cast<CM2Model*>(model));if(proxy==proxies.end())return false;
- const auto found=bindings.find(proxy->second);if(found==bindings.end()||found->second->proxy!=model)return false;auto& b=*found->second;
+ if(proxy->second->proxy!=model)return false;auto& b=*proxy->second;
  hit=false;if(!b.instance||!b.error.empty()||(model->m_hitTestMode!=3&&model->m_effectiveAlpha<=0))return true;
  TimeSample measured(b.pickTiming);++b.pickQueries;if(model->m_hitTestMode==3)++b.collisionQueries;
  try{
@@ -318,13 +351,14 @@ bool UnitPickGeometry(const CM2Model* model,const C3Vector& start,const C3Vector
  return true;
 }
 void UpdateWorldBindings(uint32_t time){
- for(auto& entry:bindings){auto& b=*entry.second;
+ for(auto& entry:proxies){auto& b=*entry.second;
   auto* unit=static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(WOWGUID{b.guid},TYPEMASK_UNIT,__FILE__,__LINE__));
-  if(!unit||unit!=b.identity||unit->m_worldModel!=b.proxy||!b.proxy||!b.proxy->IsLoaded(0,0))continue;
+  if(!unit||unit!=b.identity||(b.mount?unit->m_mountModel:unit->m_worldModel)!=b.proxy||!b.proxy||!b.proxy->IsLoaded(0,0))continue;
   try{
    if(!Ready(b))continue;
    const auto tickStart=RuntimeTiming::Clock::now();
    uint32_t flags=0;auto chosen=unit->ChooseAnimation(UINT32_MAX,&flags,nullptr);
+   if(b.mount)chosen=unit->IsJumping()?38u:(unit->m_movementData.m_flags&0xF)?5u:0u;
    if(b.emote.Action()>=0){
     const auto clip=SelectWorldAction(b.instance->Renderer().Actions(),uint32_t(b.emote.Action()));
     if(clip<0){b.actionError="Explicit M3 emote has no mapped source clip";b.emote.Clear();Trace(b,"emote_unmapped");}
@@ -333,7 +367,7 @@ void UpdateWorldBindings(uint32_t time){
      chosen=b.emote.Choose(chosen,interrupted,time,uint32_t(source.end-source.start));}
    }
    bool restartNow=false;
-   {auto shot=oneShots.find(b.guid);
+   if(!b.mount){auto shot=oneShots.find(b.guid);
     if(shot!=oneShots.end()){auto& o=shot->second;
      if(o.pending){o.pending=false;o.active=true;o.clock=false;restartNow=true;}
      if(o.active){
@@ -354,20 +388,24 @@ void UpdateWorldBindings(uint32_t time){
     b.restartEmote=false;
     Trace(b,"action");
    }
-   auto world=unit->GetMatrix();world.Scale(unit->GetTrueScale());
+   auto world=b.mount?b.proxy->m_worldTransform:unit->GetMatrix();if(!b.mount)world.Scale(unit->GetTrueScale());
    b.instance->SetWorldTransform(SourceBasis()*world);
    const double seconds=b.lastTime?double(uint32_t(time-b.lastTime))/1000:0;b.lastTime=time;
    if(!b.instance->Advance(seconds,{}))throw Error(b.instance->ErrorText());
    // HotS actors start a model's particle effects together with its body clip. Without that data the effect timeline
    // follows the body clip by name, falling back to Stand, unless a script chose one (ASECM3_SetPlayerEffectSequence).
-   {auto& follow=autoEffects[b.guid];auto& renderer=b.instance->Renderer();const int32_t clip=renderer.CurrentSequence();
+   {auto& follow=autoEffects[&b];auto& renderer=b.instance->Renderer();const int32_t clip=renderer.CurrentSequence();
     if(!follow.userSelected&&clip>=0&&clip!=follow.followedClip&&(!renderer.Data().EffectBinding().particles.empty()||!renderer.Data().Effects().ribbons.empty())){
      follow.followedClip=clip;const auto& effects=renderer.Data().EffectSequences();const auto& body=renderer.Data().Model().animations.at(size_t(clip)).name;
      int32_t pick=-1;for(size_t i=0;i<effects.size()&&pick<0;++i)if(SameName(effects[i].name,body))pick=int32_t(i);
      for(size_t i=0;i<effects.size()&&pick<0;++i)if(SameName(effects[i].name,"Stand"))pick=int32_t(i);
      if(pick>=0&&pick!=renderer.EffectSequence()){try{renderer.SetEffectSequence(pick);b.particleDrawReported=b.particleErrorReported=false;}catch(const std::exception& e){const auto detail="M3 effects not started for "+b.path+": "+e.what();ASEC_LuaDiagnostic(nullptr,detail.c_str(),0,0,0,__FILE__,__LINE__);}}
     }}
-   PublishModelAttachments(b.proxy,b.instance->Renderer().AttachmentFrames(),SourceBasis());
+   auto attachments=b.instance->Renderer().AttachmentFrames();
+   // A mount's seat (29) is the rider's attachment 0; the source's own 0 (Ref_Shield) would otherwise win the lookup.
+   if(b.mount){auto& points=attachments.points;points.erase(std::remove_if(points.begin(),points.end(),[](const auto& p){return p.id==0;}),points.end());
+    for(auto& point:points)if(point.id==29)point.id=0;}
+   PublishModelAttachments(b.proxy,attachments,SourceBasis(),b.hasRider?&b.rider:nullptr);
    CAaBox bounds;
    if(UnitModelBounds(b.proxy,bounds,false,true)&&(!b.publishedBounds||
       bounds.b.x!=b.spatialBounds.b.x||bounds.b.y!=b.spatialBounds.b.y||bounds.b.z!=b.spatialBounds.b.z||
@@ -402,13 +440,53 @@ const char* PrepareUnitModel(CGUnit_C* unit,const char* path){
  bindings[guid]=std::move(binding);return "Spells\\ErrorCube.mdx";
 }
 void AttachUnitModel(CGUnit_C* unit){if(!unit||!unit->m_obj)return;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found==bindings.end()||found->second->identity!=unit||!unit->m_worldModel)return;
- auto& b=*found->second;b.proxy=unit->m_worldModel;proxies[b.proxy]=b.guid;
+ auto& b=*found->second;b.proxy=unit->m_worldModel;proxies[b.proxy]=&b;
  RegisterModelAttachments(b.proxy,b.source?b.source->attachmentCatalog:AttachmentData{},SourceBasis());
  Trace(b,"attached");
  b.proxy->SetGeometryVisible(0,UINT32_MAX,0);b.proxy->SetEmittersEnabled(0);b.proxy->SetRibbonsEnabled(0);
  // The native name/bow callbacks remain owned by their original systems.
 }
-void RemoveUnitModel(CGUnit_C* unit){if(!unit||!unit->m_obj)return;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found==bindings.end()||found->second->identity!=unit)return;Disconnect(*found->second,unit);autoEffects.erase(found->first);oneShots.erase(found->first);bindings.erase(found);}
+void RemoveUnitModel(CGUnit_C* unit){if(!unit||!unit->m_obj)return;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found==bindings.end()||found->second->identity!=unit)return;Disconnect(*found->second,unit);autoEffects.erase(found->second.get());oneShots.erase(found->first);bindings.erase(found);}
+const char* PrepareMountModel(CGUnit_C* unit,const char* path,int32_t displayId,int32_t modelId){
+ bindingHostThread=true;if(!unit||!unit->m_obj)return path;
+ RemoveMountModel(unit);if(!IsM3(path))return path;
+ if(bindings.size()+mountBindings.size()>=512){ASEC_LuaDiagnostic(nullptr,"World M3 binding budget exceeds 512 models",0,0,0,__FILE__,__LINE__);return "Spells\\ErrorCube.mdx";}
+ auto b=std::make_unique<Binding>();b->guid=unit->m_obj->m_guid.m_guid;b->identity=unit;b->path=path;b->mount=true;
+ b->fromDBC=true;b->displayId=displayId;b->modelId=modelId;b->objectType=unit->m_obj->m_type;
+ try{
+  static const auto riders=[] {
+   std::map<std::string,C3Vector> out;const auto path=std::filesystem::path(SFile::m_basePath)/"Data"/"HotS"/"MountRiders.csv";
+   if(!std::filesystem::exists(path))return out;
+   const auto bytes=ReadLooseAssetFile(path,1024*1024);std::istringstream lines(std::string(bytes.begin(),bytes.end()));
+   for(std::string line;std::getline(lines,line);){
+    if(line.empty()||line[0]=='#')continue;if(line.size()>1024||out.size()>=4096)throw Error("HotS rider metadata exceeds budget");
+    std::replace(line.begin(),line.end(),';',' ');std::istringstream row(line);std::string name,extra;C3Vector p;
+    if(!(row>>name>>p.x>>p.y>>p.z)||(row>>extra)||!std::isfinite(p.x)||!std::isfinite(p.y)||!std::isfinite(p.z)||
+       std::abs(p.x)>100||std::abs(p.y)>100||std::abs(p.z)>100||Key(name).rfind("hots\\mounts\\",0)!=0||
+       !out.emplace(Key(name),p).second)throw Error("Invalid HotS rider metadata");
+   }return out;
+  }();
+  const auto seat=riders.find(Key(path));if(seat!=riders.end()){b->rider=seat->second;b->hasRider=true;}
+  b->source=Load(path);
+ }catch(const std::exception& e){Report(*b,e.what());}
+ mountBindings[b->guid]=std::move(b);return "Spells\\ErrorCube.mdx";
+}
+void AttachMountModel(CGUnit_C* unit){
+ if(!unit||!unit->m_obj||!unit->m_mountModel)return;const auto it=mountBindings.find(unit->m_obj->m_guid.m_guid);
+ if(it==mountBindings.end()||it->second->identity!=unit)return;auto& b=*it->second;b.proxy=unit->m_mountModel;proxies[b.proxy]=&b;
+ auto points=b.source?b.source->attachmentCatalog:AttachmentData{};
+ points.points.erase(std::remove_if(points.points.begin(),points.points.end(),[](const auto& p){return p.wowId==0;}),points.points.end());
+ for(auto& point:points.points)if(point.wowId==29)point.wowId=0;
+ if(b.hasRider&&std::none_of(points.points.begin(),points.points.end(),[](const auto& p){return p.wowId==0;})){
+  AttachmentPoint seat;seat.wowId=0;seat.bindValid=true;seat.bindPivot={b.rider.y,-b.rider.x,b.rider.z};points.points.push_back(seat);
+ }
+ RegisterModelAttachments(b.proxy,points,SourceBasis());
+ b.proxy->SetGeometryVisible(0,UINT32_MAX,0);b.proxy->SetEmittersEnabled(0);b.proxy->SetRibbonsEnabled(0);Trace(b,"mount_attached");
+}
+void RemoveMountModel(CGUnit_C* unit,CM2Model* expected){
+ if(!unit||!unit->m_obj)return;const auto it=mountBindings.find(unit->m_obj->m_guid.m_guid);
+ if(it==mountBindings.end()||it->second->identity!=unit||(expected&&it->second->proxy!=expected))return;Disconnect(*it->second,unit);autoEffects.erase(it->second.get());mountBindings.erase(it);
+}
 void OnUnitBaseAnimation(CGUnit_C* unit,uint32_t animId,int32_t){
  if(!unit||!unit->m_obj||!IsOneShotAnim(animId))return;
  const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found==bindings.end()||found->second->identity!=unit)return;
@@ -420,7 +498,7 @@ void OnUnitSwing(CGUnit_C* unit,uint32_t animId){
  auto& o=oneShots[found->first];o.action=int32_t(animId);o.pending=true;o.active=false;
 }
 void SetUnitAction(CGUnit_C* unit,uint32_t action){if(!unit||!unit->m_obj||action>505)return;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found!=bindings.end()&&found->second->identity==unit)found->second->action=action;}
-void ResetWorldBindings(){ClearModelAttachments();proxies.clear();bindings.clear();autoEffects.clear();oneShots.clear();sources.clear();parser.reset();context.reset();}
+void ResetWorldBindings(){ClearModelAttachments();proxies.clear();bindings.clear();mountBindings.clear();previewBindings.clear();autoEffects.clear();oneShots.clear();sources.clear();parser.reset();context.reset();}
 void SetUnitEmote(CGUnit_C* unit,uint32_t action){
  if(!unit||!unit->m_obj||action>505)return;const auto it=bindings.find(unit->m_obj->m_guid.m_guid);
  if(it!=bindings.end()&&it->second->identity==unit){it->second->emote.Set(action);it->second->restartEmote=true;Trace(*it->second,"emote_request");}
@@ -431,7 +509,7 @@ bool SetUnitEffectSequence(CGUnit_C* unit,int32_t sequence,std::string& error){
  const auto found=bindings.find(unit->m_obj->m_guid.m_guid);
  if(found==bindings.end()||found->second->identity!=unit){error="This unit has no M3 world binding";return false;}
  auto& b=*found->second;if(!b.instance){error="The M3 world source is not ready yet";return false;}
- try{b.instance->Renderer().SetEffectSequence(sequence);autoEffects[b.guid].userSelected=true;b.particleDrawReported=b.particleErrorReported=false;Trace(b,"effect_request");return true;}
+ try{b.instance->Renderer().SetEffectSequence(sequence);autoEffects[&b].userSelected=true;b.particleDrawReported=b.particleErrorReported=false;Trace(b,"effect_request");return true;}
  catch(const std::exception& e){error=e.what();return false;}
 }
 UnitWorldInfo GetUnitWorldInfo(const CGUnit_C* unit){UnitWorldInfo out;if(!unit||!unit->m_obj)return out;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);if(found==bindings.end()||found->second->identity!=unit)return out;

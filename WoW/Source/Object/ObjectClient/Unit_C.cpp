@@ -1,6 +1,7 @@
 #include "Engine/Source/Retail/BodyShape.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "WoW/Common/ComponentCore/MountCustomize.h"
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Retail/Ethereal.h"
@@ -6921,6 +6922,7 @@ int32_t CGUnit_C::ChooseRangedLoadAnim(uint32_t flags, uint32_t* anim) const {
 // VERIFY: 293f222c auto
 // OFFSET: 0x007151A0
 void CGUnit_C::RemoveMountModel() {
+    ASECM3::Client::RemoveMountModel(this, this->m_mountModel);
     if (this->m_mountModel) {
         this->m_mountModel->SetLoadedCallback(nullptr, nullptr);
         this->m_mountModel->SetSequenceCallback(nullptr, 0);
@@ -6944,6 +6946,7 @@ void CGUnit_C::SetMountModel(CM2Model* model) {
     }
 
     if (this->m_mountModel) {
+        ASECM3::Client::RemoveMountModel(this, this->m_mountModel);
         if (this->m_mountModel->m_attachParent) {
             this->m_mountModel->DetachFromParent();
         }
@@ -7654,6 +7657,14 @@ void CGUnit_C::ApplyAlpha(uint32_t time) {
     }
 
     model->m_fadeAlpha = static_cast<float>(this->m_alphaScale) * this->m_alpha * (1.0f / 65025.0f);
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+    // Morph-form mounts stand in for the player's body, so the rider is faded out while mounted.
+    if (model == this->m_mountModel && this->m_worldModel && this->m_mountDisplayId) {
+        const Retail::MountSkin* skin = EsteriaMountSkin(static_cast<uint32_t>(this->m_mountDisplayId));
+        if (skin && skin->hideRider)
+            this->m_worldModel->m_fadeAlpha = 0.0f;
+    }
+#endif
 }
 
 // VERIFY: b788c577 auto
@@ -9137,6 +9148,15 @@ int32_t CGUnit_C::GetModelFileName(const char** name) const {
     bool const playerBody = (this->m_obj->m_type & TYPEMASK_PLAYER) || ((this->m_unit->m_unitFieldFlags2 & 0x10) && this->m_unit->m_unitFieldBytes0[0]);
     if (playerBody && effectiveDisplay == static_cast<int32_t>(this->m_unit->m_unitFieldNativedisplayid)) {
         static thread_local char retailPath[260];
+
+        // Upright undead: the skin byte says which body (UprightUndead.h).
+        if (this->m_obj->m_type & TYPEMASK_PLAYER) {
+            const CGPlayer_C* player = static_cast<const CGPlayer_C*>(this);
+            if (const char* upright = Upright::ModelFor(this->m_unit->m_unitFieldBytes0[0], this->m_unit->m_unitFieldBytes0[2], player->m_player->m_playerBytes[0])) {
+                *name = upright;
+                return 1;
+            }
+        }
 
         if (RetailRaceModelPath(this->m_unit->m_unitFieldBytes0[0], this->m_unit->m_unitFieldBytes0[2], retailPath, sizeof(retailPath),
                                 RetailRaceLookForm(this->m_obj->m_guid.m_guid))) {
@@ -22842,7 +22862,13 @@ void CGUnit_C::CreateUnitMount(int32_t a2, int32_t a3) {
         }
 #endif
         this->m_mountScale = displayInfo->m_creatureModelScale;
-        CM2Model* mount = World::s_m2Scene->CreateModel(modelData->m_modelName, 0);
+        const char* mountPath = modelData->m_modelName;
+        mountPath = ASECM3::Client::PrepareMountModel(this, mountPath, displayInfo->m_id, modelData->m_id);
+        CM2Model* mount = World::s_m2Scene->CreateModel(mountPath, 0);
+        if (!mount) {
+            ASECM3::Client::RemoveMountModel(this);
+            return;
+        }
         mount->SetSequenceCallback(reinterpret_cast<void*>(&CGUnit_C::MountAnimEndCallback), this->m_obj->m_guid.m_guid);
         mount->SetEventCallback(reinterpret_cast<void*>(&CGUnit_C::AnimEventCallback), this->m_obj->m_guid.m_guid);
         C44Matrix transform = this->m_worldModel->m_worldTransform;
@@ -22855,6 +22881,7 @@ void CGUnit_C::CreateUnitMount(int32_t a2, int32_t a3) {
         ApplyRetailRiderPose(this, static_cast<uint32_t>(displayInfo->m_id));
 #endif
         this->SetMountModel(mount);
+        ASECM3::Client::AttachMountModel(this);
         mount->Release();
         this->m_mountFootprintTextureId = modelData->m_footprintTextureID;
         this->m_mountFootprintLength = modelData->m_footprintTextureWidth * 0.027777778f;
@@ -22876,6 +22903,14 @@ void CGUnit_C::CreateUnitMount(int32_t a2, int32_t a3) {
         }
 
         this->SetKeyBoneSequence(this->m_worldModel, 0xFFFFFFFF, this->m_mountAnimBehaviorId, 0xFFFFFFFF, 0, 1.0f, 1, 1, 0);
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+        // Rider pose diagnostic (HotS bikes): requested pose, whether the rider model has it, what it resolves to.
+        Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "rider pose: display=%d requested=%d has=%d resolved=%u playing=%u loaded=%d\n",
+            static_cast<int32_t>(displayInfo->m_id), this->m_mountAnimBehaviorId,
+            this->m_worldModel->HasSequence(static_cast<uint32_t>(this->m_mountAnimBehaviorId)) ? 1 : 0,
+            this->ResolveAnimForModel(static_cast<uint32_t>(this->m_mountAnimBehaviorId), this->m_worldModel),
+            this->m_worldModel->GetBoneSequenceId(0xFFFFFFFF), this->m_worldModel->IsLoaded(0, 0) ? 1 : 0);
+#endif
         C44Matrix scale(1.0f / this->m_mountScale);
         this->m_worldModel->m_fFlags |= 0x8000;
         this->m_worldModel->m_worldTransform = scale;

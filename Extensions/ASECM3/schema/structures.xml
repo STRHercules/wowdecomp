@@ -1764,6 +1764,22 @@
         </fields>
     </structure>
 
+    <structure name="PHC2">
+        <description>Observed 128-byte MD34 PHCL v2 record. Legacy coefficients remain opaque.</description>
+        <versions><version number="2" size="128"/></versions>
+        <fields>
+            <field name="simulation_region_index" type="uint32"/>
+            <field name="unknown00" type="uint32"/>
+            <field name="skin_bones" type="Reference" ref_to="U16_"/>
+            <field name="vertex_simulated" type="Reference" ref_to="U8__"/>
+            <field name="vertex_bones" type="Reference" ref_to="U32_"/>
+            <field name="vertex_weights" type="Reference" ref_to="U32_"/>
+            <field name="constraints" type="Reference" ref_to="PHCC"/>
+            <field name="influence_map" type="Reference" ref_to="PHAC"/>
+            <field name="legacy_coefficients" size="48"/>
+        </fields>
+    </structure>
+
     <structure name="PHCL">
         <description>Cloth Behavior</description>
         <versions>

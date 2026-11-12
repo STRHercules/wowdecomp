@@ -1,5 +1,6 @@
 #include "Engine/Source/Retail/BodyShape.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
+#include "WoW/Common/ComponentCore/UprightUndead.h"
 #include "WoW/Common/ClassMask.h"
 #include "CharacterCreation.h"
 #include <cstring>
@@ -358,6 +359,8 @@ void CCharacterCreation::CycleCharCustomization(CHAR_CUSTOMIZATION_TYPE type, in
     if (!delta) {
         return;
     }
+
+    Upright::Scope upright(CCharacterCreation::m_character->m_data.m_preferences);
 
     switch (type) {
         case CHAR_CUSTOMIZATION_SKIN: {
@@ -748,9 +751,16 @@ void CCharacterCreation::InitCharacterComponents(ComponentData* data, bool rando
 
     CCharacterCreation::m_character = CCharacterComponent::AllocComponent();
     const uint32_t form = RetailRaceFormRestore(CCharacterCreation::m_character, data->m_preferences);
+
+    // A fresh character of an upright undead pick starts on the upright body (random choices stay on it).
+    if (randomize && Upright::Wanted() && Upright::Available(data->m_preferences.m_raceID, data->m_preferences.m_sexID)) {
+        Upright::Convert(data->m_preferences, true);
+    }
+
     char retailPath[260];
-    const bool retailModel = RetailRaceModelPath(data->m_preferences.m_raceID, data->m_preferences.m_sexID, retailPath, sizeof(retailPath), form);
-    data->m_model = CCharacterCreation::m_charCustomizeFrame->GetScene()->CreateModel(retailModel ? retailPath : modelRec->m_modelName, 0);
+    const char* uprightPath = Upright::ModelFor(data->m_preferences.m_raceID, data->m_preferences.m_sexID, data->m_preferences.m_skinID);
+    const bool retailModel = !uprightPath && RetailRaceModelPath(data->m_preferences.m_raceID, data->m_preferences.m_sexID, retailPath, sizeof(retailPath), form);
+    data->m_model = CCharacterCreation::m_charCustomizeFrame->GetScene()->CreateModel(uprightPath ? uprightPath : retailModel ? retailPath : modelRec->m_modelName, 0);
 
     if (!data->m_model) {
         return;
@@ -764,6 +774,7 @@ void CCharacterCreation::InitCharacterComponents(ComponentData* data, bool rando
 
     CCharacterCreation::m_character->Init(data, nullptr);
     RetailRaceEyeLightning(m_character, eyeLightning);
+    Upright::Scope upright(CCharacterCreation::m_character->m_data.m_preferences);
 
     if (randomize) {
         CCharacterCreation::m_character->SetRandomSkin(COMPONENT_CONTEXT_0);
@@ -933,6 +944,7 @@ void CCharacterCreation::SetSelectedClass(int32_t classID) {
 // VERIFY: ca66e480 auto
 // OFFSET: 0x004E17F0
 void CCharacterCreation::RandomizeCharCustomization() {
+    Upright::Scope upright(CCharacterCreation::m_character->m_data.m_preferences);
     CCharacterCreation::m_character->SetRandomSkin(COMPONENT_CONTEXT_0);
     CCharacterCreation::m_character->SetRandomFace(COMPONENT_CONTEXT_0);
     CCharacterCreation::m_character->SetRandomHairColor(COMPONENT_CONTEXT_0);
@@ -947,6 +959,33 @@ void CCharacterCreation::RandomizeCharCustomization() {
 
     CCharacterCreation::Dress();
     CGlueLoading::StartLoad(CCharacterCreation::m_character, 1);
+}
+
+// NOT IN BINARY. Upright undead toggle: rebuilds the character on the other body. Each choice keeps its index where
+// both bodies have it; validation moves the rest onto the nearest valid choice. False if this character has no
+// upright body (not undead, or the package is not installed).
+bool CCharacterCreation::SetUpright(bool upright) {
+    CCharacterComponent* character = CCharacterCreation::m_character;
+
+    if (!character || !character->m_data.m_model || !Upright::Available(character->m_data.m_preferences.m_raceID, character->m_data.m_preferences.m_sexID)) {
+        return false;
+    }
+
+    Upright::SetWanted(upright);
+    const CharacterPreferences& current = character->m_data.m_preferences;
+
+    if (Upright::Index(current.m_raceID, static_cast<int32_t>(current.m_skinID)) == upright) {
+        return true;
+    }
+
+    ComponentData data;
+    data.m_preferences = current;
+    data.m_preferences.m_classId = CCharacterCreation::m_selectedClassID;
+    Upright::Convert(data.m_preferences, upright);
+    CCharacterComponent::ValidateComponentData(&data, COMPONENT_CONTEXT_0);
+    CCharacterCreation::InitCharacterComponents(&data, false);
+    CGlueLoading::StartLoad(CCharacterCreation::m_character, 1);
+    return true;
 }
 
 // VERIFY: f5f53eff manual
@@ -988,6 +1027,7 @@ void CCharacterCreation::ResetCharCustomizeInfo() {
 
     CCharacterCreation::m_existingCharacterIndex = -1;
     RetailRaceEyeLightning(m_character, false);
+    Upright::SetWanted(false);
 
     if (CCharacterCreation::m_charCustomizeFrame->m_model) {
         CCharacterCreation::m_charCustomizeFrame->m_model->DetachAllChildrenById(0);

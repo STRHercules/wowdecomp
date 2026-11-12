@@ -15,7 +15,7 @@ struct HandItemAppearance {
 };
 
 // One source per pinned build. Storage calls and dependency publication are serialized.
-// Each source owns its retail/ or forever/ namespace plus explicit aliases; stock paths stay in MPQ.
+// Each source owns its retail/, forever/ or hots/ namespace; stock paths stay in MPQ.
 class CascSource {
 public:
     explicit CascSource(SourceKind kind = SourceKind::Retail);
@@ -28,6 +28,8 @@ public:
     bool Exists(const char* name, std::string& error);
     bool Read(const char* name, std::vector<uint8_t>& bytes, std::string& error);
     bool Inspect(const char* name, std::vector<uint8_t>& bytes, std::string& error);
+    // Source names for import tooling, not a listfile scan on the client read path.
+    bool List(const char* mask, std::vector<std::string>& names, std::string& error);
     // Explicit player body/collection scope for legacy material approximation. Generic models
     // keep strict unsupported-shader rejection unless their existing shared-skeleton path applies.
     void RegisterCharacterModel(uint32_t fileDataId);
@@ -53,8 +55,8 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-// Lazy process-wide source, configured by WOW_RETAIL_CONFIG or RetailCasc.ini in the
-// working directory. Initialization does no network IO until a Retail reference is read.
+// Lazy process-wide sources: WOW_RETAIL_CONFIG, WOW_FOREVER_CONFIG, WOW_HOTS_CONFIG,
+// or their *Casc.ini defaults. Initialization does no network IO until an asset is read.
 CascSource& Source();
 CascSource& SourceForPath(const char* name);
 
