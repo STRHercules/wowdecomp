@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Esteria Manastorm
+## Notes: The Manastorm: choose a depth, set your gadgets, follow your run. Open it with /manastorm, its key binding (Key Bindings > Esteria Manastorm) or the micro menu. Needs the wowdecomp client and an Esteria server with Manastorm.ClientMode = 2.
+## Version: 1.0
+
+esteria_style.lua
+EsteriaManastormData.lua
+EsteriaManastorm.lua

@@ -38,11 +38,11 @@ PATCHES = {
         ('<Script file="micromenu.lua"/>', '<Script file="esteria_microbuttons.lua"/>\n    <Script file="micromenu.lua"/>', 1),
     ],
     "modules" + B + "micromenu.lua": [
-        # the strip: Esteria's six buttons sit after Collections
+        # the strip: Esteria's seven buttons sit after Collections
         ('MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),',
-         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
-        # six more buttons of 26 px each: the strip starts further left
-        ("-180", "-336", 3),
+         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Manastorm"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
+        # seven more buttons of 26 px each: the strip starts further left
+        ("-180", "-362", 3),
         # one row, however many buttons the profile's saved column count allows
         ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 16))", 1),
         # atlas rows for the new sheets
@@ -145,6 +145,21 @@ def paw(d, S, c):
     paw_at(d, 32 * S, 45 * S, S, c)
 
 
+def crystal(d, S, c):
+    # a tall crystal shard with sparks: the Manastorm mark
+    edge = (60, 40, 10, 255)
+    cx, cy = 32 * S, 41 * S
+    shard = [(cx, cy - 25 * S), (cx + 10 * S, cy - 8 * S), (cx + 7 * S, cy + 20 * S), (cx, cy + 25 * S),
+             (cx - 7 * S, cy + 20 * S), (cx - 10 * S, cy - 8 * S)]
+    d.polygon(shard, fill=c + (255,), outline=edge)
+    d.line([(cx, cy - 25 * S), (cx - 2 * S, cy + 25 * S)], fill=edge, width=S)
+    d.line([(cx - 10 * S, cy - 8 * S), (cx + 10 * S, cy - 8 * S)], fill=edge, width=S)
+    for sx, sy, r in ((-17, -14, 4), (16, 4, 3), (-14, 14, 3)):
+        x, y, r = cx + sx * S, cy + sy * S, r * S
+        d.polygon([(x, y - r), (x + r // 3, y), (x, y + r), (x - r // 3, y)], fill=(255, 255, 255, 255))
+        d.polygon([(x - r, y), (x, y - r // 3), (x + r, y), (x, y + r // 3)], fill=(255, 255, 255, 255))
+
+
 def house_at(d, cx, cy, u, c):
     # a gabled house with a door: the Neighborhood mark, about 44 u wide
     edge = (60, 40, 10, 255)
@@ -230,6 +245,7 @@ def main():
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-fate.tga"] = tga(sheet(compass))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-neighborhood.tga"] = tga(sheet(house))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-incarnation.tga"] = tga(sheet(paw))
+    entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-manastorm.tga"] = tga(sheet(crystal))
     # the stock micro bar's Incarnations button (Addons/EsteriaIncarnations), for when DragonUI is off
     for state, tint, dx in (("Up", (235, 200, 110), 0), ("Down", (190, 150, 70), 1), ("Disabled", (120, 120, 120), 0)):
         entries["Interface" + B + "Esteria" + B + "IncarnationMicro-" + state + ".tga"] = tga(stock_micro(tint, dx, paw_at))
@@ -252,6 +268,10 @@ def main():
     entries["Interface" + B + "AddOns" + B + "EsteriaMountCustomize" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     entries.update(tree(REPO / "Addons" / "EsteriaToolChest", "Interface" + B + "AddOns" + B + "EsteriaToolChest" + B))
+    # The Manastorm window (Extensions/Manastorm; its data comes from Tools/ManastormPort/manastorm_client.py)
+    entries.update(tree(REPO / "Addons" / "EsteriaManastorm", "Interface" + B + "AddOns" + B + "EsteriaManastorm" + B))
+    entries["Interface" + B + "AddOns" + B + "EsteriaManastorm" + B + "esteria_style.lua"] = (
+        REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     entries["Interface" + B + "AddOns" + B + "EsteriaToolChest" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     # The swap wheel's art (EasyController, MIT: easycontroller/README.md)

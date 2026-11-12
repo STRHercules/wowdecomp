@@ -5,6 +5,7 @@
 // CGxDeviceVulkanDraw.cpp, the render targets CGxDeviceVulkanTarget.cpp, the queries
 // CGxDeviceVulkanQuery.cpp, the cursor CGxDeviceVulkanCursor.cpp, the rest CGxDeviceVulkanStubs.cpp.
 #include <cstdint>
+#include "WoW/Source/Extension/ExtensionMgr.h"
 #include <cstring>
 #include <new>
 #include "Engine/Source/Gx/CGxDeviceVulkan/CGxDeviceVulkan.h"
@@ -291,6 +292,7 @@ void CGxDeviceVulkan::IReleaseVulkanWindow() {
 void CGxDeviceVulkan::IDestroyVulkan() {
     this->ICursorDestroy();
     frame::ReleaseSwapchain();
+    sExtensionMgr->OnVulkanDeviceDestroy();
     effects::Shutdown();
     this->IReleasePools();
     this->IReleaseTextures();

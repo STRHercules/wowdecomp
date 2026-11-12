@@ -51,19 +51,6 @@ Turn a property into a functioning tavern with a **Bartender NPC**, seating, and
 
 ---
 
-### 3. Shared Guild Halls
-
-Allow guilds to own or designate a shared hall with collaborative management.
-
-- Assign ownership and management permissions to guild leadership and authorized ranks.
-- Support rank-based rights for decorating, placing NPCs, accessing storage, and configuring services.
-- Enable shared meeting spaces, guild trophies, crafting stations, mailboxes, and guild bank access.
-- Allow member teleportation or access based on guild permissions and travel rules.
-- Maintain audit logs for important shared actions, including removing furniture and withdrawing shared items.
-- Define ownership transfer and asset handling if a guild disbands or changes leadership.
-
----
-
 ### 3.5 Private PvP Arenas
 
 Let homeowners create controlled dueling and practice spaces within their property.

@@ -378,7 +378,7 @@ void CGUnit_C::PlayCombatSpellMissEffects(uint32_t reason, const WOWGUID& source
     const CGUnitVirtualItem* weapon = nullptr;
 
     if (attacker && attacker->m_sheatheState) {
-        const CGUnitVirtualItem* item = attacker->GetVirtualItem(0, false);
+        const CGUnitVirtualItem* item = attacker->GetAppearanceItem(0, false);
         weapon = item && item->m_classID == 2 ? item : nullptr;
     }
 
@@ -398,8 +398,8 @@ void CGUnit_C::PlayCombatSpellMissEffects(uint32_t reason, const WOWGUID& source
 
         case 5: {
             this->PlayBaseAnimation(ANIM_SHIELD_BLOCK, 0);
-            this->GetVirtualItem(0, false);
-            const CGUnitVirtualItem* shield = this->GetVirtualItem(1, false);
+            this->GetAppearanceItem(0, false);
+            const CGUnitVirtualItem* shield = this->GetAppearanceItem(1, false);
 
             if (shield && shield->m_classID != 2 && shield->m_classID != 4) {
                 shield = nullptr;
@@ -452,7 +452,7 @@ void CGUnit_C::PlayVictimWorldFeedback(const ATTACKROUNDINFO& info) {
             CGUnit_C* attacker = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(info.m_attacker, TYPEMASK_UNIT, __FILE__, __LINE__));
 
             if (attacker) {
-                bool oneHand = !CGUnit_C::IsTwoHanded(attacker->GetVirtualItem(0, false));
+                bool oneHand = !CGUnit_C::IsTwoHanded(attacker->GetAppearanceItem(0, false));
                 int32_t self = activePlayer == info.m_attacker || activePlayer == info.m_target;
                 C3Vector position = attacker->GetPosition();
                 SI2::PlayMissedSound(oneHand, &position, self);
@@ -520,7 +520,7 @@ void CGUnit_C::PlayVictimWorldFeedback(const ATTACKROUNDINFO& info) {
         CGUnit_C* attacker = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(info.m_attacker, TYPEMASK_UNIT, __FILE__, __LINE__));
 
         if (attacker) {
-            bool oneHand = !CGUnit_C::IsTwoHanded(attacker->GetVirtualItem(0, false));
+            bool oneHand = !CGUnit_C::IsTwoHanded(attacker->GetAppearanceItem(0, false));
             int32_t self = activePlayer == info.m_attacker || activePlayer == info.m_target;
             C3Vector position = attacker->GetPosition();
             SI2::PlayMissedSound(oneHand, &position, self);
@@ -657,7 +657,7 @@ void CGUnit_C::HandleCombatAnimEvent(uint32_t eventId, uint32_t data, const C3Ve
             }
 
             this->PlayRangedItemPull();
-            const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+            const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
             if (!item || item->m_classID != 2 || (item->m_subclassID != 3 && item->m_subclassID != 18)) {
                 if (this->m_ammoModel && !this->m_ammoModel->m_attachParent) {

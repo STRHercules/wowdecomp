@@ -51,19 +51,26 @@ bool MergeClientTable(const std::string& table, const std::vector<uint8_t>& base
     const std::vector<uint8_t>& additions, std::vector<uint8_t>& merged, std::string& error) {
     error.clear();
     merged.clear();
-    const uint32_t fields = table == "item.dbc" ? 8 : table == "itemdisplayinfo.dbc" ? 25 :
-        table == "creaturemodeldata.dbc" ? 28 : table == "creaturedisplayinfo.dbc" ? 16 :
-        table == "spell.dbc" ? 234 : table == "spellicon.dbc" ? 2 : table == "skilllineability.dbc" ? 14 :
-        table == "spellvisual.dbc" ? 32 : table == "spellvisualkit.dbc" ? 38 :
-        table == "spellvisualeffectname.dbc" ? 7 : table == "spellvisualkitmodelattach.dbc" ? 10 : 0;
-    if (!fields) return Reject(error, "Unsupported supplemental client table");
-    std::vector<unsigned> strings;
-    if (table == "spellvisualeffectname.dbc") strings = {1, 2};
-    if (fields == 25) { for (unsigned i = 1; i <= 6; ++i) strings.push_back(i); for (unsigned i = 15; i <= 22; ++i) strings.push_back(i); }
-    if (fields == 28) strings = {2};
-    if (fields == 16) strings = {6, 7, 8, 9};
-    if (fields == 2) strings = {1};
-    if (fields == 234) for (unsigned start : {136u, 153u, 170u, 187u})
+    // Field count and string columns per table; localized names are 16 string columns starting at the given one.
+    struct Layout { const char* name; uint32_t fields; std::vector<unsigned> strings, localized; };
+    static const Layout layouts[] = {
+        {"item.dbc", 8, {}, {}}, {"itemdisplayinfo.dbc", 25, {1, 2, 3, 4, 5, 6, 15, 16, 17, 18, 19, 20, 21, 22}, {}},
+        {"creaturemodeldata.dbc", 28, {2}, {}}, {"creaturedisplayinfo.dbc", 16, {6, 7, 8, 9}, {}},
+        {"spell.dbc", 234, {}, {136, 153, 170, 187}}, {"spellicon.dbc", 2, {1}, {}}, {"skilllineability.dbc", 14, {}, {}},
+        {"spellvisual.dbc", 32, {}, {}}, {"spellvisualkit.dbc", 38, {}, {}}, {"spellvisualeffectname.dbc", 7, {1, 2}, {}},
+        {"spellvisualkitmodelattach.dbc", 10, {}, {}},
+        // Item and spell lookups that content ported from other 3.3.5 realms (Manastorm) brings along.
+        {"spellcategory.dbc", 2, {}, {}}, {"spellduration.dbc", 4, {}, {}}, {"spellradius.dbc", 4, {}, {}}, {"spellrange.dbc", 40, {}, {6, 23}},
+        {"itemset.dbc", 53, {}, {1}}, {"itemlimitcategory.dbc", 20, {}, {1}}, {"itemextendedcost.dbc", 16, {}, {}},
+        {"spellitemenchantment.dbc", 38, {}, {14}}, {"scalingstatdistribution.dbc", 22, {}, {}},
+        {"gameobjectdisplayinfo.dbc", 19, {1}, {}},
+    };
+    const Layout* layout = nullptr;
+    for (const auto& candidate : layouts) if (table == candidate.name) layout = &candidate;
+    if (!layout) return Reject(error, "Unsupported supplemental client table");
+    const uint32_t fields = layout->fields;
+    std::vector<unsigned> strings = layout->strings;
+    for (unsigned start : layout->localized)
         for (unsigned i = start; i < start + 16; ++i) strings.push_back(i);
     std::set<uint32_t> ids;
     if (!Validate(base, fields, strings, ids, false, error) || !Validate(additions, fields, strings, ids, true, error)) return false;

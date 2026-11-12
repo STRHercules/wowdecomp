@@ -1,4 +1,5 @@
 #include "Player_C.h"
+#include "WoW/Source/Extension/AppearanceOverrides.h"
 #include <malloc.h>
 #include "Engine/Source/Base/CDataStore.h"
 #include "Engine/Source/BlizzardCore/SFile2-Core.h"
@@ -8254,9 +8255,9 @@ void CGPlayer_C::ToggleSheathe() {
         }
     }
 
-    const CGUnitVirtualItem* mainHand = this->GetVirtualItem(0, false);
-    const CGUnitVirtualItem* offHand = this->GetVirtualItem(1, false);
-    const CGUnitVirtualItem* ranged = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* mainHand = this->GetAppearanceItem(0, false);
+    const CGUnitVirtualItem* offHand = this->GetAppearanceItem(1, false);
+    const CGUnitVirtualItem* ranged = this->GetAppearanceItem(2, false);
     ChrClassesRec* playerClass = g_chrClassesDB.GetRecord(this->m_unit->m_unitFieldBytes0[1]);
 
     if (!playerClass || (playerClass->m_flags & 0x8)) {
@@ -10290,7 +10291,7 @@ void CGPlayer_C::UpdateObjComponentVisualsSlot(const VisibleItem_C* item, int32_
         return;
     }
 
-    const CGUnitVirtualItem* virtualItem = this->GetVirtualItem(hand, false);
+    const CGUnitVirtualItem* virtualItem = this->GetAppearanceItem(hand, false);
 
     if (!virtualItem) {
         return;
@@ -10302,7 +10303,7 @@ void CGPlayer_C::UpdateObjComponentVisualsSlot(const VisibleItem_C* item, int32_
         if (slot == 15) {
             this->UpdateObjComponentVisuals(item, CCharacterComponent::GetSheatheLink(sheatheType, true));
             this->UpdateObjComponentVisuals(item, static_cast<GEOCOMPONENTLINKS>(1));
-        } else if (const_cast<VisibleItem_C*>(item)->GetInventoryType() == 14) {
+        } else if (virtualItem->m_inventoryType == 14) {
             this->UpdateObjComponentVisuals(item, static_cast<GEOCOMPONENTLINKS>(0));
         } else {
             this->UpdateObjComponentVisuals(item, CCharacterComponent::GetSheatheLink(sheatheType, false));
@@ -10356,7 +10357,20 @@ void CGPlayer_C::AutoEquipItem(WOWGUID container, uint32_t slot, int32_t ignoreB
 // VERIFY: d775d48d manual
 // OFFSET: 0x006E08C0
 void CGPlayer_C::EquipVisibleItem(const VisibleItem_C* item, int32_t slot) {
-    if (!item || !abs(item->m_itemId) || static_cast<int32_t>(const_cast<VisibleItem_C*>(item)->GetDisplayID()) <= 0) {
+    const auto* look = ClientAppearance::Resolve(*this, slot);
+    const uint32_t display = look ? look->display : item && abs(item->m_itemId) ? const_cast<VisibleItem_C*>(item)->GetDisplayID() : 0;
+    if (look && !display) {
+        if (slot >= 15 && slot <= 17 && m_worldModel) {
+            for (int sheath = SHEATHE_NONE; sheath <= SHEATHE_SHIELD; ++sheath) {
+                CCharacterComponent::RemoveHandItem(m_worldModel, static_cast<INVENTORY_SLOTS>(slot), static_cast<SHEATHE_TYPE>(sheath), false);
+                CCharacterComponent::RemoveHandItem(m_worldModel, static_cast<INVENTORY_SLOTS>(slot), static_cast<SHEATHE_TYPE>(sheath), true);
+            }
+        } else if (m_characterComponent) {
+            m_characterComponent->RemoveItemBySlot(static_cast<INVENTORY_SLOTS>(slot));
+        }
+        return;
+    }
+    if (!item || (!look && !abs(item->m_itemId)) || static_cast<int32_t>(display) <= 0) {
         return;
     }
 
@@ -10385,7 +10399,7 @@ void CGPlayer_C::EquipVisibleItem(const VisibleItem_C* item, int32_t slot) {
     }
 
     if (slot == 18) {
-        this->LoadGuildTextures(const_cast<VisibleItem_C*>(item)->GetDisplayID());
+        this->LoadGuildTextures(display);
         return;
     }
 
@@ -10393,7 +10407,7 @@ void CGPlayer_C::EquipVisibleItem(const VisibleItem_C* item, int32_t slot) {
         return;
     }
 
-    this->m_characterComponent->AddItemBySlot(static_cast<INVENTORY_SLOTS>(slot), const_cast<VisibleItem_C*>(item)->GetDisplayID(), 0);
+    this->m_characterComponent->AddItemBySlot(static_cast<INVENTORY_SLOTS>(slot), display, 0);
 }
 
 // VERIFY: 0dbd89fa manual
@@ -10450,7 +10464,7 @@ int32_t CGPlayer_C::RefreshVisibleItems() {
 
         this->EquipVisibleItem(item, slot);
 
-        if (!item->m_itemId && slot == 15) {
+        if (!item->m_itemId && slot == 15 && !ClientAppearance::Resolve(*this, slot)) {
             CCharacterComponent::RemoveHandItem(this->m_worldModel, static_cast<INVENTORY_SLOTS>(15), static_cast<SHEATHE_TYPE>(0), false);
             CCharacterComponent::RemoveHandItem(this->m_worldModel, static_cast<INVENTORY_SLOTS>(15), static_cast<SHEATHE_TYPE>(1), false);
             CCharacterComponent::RemoveHandItem(this->m_worldModel, static_cast<INVENTORY_SLOTS>(15), static_cast<SHEATHE_TYPE>(2), false);
@@ -10492,7 +10506,9 @@ void CGPlayer_C::GetRangedAttackSkillRank(int32_t& rank, int32_t& bonus) {
 void CGPlayer_C::ShowHelm() {
     VisibleItem_C* head = &this->m_player->m_playerVisibleItems[0];
 
-    if (head && head->GetDisplayID() && this->CanEquipItemsInThisForm() && this->m_characterComponent) {
+    if (ClientAppearance::Resolve(*this, 0)) {
+        EquipVisibleItem(head, 0);
+    } else if (head && head->GetDisplayID() && this->CanEquipItemsInThisForm() && this->m_characterComponent) {
         this->m_characterComponent->AddItemBySlot(static_cast<INVENTORY_SLOTS>(0), head->GetDisplayID(), 0);
     }
 
@@ -10512,7 +10528,9 @@ void CGPlayer_C::ShowHelm() {
 void CGPlayer_C::ShowCloak() {
     VisibleItem_C* back = &this->m_player->m_playerVisibleItems[14];
 
-    if (back && back->GetDisplayID() && this->CanEquipItemsInThisForm() && this->m_characterComponent) {
+    if (ClientAppearance::Resolve(*this, 14)) {
+        EquipVisibleItem(back, 14);
+    } else if (back && back->GetDisplayID() && this->CanEquipItemsInThisForm() && this->m_characterComponent) {
         this->m_characterComponent->AddItemBySlot(static_cast<INVENTORY_SLOTS>(14), back->GetDisplayID(), 0);
     }
 
@@ -10589,7 +10607,7 @@ void CGPlayer_C::UpdateInventoryComponent(INVENTORY_SLOTS slot, const VisibleIte
         }
     }
 
-    const CGUnitVirtualItem* rangedItem = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* rangedItem = this->GetAppearanceItem(2, false);
     bool thrown = rangedItem && (rangedItem->m_inventoryType == 26 || rangedItem->m_inventoryType == 25);
     CM2Model* detached = nullptr;
 
@@ -14065,7 +14083,13 @@ void CGPlayer_C::StartGiftWrap(CGItem_C* item) {
 // VERIFY: 35dbeab8 manual
 // OFFSET: 0x006D6BA0
 void CGPlayer_C::UpdateObjComponentVisuals(const VisibleItem_C* item, GEOCOMPONENTLINKS link) {
-    int32_t visual = const_cast<VisibleItem_C*>(item)->GetItemEnchantmentVisualID();
+    VisibleItem_C appearance = *item;
+    const int slot = item == &m_player->m_playerVisibleItems[15] ? 15 : item == &m_player->m_playerVisibleItems[16] ? 16 : -1;
+    if (const auto* look = ClientAppearance::Resolve(*this, slot)) {
+        if (!look->entry) return;
+        appearance.m_itemId = static_cast<int32_t>(look->entry);
+    }
+    int32_t visual = appearance.GetItemEnchantmentVisualID();
 
     if (visual == -1) {
         return;

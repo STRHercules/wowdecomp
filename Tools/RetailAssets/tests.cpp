@@ -1445,7 +1445,10 @@ int main(int argc, char** argv) {
     Check(!Retail::MergeClientTable("item.dbc", baseItem, invalidTable, prepared, error), "reject overflowing table counts");
     for (const auto& schema : {std::pair<const char*, unsigned>{"creaturemodeldata.dbc", 28},
         {"creaturedisplayinfo.dbc", 16}, {"spell.dbc", 234}, {"spellicon.dbc", 2}, {"skilllineability.dbc", 14},
-        {"spellvisual.dbc", 32}, {"spellvisualkit.dbc", 38}, {"spellvisualkitmodelattach.dbc", 10}}) {
+        {"spellvisual.dbc", 32}, {"spellvisualkit.dbc", 38}, {"spellvisualkitmodelattach.dbc", 10},
+        {"spellcategory.dbc", 2}, {"spellduration.dbc", 4}, {"spellradius.dbc", 4}, {"spellrange.dbc", 40}, {"itemset.dbc", 53},
+        {"itemlimitcategory.dbc", 20}, {"itemextendedcost.dbc", 16}, {"spellitemenchantment.dbc", 38},
+        {"scalingstatdistribution.dbc", 22}, {"gameobjectdisplayinfo.dbc", 19}}) {
         Check(Retail::MergeClientTable(schema.first, table(schema.second, 1), table(schema.second, 2), prepared, error), "mount table additions");
         Check(!Retail::MergeClientTable(schema.first, table(schema.second, 1), table(schema.second, 1), prepared, error), "mount ID collision rejection");
     }
@@ -1455,6 +1458,12 @@ int main(int argc, char** argv) {
         Get(prepared, 4) == 2 && Get(prepared, 56) == 2, "append effect names and relocate their file strings");
     Put(newEffect, 28, 99);
     Check(!Retail::MergeClientTable("spellvisualeffectname.dbc", baseEffect, newEffect, prepared, error), "reject invalid effect name strings");
+    auto newSet = table(53, 20);
+    newSet.push_back('S'); newSet.push_back(0); Put(newSet, 16, 3); Put(newSet, 24, 1);
+    Check(Retail::MergeClientTable("itemset.dbc", table(53, 10), newSet, prepared, error) &&
+        Get(prepared, 20 + 53 * 4 + 4) == 2, "relocate an added item set's localized name");
+    Put(newSet, 24, 99);
+    Check(!Retail::MergeClientTable("itemset.dbc", table(53, 10), newSet, prepared, error), "reject invalid localized strings");
     Check(Retail::MergeClientTable("spell.dbc", table(234, 13990005), table(234, 300000), prepared, error) &&
         Get(prepared, 20) == 13990005, "preserve Esteria's existing high spell IDs verbatim");
     Check(!Retail::MergeClientTable("spell.dbc", table(234, 1), table(234, 13990005), prepared, error), "new imports retain bounded allocation policy");

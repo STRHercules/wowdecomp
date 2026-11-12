@@ -1,0 +1,5 @@
+<Bindings>
+    <Binding name="ESTERIAMANASTORM_TOGGLE" header="ESTERIAMANASTORM">
+        EsteriaManastorm_Toggle()
+    </Binding>
+</Bindings>

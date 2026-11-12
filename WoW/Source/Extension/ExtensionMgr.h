@@ -94,6 +94,7 @@ class ExtensionMgr {
     void OnFrameBegin(float elapsedSec);
     void OnWorldRendered();
     void OnFrameEnd();
+    void OnVulkanDeviceDestroy();
 
     public: /* NetScript */
     // Registration API. A handler receives the server messages of one opcode that the stock

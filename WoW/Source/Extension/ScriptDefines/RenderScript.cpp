@@ -14,6 +14,10 @@ void ExtensionMgr::OnFrameEnd() {
     CALL_HOOKS(RenderScript, script->OnFrameEnd());
 }
 
+void ExtensionMgr::OnVulkanDeviceDestroy() {
+    CALL_HOOKS(RenderScript, script->OnVulkanDeviceDestroy());
+}
+
 RenderScript::RenderScript(const char* name) : ScriptObject(name) {
     ScriptRegistry<RenderScript>::AddScript(this);
     sExtensionMgr->Log("Extensions: registered RenderScript %s", name);

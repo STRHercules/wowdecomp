@@ -5398,8 +5398,8 @@ void CGUnit_C::PlayBaseAnimation(uint32_t animId, int32_t flags) {
         anim = animId;
     } else {
         if (!(flags & 0x8) && (animId == ANIM_SPECIAL_1H || animId == ANIM_SPECIAL_2H)) {
-            const CGUnitVirtualItem* mainHand = this->GetVirtualItem(0, false);
-            const CGUnitVirtualItem* offHand = this->GetVirtualItem(1, false);
+            const CGUnitVirtualItem* mainHand = this->GetAppearanceItem(0, false);
+            const CGUnitVirtualItem* offHand = this->GetAppearanceItem(1, false);
 
             if (!mainHand && !offHand) {
                 animId = ANIM_SPECIAL_UNARMED;
@@ -6834,17 +6834,17 @@ int32_t __stdcall CGUnit_C::IsTwoHanded(const CGUnitVirtualItem* item) {
 // VERIFY: 46787e5a auto
 // OFFSET: 0x00714DD0
 uint32_t CGUnit_C::GetCombatReadyAnim() const {
-    const CGUnitVirtualItem* item = this->GetVirtualItem(0, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(0, false);
 
     if (!item || item->m_classID != 2) {
-        item = this->GetVirtualItem(1, false);
+        item = this->GetAppearanceItem(1, false);
     }
 
     if (!item || item->m_classID != 2) {
         return ANIM_READY_UNARMED;
     }
 
-    uint32_t anim = ANIM_READY_2H - (this->GetVirtualItem(1, false) != nullptr);
+    uint32_t anim = ANIM_READY_2H - (this->GetAppearanceItem(1, false) != nullptr);
 
     switch (item->m_subclassID) {
         case 0:
@@ -6885,7 +6885,7 @@ int32_t CGUnit_C::ChooseRangedLoadAnim(uint32_t flags, uint32_t* anim) const {
     }
 
     *anim = ANIM_READY_UNARMED;
-    const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
     if (!item || item->m_classID != 2) {
         return 1;
@@ -9855,7 +9855,7 @@ void CGUnit_C::UpdateAmmoModel(uint32_t displayId, uint32_t invType) {
     }
 
     uint32_t ammoType = 24;
-    const CGUnitVirtualItem* ranged = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* ranged = this->GetAppearanceItem(2, false);
 
     if (invType == 30) {
         if (ranged) {
@@ -14658,7 +14658,7 @@ void CGUnit_C::PlayAttackerRound(const ATTACKROUNDINFO& info) {
     uint32_t anim = 16;
 
     if (info.m_hitInfo & 0x4) {
-        const CGUnitVirtualItem* offhand = this->GetVirtualItem(1, false);
+        const CGUnitVirtualItem* offhand = this->GetAppearanceItem(1, false);
 
         if (offhand && offhand->m_classID == 2) {
             anim = (offhand->m_subclassID == 15) + 87;
@@ -14666,10 +14666,10 @@ void CGUnit_C::PlayAttackerRound(const ATTACKROUNDINFO& info) {
             anim = 117;
         }
     } else {
-        const CGUnitVirtualItem* mainhand = this->GetVirtualItem(0, false);
+        const CGUnitVirtualItem* mainhand = this->GetAppearanceItem(0, false);
 
         if (mainhand && mainhand->m_classID == 2) {
-            uint32_t oneHanded = 18 - (this->GetVirtualItem(1, false) != nullptr);
+            uint32_t oneHanded = 18 - (this->GetAppearanceItem(1, false) != nullptr);
 
             switch (mainhand->m_subclassID) {
                 case 0:
@@ -15011,7 +15011,7 @@ static bool UsesEtherealSheatheSync(const CGUnit_C* unit) {
 void CGUnit_C::SetSheatheState(uint32_t showWeapons, int32_t instant, int32_t noSend) {
     const bool syncAttachments = UsesEtherealSheatheSync(this);
     if (this->IsPlayingWeaponAnim()) {
-        showWeapons = CGUnit_C::ResolveSheathState(showWeapons, this->GetVirtualItem(0, false), this->GetVirtualItem(1, false));
+        showWeapons = CGUnit_C::ResolveSheathState(showWeapons, this->GetAppearanceItem(0, false), this->GetAppearanceItem(1, false));
     }
 
     if (showWeapons == 2 && (this->m_obj->m_type & TYPEMASK_PLAYER)) {
@@ -15326,7 +15326,7 @@ int32_t CGUnit_C::ShowRangedWeapon(bool sheathed, bool* rightHand) {
         return 0;
     }
 
-    const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
     if (!item) {
         return 0;
@@ -15355,7 +15355,7 @@ int32_t CGUnit_C::ShowRangedWeapon(bool sheathed, bool* rightHand) {
     ItemDisplayInfoRec displayRec;
     const ItemDisplayInfoRec* displayRecPtr = nullptr;
 
-    if (this->GetVirtualItemDisplayRec(2, displayRec)) {
+    if (this->GetAppearanceDisplayRec(2, displayRec)) {
         displayRecPtr = &displayRec;
     }
 
@@ -15430,7 +15430,7 @@ int32_t CGUnit_C::SheatheHandItem(uint32_t hand, int32_t sheathe) {
         return 0;
     }
 
-    const CGUnitVirtualItem* item = this->GetVirtualItem(hand, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(hand, false);
 
     if (!item) {
         return 0;
@@ -15542,7 +15542,7 @@ void CGUnit_C::SetSheatheStateInstant() {
                     this->ClearTrackingTarget(false, true);
                 }
 
-                const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+                const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
                 if (item) {
                     if (item->m_inventoryType == INVTYPE_RANGEDRIGHT || item->m_inventoryType == INVTYPE_THROWN) {
@@ -15614,7 +15614,7 @@ int32_t CGUnit_C::UnsheatheRightWeapon() {
     }
 
     if (this->m_sheatheState == 1) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(0, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(0, false);
 
         if (!item) {
             return 0;
@@ -15625,7 +15625,7 @@ int32_t CGUnit_C::UnsheatheRightWeapon() {
     }
 
     if (this->m_sheatheState == 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item && (item->m_inventoryType == INVTYPE_RANGEDRIGHT || item->m_inventoryType == INVTYPE_THROWN)) {
             this->ShowRangedWeapon(true, nullptr);
@@ -15647,7 +15647,7 @@ int32_t CGUnit_C::UnsheatheLeftWeapon() {
     }
 
     if (this->m_sheatheState == 1) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(1, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(1, false);
 
         if (!item) {
             return 0;
@@ -15658,7 +15658,7 @@ int32_t CGUnit_C::UnsheatheLeftWeapon() {
     }
 
     if (this->m_sheatheState == 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item && item->m_inventoryType != INVTYPE_RANGEDRIGHT && item->m_inventoryType != INVTYPE_THROWN) {
             this->ShowRangedWeapon(true, nullptr);
@@ -15679,8 +15679,8 @@ void CGUnit_C::SetSheatheStateAnimate() {
         }
 
         case 1: {
-            const CGUnitVirtualItem* right = this->GetVirtualItem(0, false);
-            const CGUnitVirtualItem* left = this->GetVirtualItem(1, false);
+            const CGUnitVirtualItem* right = this->GetAppearanceItem(0, false);
+            const CGUnitVirtualItem* left = this->GetAppearanceItem(1, false);
 
             if (right) {
                 this->SetKeyBoneSequence(this->m_worldModel, 3, ((1 << right->m_sheatheType) & 0x88) ? 90 : 89, 0xFFFFFFFF, 0, 1.0f, 1, 1, 0);
@@ -15710,7 +15710,7 @@ void CGUnit_C::SetSheatheStateAnimate() {
                 this->ClearTrackingTarget(false, true);
             }
 
-            const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+            const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
             if (!item) {
                 break;
@@ -15735,8 +15735,8 @@ void CGUnit_C::SetSheatheStateAnimate() {
     }
 
     if (this->m_sheatheState == 1) {
-        const CGUnitVirtualItem* right = this->GetVirtualItem(0, false);
-        const CGUnitVirtualItem* left = this->GetVirtualItem(1, false);
+        const CGUnitVirtualItem* right = this->GetAppearanceItem(0, false);
+        const CGUnitVirtualItem* left = this->GetAppearanceItem(1, false);
 
         if (right) {
             this->SetKeyBoneSequence(this->m_worldModel, 3, ((1 << right->m_sheatheType) & 0x88) ? 90 : 89, 0xFFFFFFFF, 0, 1.0f, 1, 1, 0);
@@ -15748,7 +15748,7 @@ void CGUnit_C::SetSheatheStateAnimate() {
             this->m_animationState |= 0x200000;
         }
     } else if (this->m_sheatheState == 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item) {
             this->ShowRangedWeapon(true, nullptr);
@@ -16298,8 +16298,8 @@ void CGUnit_C::OnKeyBoneAnimEnd(CM2Model* model, uint32_t boneId, uint32_t seque
 // VERIFY: fab76f79 auto
 // OFFSET: 0x00732500
 void CGUnit_C::ExchangeSheathedWeapon(const C3Vector* position, uint32_t hand, uint32_t flag) {
-    const CGUnitVirtualItem* item = this->GetVirtualItem(hand, false);
-    const CGUnitVirtualItem* ranged = this->GetVirtualItem(2, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(hand, false);
+    const CGUnitVirtualItem* ranged = this->GetAppearanceItem(2, false);
     uint32_t state;
     bool sheathe;
 
@@ -20287,14 +20287,14 @@ void CGUnit_C::PlayParryAnimation() {
         return;
     }
 
-    const CGUnitVirtualItem* item = this->GetVirtualItem(0, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(0, false);
 
     if (!item || item->m_classID != 2 || !this->m_unit->m_unitFieldBytes2[0]) {
         this->PlayBaseAnimation(ANIM_PARRY_UNARMED, 0);
         return;
     }
 
-    uint32_t twoHandAnim = ANIM_PARRY_2H - (this->GetVirtualItem(1, false) != nullptr);
+    uint32_t twoHandAnim = ANIM_PARRY_2H - (this->GetAppearanceItem(1, false) != nullptr);
 
     switch (item->m_subclassID) {
         case 0:
@@ -20416,7 +20416,7 @@ void CGUnit_C::CreateMissile(const WOWGUID* target, PendingSpellCastData* data, 
     }
 
     if (spell.m_attributes & 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item && item->m_classID == 2 && (item->m_subclassID == 2 || item->m_subclassID == 18 || item->m_subclassID == 16)) {
             missile->m_flags |= 4;
@@ -20684,7 +20684,7 @@ void CGUnit_C::CreateMissile(const SpellCastTargetPoint* point, PendingSpellCast
     missile->m_missReason = 0;
 
     if (spell.m_attributes & 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item && item->m_classID == 2 && (item->m_subclassID == 2 || item->m_subclassID == 18 || item->m_subclassID == 16)) {
             missile->m_flags |= 4;
@@ -20873,7 +20873,7 @@ void CGUnit_C::CreateMissile(const TSStackArray<SpellCastTargetPoint>* points, P
     missile->m_missReason = 0;
 
     if (spell.m_attributes & 2) {
-        const CGUnitVirtualItem* item = this->GetVirtualItem(2, false);
+        const CGUnitVirtualItem* item = this->GetAppearanceItem(2, false);
 
         if (item && item->m_classID == 2 && (item->m_subclassID == 2 || item->m_subclassID == 18 || item->m_subclassID == 16)) {
             missile->m_flags |= 4;
@@ -21079,7 +21079,7 @@ int32_t CGUnit_C::IsPlayingUnarmedAnim() {
         }
     }
 
-    return IsUnarmedAnim(sequence) || (IsMeleeAttackAnim(sequence) && !this->GetVirtualItem(0, false));
+    return IsUnarmedAnim(sequence) || (IsMeleeAttackAnim(sequence) && !this->GetAppearanceItem(0, false));
 }
 
 // VERIFY: 570e3c87 manual
@@ -21089,7 +21089,7 @@ void CGUnit_C::AddHandItem(int32_t hand) {
         return;
     }
 
-    const CGUnitVirtualItem* item = this->GetVirtualItem(hand, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(hand, false);
 
     if (!item) {
         return;
@@ -21097,7 +21097,7 @@ void CGUnit_C::AddHandItem(int32_t hand) {
 
     ItemDisplayInfoRec displayRec;
 
-    if (!this->GetVirtualItemDisplayRec(hand, displayRec)) {
+    if (!this->GetAppearanceDisplayRec(hand, displayRec)) {
         return;
     }
 
@@ -21107,7 +21107,7 @@ void CGUnit_C::AddHandItem(int32_t hand) {
     if (this->m_sheatheState == 2) {
         sheathed = hand != 2;
     } else if (hand == 1 && this->IsPlayingUnarmedAnim()) {
-        sheathed = CGUnit_C::ResolveSheathState(this->m_sheatheState, this->GetVirtualItem(0, false), item) == 0;
+        sheathed = CGUnit_C::ResolveSheathState(this->m_sheatheState, this->GetAppearanceItem(0, false), item) == 0;
     } else {
         sheathed = this->m_sheatheState == 0;
     }
@@ -21121,7 +21121,7 @@ void CGUnit_C::AddHandItem(int32_t hand) {
     if (hand == 0) {
         const CGUnitVirtualItem* mainItem;
 
-        if ((this->m_unit->m_unitFieldFlags & 0x200000) && (mainItem = this->GetVirtualItem(0, true)) && mainItem->m_classID == 2) {
+        if ((this->m_unit->m_unitFieldFlags & 0x200000) && (mainItem = this->GetAppearanceItem(0, true)) && mainItem->m_classID == 2) {
             return;
         }
 
@@ -21132,9 +21132,9 @@ void CGUnit_C::AddHandItem(int32_t hand) {
         const CGUnitVirtualItem* offItem;
 
         if (this->m_unit->m_unitFieldFlags & 0x200000) {
-            this->GetVirtualItem(0, true);
+            this->GetAppearanceItem(0, true);
 
-            if (!this->IsDisarmed(0) && (offItem = this->GetVirtualItem(1, true)) && offItem->m_classID == 2) {
+            if (!this->IsDisarmed(0) && (offItem = this->GetAppearanceItem(1, true)) && offItem->m_classID == 2) {
                 return;
             }
         }
@@ -21145,7 +21145,7 @@ void CGUnit_C::AddHandItem(int32_t hand) {
 
         const CGUnitVirtualItem* mainItem;
 
-        if (!(this->m_obj->m_type & TYPEMASK_PLAYER) && (mainItem = this->GetVirtualItem(0, false)) && mainItem->m_classID == 2) {
+        if (!(this->m_obj->m_type & TYPEMASK_PLAYER) && (mainItem = this->GetAppearanceItem(0, false)) && mainItem->m_classID == 2) {
             uint8_t subclass = mainItem->m_subclassID;
 
             if (subclass == 1 || subclass == 5 || subclass == 8 || subclass == 10 || subclass == 12 || subclass == 6 || subclass == 17 || subclass == 20) {
@@ -22103,7 +22103,7 @@ void CGUnit_C::SetWeaponTrail(CM2Model* model, uint32_t hand) {
     }
 
     this->m_weaponTrails[hand] = nullptr;
-    const CGUnitVirtualItem* item = this->GetVirtualItem(hand, false);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(hand, false);
 
     if (!item) {
         return;
@@ -22675,7 +22675,7 @@ bool CGUnit_C::IsPlayingWeaponAnim() const {
         return true;
     }
 
-    return IsMeleeAttackAnim(sequence) && !this->GetVirtualItem(0, false);
+    return IsMeleeAttackAnim(sequence) && !this->GetAppearanceItem(0, false);
 }
 
 // VERIFY: 0401280d manual
@@ -24819,7 +24819,7 @@ const SpellVisualRec* CGUnit_C::GetAppropriateSpellVisual(const SpellRec* spell,
     }
 
     if (spell->m_attributes & 0x2) {
-        uint32_t displayId = this->GetVirtualItemDisplayID(2);
+        uint32_t displayId = this->GetAppearanceDisplayID(2);
         ItemDisplayInfoRec itemRec;
 
         if (g_itemDisplayInfoDB.GetRecord(displayId, &itemRec) && itemRec.m_spellVisualID) {
@@ -25356,13 +25356,13 @@ void CGUnit_C::OnReceiveMirrorImageDataFromServer(CDataStore* msg) {
 // VERIFY: 3b5e7768 auto
 // OFFSET: 0x00732400
 CM2Model* CGUnit_C::CreateItemModel(uint32_t hand, float* scale) {
-    const CGUnitVirtualItem* item = this->GetVirtualItem(hand, true);
+    const CGUnitVirtualItem* item = this->GetAppearanceItem(hand, true);
 
     if (!item) {
         return nullptr;
     }
 
-    return this->CreateItemModel(this->GetVirtualItemDisplayID(hand), item->m_inventoryType, scale);
+    return this->CreateItemModel(this->GetAppearanceDisplayID(hand), item->m_inventoryType, scale);
 }
 
 // VERIFY: 4a0f01e4 manual

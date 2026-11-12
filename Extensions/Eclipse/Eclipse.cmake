@@ -1,0 +1,6 @@
+get_filename_component(ECLIPSE_DEFAULT_SOURCE "${CMAKE_CURRENT_LIST_DIR}/../../../Eclipse-DEV" ABSOLUTE)
+set(ECLIPSE_SOURCE_DIR "${ECLIPSE_DEFAULT_SOURCE}" CACHE PATH "Eclipse source checkout for the native x64 extension")
+if(NOT EXISTS "${ECLIPSE_SOURCE_DIR}/src/eclipse/native/CMakeLists.txt")
+    message(FATAL_ERROR "Set ECLIPSE_SOURCE_DIR to the Eclipse checkout, or disable WOWDECOMP_EXTENSION_ECLIPSE")
+endif()
+add_subdirectory("${ECLIPSE_SOURCE_DIR}/src/eclipse/native" "${CMAKE_BINARY_DIR}/EclipseNative")

@@ -58,7 +58,9 @@ bool SafeName(const std::string& name) {
 bool TableName(const std::string& name) {
     for (const char* table : {"item.dbc", "itemdisplayinfo.dbc", "creaturemodeldata.dbc", "creaturedisplayinfo.dbc",
         "spell.dbc", "spellicon.dbc", "skilllineability.dbc", "spellvisual.dbc", "spellvisualkit.dbc",
-        "spellvisualeffectname.dbc", "spellvisualkitmodelattach.dbc"})
+        "spellvisualeffectname.dbc", "spellvisualkitmodelattach.dbc", "spellcategory.dbc", "spellduration.dbc", "spellradius.dbc",
+        "spellrange.dbc", "itemset.dbc", "itemlimitcategory.dbc", "itemextendedcost.dbc", "spellitemenchantment.dbc",
+        "scalingstatdistribution.dbc", "gameobjectdisplayinfo.dbc"})
         if (name == std::string("dbfilesclient/") + table) return true;
     return false;
 }

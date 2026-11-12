@@ -521,6 +521,10 @@ class CGUnit_C : public CGObject_C, public CGUnit {
     const char* GetDisplayBakeName() const;
     const char* GetPortraitTextureName() const;
     uint32_t GetPortraitDisplayId();
+    // Cosmetic rendering views; gameplay continues to use GetVirtualItem and the server fields.
+    const CGUnitVirtualItem* GetAppearanceItem(uint32_t slot, bool ignoreDisarm = false) const;
+    uint32_t GetAppearanceDisplayID(uint32_t slot) const;
+    int32_t GetAppearanceDisplayRec(uint32_t slot, ItemDisplayInfoRec& rec) const;
     void SetAnimEventPosition(const C3Vector* position);
     void SetCastingSpell(uint8_t castCount, int32_t spellId);
     void SetCastSchoolImmunities(int32_t immunities);

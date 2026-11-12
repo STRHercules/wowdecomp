@@ -17,6 +17,9 @@ set(EXTENSION_FORWARD_DECL "")
 set(EXTENSION_ENTRIES "")
 set(EXTENSION_COUNT 0)
 
+# Eclipse lives in its own checkout; opt in when that source is available.
+option(WOWDECOMP_EXTENSION_ECLIPSE "Compile the native Eclipse x64/Vulkan extension" OFF)
+
 message(STATUS "Extensions:")
 
 foreach (name ${EXTENSION_NAMES})
@@ -86,4 +89,8 @@ target_link_libraries(WowExtensions
 
 if (WOWDECOMP_RETAIL_ASSETS)
     target_link_libraries(WowExtensions PRIVATE RetailAssets)
+endif ()
+
+if (TARGET EclipseNative)
+    target_link_libraries(WowExtensions PRIVATE EclipseNative)
 endif ()

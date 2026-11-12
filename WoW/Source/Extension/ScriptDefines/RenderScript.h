@@ -30,6 +30,9 @@ class RenderScript : public ScriptObject {
     // top of the UI here. Fires once per painted frame, whether or not the frame is presented
     // (the no-present debug mode skips the present only).
     virtual void OnFrameEnd() {}
+
+    // Vulkan draws are submitted and idle; release extension resources before the device goes.
+    virtual void OnVulkanDeviceDestroy() {}
 };
 
 #endif
