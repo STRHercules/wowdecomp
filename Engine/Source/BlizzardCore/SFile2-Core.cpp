@@ -1116,9 +1116,12 @@ bool System_SFile2::FindFile(const char* name, char* path, uint32_t size, uint32
     return false;
 }
 
+#include "WoW/Source/Extension/VirtualAssets.h"
+
 // VERIFY: 6401cce4 auto
 // OFFSET: 0x00424B10
 int32_t STORMAPI SFile::FileExistsEx(const char* name, uint32_t flags) {
+    if (VirtualAssets::Read(name)) return 1;
     char path[260];
     SFILE_TYPE type;
 
@@ -1136,6 +1139,21 @@ int32_t STORMAPI SFile::FileExistsEx(const char* name, uint32_t flags) {
 // OFFSET: 0x00424B50
 int32_t STORMAPI SFile::OpenEx(SArchive* archive, const char* name, uint32_t flags, SFileImpl** result) {
     Blizzard::File::SetLastErrorStack(nullptr);
+    if (!archive) {
+        if (const auto bytes = VirtualAssets::Read(name)) {
+            *result = nullptr;
+            if (bytes->empty() || bytes->size() > UINT32_MAX) return 0;
+            auto* file = new (0u, __FILE__, __LINE__) SFileImpl(SFILE_RETAIL);
+            file->m_size = static_cast<uint32_t>(bytes->size());
+            file->m_name = Blizzard::String::Duplicate(name);
+            file->m_data = static_cast<uint8_t*>(Blizzard::Memory::Allocate(file->m_size, 0, __FILE__, __LINE__));
+            if (!file->m_data) { delete file; return 0; }
+            std::memcpy(file->m_data, bytes->data(), bytes->size());
+            *result = file;
+            sExtensionMgr->OnFileOpened(name, file);
+            return 1;
+        }
+    }
 
     // Not in the original: a by-name open may be redirected to another path before the lookup;
     // the rest of the function then opens, names and reads the substitute.
@@ -1329,6 +1347,7 @@ fail:
 // VERIFY: 663ae688 auto
 // OFFSET: 0x00424E50
 int32_t STORMAPI SFile::FileExists(const char* name) {
+    if (VirtualAssets::Read(name)) return 1;
     char path[260];
     SFILE_TYPE type;
 

@@ -183,3 +183,88 @@ Original plan (kept for reference):
    shell MPQ into `Data\Patch-ZzzzzzzzzzzEsteriaShell.MPQ` (back up the old one); clear `Cache\WDB` (item displays moved).
 5. **In game:** `/manastorm`, enter depth 1 solo, clear it, leave; set a gadget; check items from a cache show icons
    and equip with the right look.
+
+## Level 80 quick fixes (2026-11-12, not deployed)
+
+Esteria caps at 80, CoA at 60. Endgame already starts at the realm cap (`max(60, MaxPlayerLevel)` in ManastormMgr).
+- **Caches for 61-79:** `mod-manastorm-endless/data/sql/db-world/updates/zzzzz_esteria_level80_caches.sql` adds
+  brackets 8-11 (61-65, 66-70, 71-75, 76-79) and cache items 3390001-3390004 (copies of 97882), each an equal-chance
+  pool of green/blue gear from TBC/WotLK five-player dungeons (298/318/65/192 items). Applied to `ms_coa_world`, so the
+  next `manastorm_port.py stage` + `manastorm_client.py stage` carry the items, loot and client Item rows.
+- **Molten Core endgame check:** `ManastormRuntimeCompat.cpp` compared against a hard-coded 60; now uses the same cap.
+  Compiled in housing-build (object only).
+- Left alone: `Manastorm.AffixMinimumLevel = 50`; the one ported item on a scaling row capped below 80 (702, a
+  level-55 necklace). Still open: endgame loot is TBC-tiered, no Outland/Northrend segments, depth curve untuned at 80.
+- To deploy: stage dirs empty, re-stage server then client (client against the pre-Manastorm registry, as in the
+  second pass), `test`, then `deploy_dev.py db` and `image`/`start` with a new tag.
+
+## Level 80 difficulty and spell scaling (2026-11-12, not deployed)
+
+Findings:
+- **Autobalance was scaling Manastorm runs too.** Esteria runs mod-autobalance with level scaling in dungeons; CoA had
+  none (its own dungeon scaler skips `IsScriptedPrivateInstance()`). Both modules set level, health and group-size
+  scaling on the same creatures. Fixed in `mod-custom-server/src/InstanceMode.cpp`: a scripted private instance is
+  "special" (autobalance skips it) and can't be claimed by Mythic+/Dungeon Master/Roguelike.
+- **Classic stats at 80.** Runs rebuild creatures from `creature_classlevelstats` for the template's expansion, and
+  nearly all Manastorm creatures are Classic: at 80 that is 5,342 HP / 47 base damage vs WotLK's 12,600 / 165. New
+  `ManastormExpansionLift` (ManastormMgr.cpp) multiplies health (`ApplyCreatureHealthScaling`) and damage
+  (`ScaleCreatureDamage`) up to the level's TBC/WotLK base stats, blended at 61-62 and 71-72 like autobalance. 1.0 at
+  60 and below, so CoA's tuning is untouched. Classic warrior at 80: 2.36x HP, 3.49x damage. Spells that already
+  follow target max health (effect 174 except MiscValue 1, aura 89) are not lifted.
+- **Affixes:** every affix but Mana Bomb deals percentages (effect 174, aura 89, % auras). Mana Bomb's 50-90 mana drain
+  is flat but tiny at any level; left alone.
+- **Gadgets:** Long Haul Liquid, Harm Repellant Remedy, Rage Rush Solution and Incantation Intensifier grow per level
+  but had MaxLevel 70; `manastorm_port.py` now writes 80 for ported `Manastorm:` spells that grow per level (32 rows;
+  the client stage reads the same rows, so tooltips match). The rest are percentages or have no amount. The Manastorm
+  Potion heals a percentage.
+- **Heart Healing (991510)** heals 10 + 5/level: 310 at 60, 410 at 80. `ModifyHealReceived` now applies the same lift
+  as creature health (967 at 80).
+
+Compiled (objects only): `Manastorm.cpp`, `ManastormMgr.cpp`, `InstanceMode.cpp`. Not re-staged or deployed.
+
+Still for in-game tuning: the depth curve and group scaling are unchanged multipliers on top; creature spells use
+the melee lift although their amounts were authored at the creature's native level (may still run low); creature
+heals are not lifted.
+
+## WotLK endgame caches (2026-11-12, not deployed)
+
+Correction to the earlier scoping: the TBC brackets (100-128) are disabled; the live endgame (depth) track was CoA's
+Classic ladder 1000-1027 (dungeons, ZG, MC, Onyxia, BWL, AQ, Naxx 40; item level 55-99). It only runs at 80.
+
+User decisions: replace it with WotLK; scaled copies like Ascension's; Normal = 10-player, Heroic = 25-player +5
+item levels, Mythic = 25-player heroic +10 (25-player when a raid has no heroic, Ulduar = its 25-player hard-mode
+drops); gear only, no tokens.
+
+`mod-manastorm-endless/data/sql/db-world/updates/zzzzz_esteria_wotlk_endgame_caches.sql` (applied to `ms_coa_world`):
+- Keeps every cache, roll group, chance, depth and unlock; only refills the 48 shared pools (9002xxx/9003xxx refs) and
+  1278050's direct list, renames the caches and rewrites their tooltips from the real brackets and roll groups.
+- Slot mapping: dungeons -> WotLK 5-player; ZG -> Naxx + OS + EoE; MC -> Ulduar; Onyxia -> Onyxia 80; MC/Onyxia ->
+  Ulduar + Onyxia; BWL -> ToC; AQ20 -> ICC without Frostwing Halls; AQ40 -> Frostwing Halls + Ruby Sanctum; Naxx ->
+  all ICC + Ruby Sanctum. Ranked "Mythic N" caches take the Heroic pool of the raid beside them.
+- Pools come from CoA's boss/chest loot per difficulty, plus script-spawned bosses and chests (ToC, ICC chests, Naxx
+  Horsemen, Ulduar caches, Oculus/HoS) listed from the core's instance headers. Gear is judged on Esteria's rows.
+- Copies: 1,984 rows, +5 at 4500000 + entry, +10 at 4600000 + entry (free in CoA, Esteria and the port remaps).
+  Esteria's stats scaled as WotLK scales the same item between item levels (fitted on 901 stock pairs: stats
+  ilvl^2.46, armor/block ^0.88, weapon damage ^1.94); CoA's display ID so the client stage maps the art.
+  Description "Manastorm Heroic"/"Manastorm Mythic". Top: Mythic ICC/RS 287-304 (stock tops at 284).
+- Why Esteria's rows: Ascension rebalanced WotLK items in CoA's DB (359 stat, 1,737 armor differences among pooled
+  items). Stock items in the pools keep Esteria's row through the normal stage rule.
+- Not touched: the seven "Ascended" caches (never awarded), Greedy Demon pool, TBC brackets (still disabled).
+
+Known gaps: heroic dungeon pool lacks ToC5/FoS/PoS/HoR heroic (script bosses), so Normal Dungeons tops at 219 while
+Heroic copies reach 205-210; a copy and its stock item are separate entries, so "unique-equipped" doesn't stop wearing
+both (e.g. two of one trinket).
+
+## Heroic dungeon pool and unique copies (2026-11-12, not deployed)
+
+- **Pool sources are now Esteria's world** (`acore_world` creature/gameobject spawns and loot), not CoA's: Ascension
+  changed WotLK loot in CoA's DB too (Forge of Souls heroic = 200 there, 232 here). CoA rows only supply copy display
+  IDs. Added script-spawned dungeon sources: Black Knight 35451, Tyrannus 36658, ToC5 caches 195709/195710, 195374/
+  195375, 195323/195324, Halls of Reflection chests 201710/202212 (normal), 202336/202337 (heroic). Dungeon pools:
+  Normal 201 items (183-219), Heroic 351 (copies to 237), Mythic 351 (to 242). 2,106 copies; Mythic top is now 294.
+- **Unique families:** `manastorm_port.py stage` now gives each copy family whose Esteria stock item is Unique-Equipped
+  (flag 0x80000) or one-per-player, and has no limit category yet, its own ItemLimitCategory (quantity 1, equip mode,
+  named after the item) from the free IDs below 32768, after the CoA remaps (`unique_family_limits`). The rows go out
+  through the normal ItemLimitCategory continuation (server) and the client stage; copies are tagged in
+  `ms_coa_world`; the stock rows get `UPDATE item_template SET ItemLimitCategory` lines appended to `world.sql`.
+  176 families today; 50 more already share a stock category, which the copies inherit.

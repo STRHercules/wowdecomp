@@ -281,6 +281,10 @@ def stage(_args):
     remap_spell = lambda v: spell_map.get(v, v)  # noqa: E731
 
     def spell_row(row):
+        # Manastorm's own gadgets that grow per level stopped at 70 (CoA's cap is 60); Esteria's is 80. Item procs keep
+        # their caps on purpose, like stock items.
+        if coa["Spell"].name_of(row[0], 136).startswith("Manastorm:") and 0 < row[37] < 80 and any(row[77:80]):
+            row[37] = 80
         row[0] = remap_spell(row[0])
         for field in SPELL_REFS:
             row[field] = remap_spell(row[field])
@@ -330,6 +334,8 @@ def stage(_args):
     mysql("DROP TABLE IF EXISTS ms_port_limit; CREATE TABLE ms_port_limit (id INT UNSIGNED PRIMARY KEY, new_id INT UNSIGNED NOT NULL);"
           + (f"INSERT INTO ms_port_limit VALUES {','.join(f'({a},{b})' for a, b in limit_map.items())};" if limit_map else ""),
           COA_SCHEMA)
+    family_limits = unique_family_limits(coa["ItemLimitCategory"], free)
+    lookups["ItemLimitCategory"] |= set(family_limits.values())
     report = {"spells": {"closure": len(spells), "ported": len(ported), "remapped": {str(a): b for a, b in spell_map.items() if a != b}},
               "item_limit_categories_remapped": {str(a): b for a, b in limit_map.items()},
               "enchantments": {"closure": len(enchants), "ported": len(enchant_map)}, "dbc": {}}
@@ -345,11 +351,46 @@ def stage(_args):
             (STAGE / "server" / f"{name}.dbc1-{CONTINUATION}").write_bytes(coa[name].build(ids, fix))
 
     world, characters = build_sql(report)
+    # the stock half of each unique family is Esteria's own row, which the stage never copies: tag it in place
+    world += b"".join(f"UPDATE item_template SET ItemLimitCategory = {limit} WHERE entry = {base} AND ItemLimitCategory = 0;\n"
+                      .encode() for base, limit in sorted(family_limits.items()))
+    report["unique_families"] = len(family_limits)
     (STAGE / "world.sql").write_bytes(world)
     (STAGE / "characters.sql").write_bytes(characters)
     (STAGE / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(json.dumps({k: v for k, v in report.items() if k != "spells"} | {"spells": {k: (len(v) if isinstance(v, dict) else v)
                       for k, v in report["spells"].items()}}, indent=2))
+
+
+COPY_OFFSETS = (4500000, 4600000)  # Manastorm +5/+10 item-level copies (zzzzz_esteria_wotlk_endgame_caches.sql)
+ITEM_FLAG_UNIQUE_EQUIPPABLE = 0x80000
+
+
+def unique_family_limits(limits: Table, free) -> dict[int, int]:
+    """A copy and its stock item are separate entries, so "Unique-Equipped" (or one per player) alone lets a player wear
+    both. Give each such family one equip limit category of quantity 1, named after the item, and tag the copies in
+    COA_SCHEMA so the stage carries it. Returns {stock entry: category}. Families whose stock item already has a
+    category share it through the copy, which was built from the stock row."""
+    lo, hi = COPY_OFFSETS[0], COPY_OFFSETS[-1] + 99999
+    rows = [line.split("\t", 1) for line in mysql(
+        "SELECT e.entry, e.name FROM acore_world.item_template e "
+        f"WHERE e.ItemLimitCategory = 0 AND (e.Flags & {ITEM_FLAG_UNIQUE_EQUIPPABLE} OR e.maxcount = 1) "
+        f"AND e.entry IN (SELECT entry % 100000 FROM item_template WHERE entry BETWEEN {lo} AND {hi}) ORDER BY e.entry",
+        COA_SCHEMA).splitlines() if line]
+    sample = next(r for r in limits.rows.values() if r[19] == 1)  # an equip-limited row: keeps its locale flags field
+    families = {}
+    for (entry, name), limit in zip(rows, free):
+        row = [0] * limits.fields
+        row[0], row[17], row[18], row[19] = limit, sample[17], 1, 1  # quantity 1, mode equip
+        limits.rows[limit] = row
+        limits.text[limit, 1] = name
+        families[int(entry)] = limit
+    if len(families) < len(rows):
+        raise SystemExit(f"out of free ItemLimitCategory IDs below 32768 ({len(rows) - len(families)} families left)")
+    if families:
+        mysql("".join(f"UPDATE item_template SET ItemLimitCategory = {limit} WHERE entry IN ({', '.join(str(o + base) for o in COPY_OFFSETS)});"
+                      for base, limit in families.items()), COA_SCHEMA)
+    return families
 
 
 def chunks(values, size):
