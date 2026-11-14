@@ -6196,6 +6196,10 @@ void CM2Model::Animate() {
             transform = &matrix;
         }
 
+        // Explicit bone mounts must also survive synchronous preview animation, including private root sockets.
+        matrix = *transform;
+        ApplyAttachmentFrame(this, parent, matrix);
+        transform = &matrix;
         parent = this->m_attachParent;
 
         if (this->m_fFlags & 0x1000) {
@@ -8303,9 +8307,19 @@ bool CM2Model::CopyAttachmentFrameFrom(const CM2Model* source) {
     return this->SetAttachmentFrame(frame.bone, frame.position, frame.scale);
 }
 
+bool CM2Model::HasAttachmentFrame() const {
+    std::lock_guard<std::mutex> lock(s_skinParentMutex);
+    const auto found = s_attachmentFrames.find(this);
+    if (found == s_attachmentFrames.end()) return false;
+    const auto& frame = found->second;
+    return this->m_attachParent == frame.parent && this->m_shared == frame.childShared &&
+        frame.parent->m_shared && frame.parent->m_shared->m_data == frame.parentData &&
+        frame.bone < frame.parentData->m_bones.m_count;
+}
+
 bool CM2Model::SetAttachmentFrame(uint32_t bone, const C3Vector& position, float scale) {
     CM2Model* parent = this->m_attachParent;
-    if (!parent || !(parent->m_fFlags & 1) || this->m_attachmentIndex == 0xffff ||
+    if (!parent || !(parent->m_fFlags & 1) || (this->m_attachmentIndex == 0xffff && !(this->m_fFlags & 0x40000)) ||
         !this->m_shared || !parent->m_shared || !parent->m_shared->m_data ||
         bone >= parent->m_shared->m_data->m_bones.m_count ||
         !std::isfinite(position.x) || !std::isfinite(position.y) || !std::isfinite(position.z) ||

@@ -1,0 +1,8 @@
+<Bindings>
+    <Binding name="ESTERIAEMOTES_WHEEL" header="ESTERIAEMOTES" runOnUp="true">
+        EsteriaEmotes_Wheel(keystate)
+    </Binding>
+    <Binding name="ESTERIAEMOTES_TOGGLE" header="ESTERIAEMOTES">
+        EsteriaEmotes_Toggle()
+    </Binding>
+</Bindings>

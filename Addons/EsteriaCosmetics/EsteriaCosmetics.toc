@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: Esteria Cosmetics
+## Notes: Your wings, backpacks and emotes (/cosmetics).
+## Dependencies: EsteriaEmotes
+## SavedVariables: EsteriaCosmeticsDB
+EsteriaCosmeticsData.lua
+EsteriaCosmeticsWings.lua
+EsteriaCosmetics.lua
+BackpackFitter.lua

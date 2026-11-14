@@ -373,7 +373,13 @@ local function PendingCost()
         if IsChanged(slot) then
             count = count + 1
             local p = S.pending[slot]
-            if p ~= 0 and not (p == HIDDEN and S.info.hiddenFree) then
+            local cosmetic = false
+            if slot == 14 then
+                for _, appearance in ipairs(EsteriaCosmeticsData or {}) do
+                    if appearance.id == p then cosmetic = true; break end
+                end
+            end
+            if p ~= 0 and not cosmetic and not (p == HIDDEN and S.info.hiddenFree) then
                 total = total + (S.cost[slot] or 0)
             end
         end

@@ -204,9 +204,11 @@ static int32_t Script_SetSequence(lua_State* L) {
 
     uint32_t sequence = static_cast<uint32_t>(lua_tonumber(L, 2));
 
-    if (sequence >= 506) {
+    // NOT IN BINARY. The original capped this at the 506-row animation table; retail models and Esteria emotes
+    // (ids from 3000) carry sequence ids up to 0xFFFF, and ResolveSequenceFallback no longer depends on the table.
+    if (sequence > 0xFFFF) {
         const char* name = model->GetName();
-        luaL_error(L, "Error: %s:SetSequence(sequence) exceeds valid range of 0 - %d", name ? name : "<unnamed>", 506);
+        luaL_error(L, "Error: %s:SetSequence(sequence) exceeds valid range of 0 - %d", name ? name : "<unnamed>", 0xFFFF);
         return 0;
     }
 

@@ -14,6 +14,7 @@
 #include <alloca.h>
 #endif
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
+#include "WoW/Common/ComponentCore/BackpackCosmetics.h"
 #include "WoW/Common/ComponentCore/EsteriaAppearance.h"
 #include "WoW/Common/ComponentCore/RetailRace.h"
 #include "WoW/Common/ComponentCore/UprightUndead.h"
@@ -3699,6 +3700,7 @@ void CCharacterComponent::GeosRenderPrep() {
 
     RetailRaceEquipment(this);
     EsteriaNativeEquipment(this);
+    EsteriaBackpackEquipment(this);
     this->m_data.m_model->OptimizeVisibleGeometry();
     this->m_flags &= ~0x4;
 }
@@ -5361,6 +5363,8 @@ void CCharacterComponent::RenderPrepSections() {
 // VERIFY: e78118c6 manual
 // OFFSET: 0x004F1520
 bool CCharacterComponent::RenderPrep(int32_t wait) {
+    // Measure cosmetic mounts only after GeosRenderPrep selects the actual body/equipment surfaces.
+    if (EsteriaBackpackPending(this)) this->m_flags |= 0x4;
     if (EsteriaNativeEquipmentPending(this)) this->m_flags |= 0x4;
     if (this->m_data.m_flags & 0x1) {
         if (this->m_flags & 0x4) {
@@ -5411,6 +5415,7 @@ bool CCharacterComponent::RenderPrep(int32_t wait) {
 // VERIFY: 3d69252b auto
 // OFFSET: 0x004F16C0
 void CCharacterComponent::FreeComponent(CCharacterComponent* component) {
+    EsteriaBackpackForget(component);
     EsteriaForgetCharacter(component);
     RetailRaceForget(component);
     uint32_t* heap = s_componentHeap;

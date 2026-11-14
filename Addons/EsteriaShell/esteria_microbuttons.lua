@@ -12,6 +12,11 @@ local SHEETS = 'Interface\\AddOns\\DragonUI\\Textures\\Micromenu\\'
 -- click and tip name global functions so an add-on loaded later (or in a different order) can supply them.
 local SPECS = {
     {
+        stem = 'Cosmetics', sheet = SHEETS .. 'esteria-flight',
+        title = 'Cosmetics', text = 'Your wings, backpacks and emotes.',
+        click = 'EsteriaCosmetics_Toggle',
+    },
+    {
         stem = 'Transmog', sheet = SHEETS .. 'esteria-transmog',
         title = 'Transmogrification', text = 'Change the look of your gear.',
         click = 'ManastormTransmog_Toggle',

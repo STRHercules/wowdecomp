@@ -6,11 +6,23 @@
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "Engine/Source/Model2/M2Cache.h"
+#include "Engine/Source/Model2/M2Scene.h"
+#include "Engine/Source/Retail/CloakAnchor.h"
+#include "Engine/Source/Retail/CosmeticPreviewFit.h"
+#include "WoW/Source/DB/Rec/SpellRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualEffectNameRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualKitModelAttachRec.h"
+#include "WoW/Source/Magic/MagicClient/Spell_C.h"
+#include "WoW/Source/Magic/MagicClient/SpellVisuals.h"
+#include "WoW/Source/ObjectMgrClient/ObjectMgrClient.h"
+#include "WoW/Source/Object/ObjectClient/Player_C.h"
 #include "Engine/Source/Model2/M2Shared.h"
 #include "Engine/Source/Retail/RetailModel.h"
 #include "Engine/Source/Retail/CascSource.h"
 #include "Engine/Source/Retail/Ethereal.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
+#include "WoW/Common/ComponentCore/BackpackCosmetics.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/ItemDisplayInfoRec.h"
 #include "WoW/Source/Glue/CharacterSelection.h"
@@ -29,6 +41,11 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <filesystem>
+#include <fstream>
+#include <ctime>
+#include "Engine/Source/Retail/BackpackFitExport.h"
+#include "Engine/Source/BlizzardCore/SFile2-Core.h"
 
 namespace {
 bool ParseEquipment(const char* arguments, Retail::HandItemAppearance& appearance) {
@@ -253,12 +270,78 @@ int32_t MountPreview(const char*, const char* arguments) {
     return Preview("retailmodel", request);
 }
 
+#include "JourneyShieldTrial.inl"
+#include "CosmeticPreview.inl"
+
+int CosmeticsPreview(lua_State* L) {
+    auto* frame = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
+    const int display = luaL_checkint(L, 2);
+    if (display < 0 || display > 5000000) return luaL_error(L, "Invalid backpack display");
+    lua_pushboolean(L, EsteriaBackpackPreview(frame->m_model, static_cast<uint32_t>(display)));
+    return 1;
+}
+
+int BackpackFitInfo(lua_State* L) {
+    uint32_t display=0;
+    std::string body;
+    if (!EsteriaBackpackFitInfo(display,body)) return 0;
+    lua_pushinteger(L,display);
+    lua_pushlstring(L,body.data(),body.size());
+    return 2;
+}
+int BackpackSetFit(lua_State* L) {
+    const int display=luaL_checkint(L,1);
+    const char* body=luaL_checkstring(L,2);
+    const Retail::BackpackFit fit{float(luaL_checknumber(L,3)),float(luaL_checknumber(L,4)),
+        float(luaL_checknumber(L,5)),float(luaL_checknumber(L,6))};
+    lua_pushboolean(L,display>0 && EsteriaBackpackSetFit(uint32_t(display),body,fit));
+    return 1;
+}
+
+int BackpackExportFits(lua_State* L) {
+    size_t size=0;
+    const char* data=luaL_checklstring(L,1,&size);
+    if (!Retail::ValidBackpackFitExport(std::string(data,size))) return luaL_error(L,"Invalid backpack fit export");
+    try {
+        const auto directory=std::filesystem::path(SFile::m_basePath)/"WTF"/"Esteria"/"BackpackFits";
+        std::filesystem::create_directories(directory);
+        const std::time_t now=std::time(nullptr);
+        std::tm time{};
+        localtime_s(&time,&now);
+        char stamp[32];
+        std::strftime(stamp,sizeof(stamp),"%Y%m%d-%H%M%S",&time);
+        auto path=directory/(std::string("BackpackFits-")+stamp+".txt");
+        unsigned index=1;
+        while (std::filesystem::exists(path)) path=directory/(std::string("BackpackFits-")+stamp+"-"+std::to_string(index++)+".txt");
+        std::ofstream output(path,std::ios::binary);
+        output.write(data,std::streamsize(size));
+        output.close();
+        if (!output) throw std::runtime_error("Could not write backpack fit export");
+        lua_pushboolean(L,true);
+        const auto filename=path.string();
+        lua_pushlstring(L,filename.data(),filename.size());
+    } catch (const std::exception& error) {
+        lua_pushboolean(L,false);
+        lua_pushstring(L,error.what());
+    }
+    return 2;
+}
+
 class RetailPreview : public ClientScript {
     bool m_previewAttempted = false;
     float m_elapsed = 0;
 public:
     RetailPreview() : ClientScript("RetailPreview") {}
     void OnStartup() override {
+        sExtensionMgr->RegisterLuaFunction("EsteriaBackpackExportFits", BackpackExportFits, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaBackpackFitInfo", BackpackFitInfo, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaBackpackSetFit", BackpackSetFit, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsFit", CosmeticFit, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsWingPreview", WingPreview, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsPreview", CosmeticsPreview, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterConsoleCommand("journeyshield", JourneyCommand, CATEGORY_DEBUG, "Journey Mentor Shield cloak trial: on|off|model");
+        sExtensionMgr->RegisterLuaFunction("JourneyShieldTrial", JourneyLua, FRAMESCRIPT_CONTEXTS_ALL);
+        if (const char* mode = std::getenv("WOW_JOURNEY_SHIELD_TRIAL")) g_journeyTrial = std::string(mode) == "on";
         sExtensionMgr->RegisterConsoleCommand("retailmodel", Preview, CATEGORY_DEBUG, "Preview a Retail CASC model by FileDataID");
         sExtensionMgr->RegisterConsoleCommand("retailmount", MountPreview, CATEGORY_DEBUG, "Diagnostic preview of a registered native Retail mount display ID");
         sExtensionMgr->RegisterConsoleCommand("retailweapon", EquipPreview, CATEGORY_DEBUG, "Replace selected character's equipped mainhand appearance: <modelID> <textureID>");
@@ -275,9 +358,12 @@ public:
         }
     }
     void OnUpdate(float elapsed) override {
+        SyncJourneyShield();
         m_elapsed += elapsed;
         if (!m_previewAttempted && m_elapsed > 2) {
             m_previewAttempted = true;
+            if (const char* mode = std::getenv("WOW_JOURNEY_SHIELD_TRIAL"))
+                if (std::string(mode) == "model") JourneyCommand("journeyshield", "model");
             if (g_theGxDevicePtr && std::getenv("WOW_RETAIL_CONFIG"))
                 sExtensionMgr->Log("Retail active renderer: %s; native large-palette mounts require D3D11",
                     g_gxApiNames[g_theGxDevicePtr->DeviceApi()]);

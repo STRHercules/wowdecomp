@@ -40,9 +40,9 @@ PATCHES = {
     "modules" + B + "micromenu.lua": [
         # the strip: Esteria's seven buttons sit after Collections
         ('MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),',
-         'MicroButtonFor("Transmog"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Manastorm"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
+         'MicroButtonFor("Transmog"), MicroButtonFor("Cosmetics"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Manastorm"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
         # seven more buttons of 26 px each: the strip starts further left
-        ("-180", "-362", 3),
+        ("-180", "-388", 3),
         # one row, however many buttons the profile's saved column count allows
         ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 16))", 1),
         # atlas rows for the new sheets

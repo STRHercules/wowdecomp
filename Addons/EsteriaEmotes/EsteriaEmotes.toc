@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Esteria Emotes
+## Notes: Your dance collection (/emotes) and the emote wheel (hold the bound key, Key Bindings > Esteria Emotes). Needs the wowdecomp client, an Esteria emote pack and mod-esteria-emotes on the realm.
+## SavedVariables: EsteriaEmotesDB
+esteria_style.lua
+EsteriaEmotesData.lua
+EsteriaEmotes.lua
+EsteriaEmotesWheel.lua

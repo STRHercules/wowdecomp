@@ -268,3 +268,19 @@ both (e.g. two of one trinket).
   through the normal ItemLimitCategory continuation (server) and the client stage; copies are tagged in
   `ms_coa_world`; the stock rows get `UPDATE item_template SET ItemLimitCategory` lines appended to `world.sql`.
   176 families today; 50 more already share a stock category, which the copies inherit.
+
+## Deploy dev2 (2026-11-12 ~20:30; dev realm + `G:\3.3.5a - Dev` only, Live untouched)
+
+- Server stage re-run (`stage-run4.log`), client stage against the pre-Manastorm registry `hots-26a5ed9ad10e0a6e`
+  with the old `patch-Manastorm.MPQ` moved out first (otherwise every asset looks present and `assets.tsv` is empty):
+  858 asset files, 127,293 Item rows. `test` all 0. Older outputs: `G:\ManastormPort\stage-manastorm2`,
+  `client-manastorm2`, `stage-dev2-try1`, `client-dev2-try1`.
+- Fixed while deploying: the unique-family `UPDATE`s were appended in `stage()` and lost when the client stage
+  rebuilt `world.sql`; they now come from `report.json["unique_families"]` inside `build_sql`.
+- `deploy_dev.py db` (backup `G:\ManastormPort\deploy-backup-20261112-202018`), image `esteria-manastorm:dev2` FROM
+  `esteria-coa:20261111d-housing`, `start`. Startup clean: 296 segments, no bracket errors, ItemLimitCategory
+  continuation 1,000 rows, world up in 23 s.
+- Client: registry `manastorm-2fb66b3aec40` on `hots-26a5ed9ad10e0a6e`, new `patch-Manastorm.MPQ`; backups
+  `_backups\manastorm-dev2-20261112-200044` (old ini + MPQ) and `_backups\manastorm-20261112-202523` (installer).
+  Wow.exe and the shell MPQ unchanged. `Cache\WDB` not cleared yet (WoW was running): renamed caches show their old
+  names until it is.

@@ -350,11 +350,8 @@ def stage(_args):
         if ids:
             (STAGE / "server" / f"{name}.dbc1-{CONTINUATION}").write_bytes(coa[name].build(ids, fix))
 
+    report["unique_families"] = {str(base): limit for base, limit in sorted(family_limits.items())}
     world, characters = build_sql(report)
-    # the stock half of each unique family is Esteria's own row, which the stage never copies: tag it in place
-    world += b"".join(f"UPDATE item_template SET ItemLimitCategory = {limit} WHERE entry = {base} AND ItemLimitCategory = 0;\n"
-                      .encode() for base, limit in sorted(family_limits.items()))
-    report["unique_families"] = len(family_limits)
     (STAGE / "world.sql").write_bytes(world)
     (STAGE / "characters.sql").write_bytes(characters)
     (STAGE / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -411,6 +408,10 @@ def build_sql(report) -> tuple[bytes, bytes]:
               # 36 Ascension descriptions run past Esteria's 255 (max 423); CoA's column is 1024 and the core reads a string
               b"ALTER TABLE item_template MODIFY description VARCHAR(1024) COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT '';\n")
     world = header + dump(STAGE_SCHEMA, manastorm) + dump(STAGE_SCHEMA, shared, "--no-create-info", "--insert-ignore")
+    # the stock half of each unique family is Esteria's own row, which the stage never copies: tag it in place
+    # (here, not in stage(), because manastorm_client.py stage rebuilds world.sql through this function too)
+    world += b"".join(f"UPDATE item_template SET ItemLimitCategory = {limit} WHERE entry = {base} AND ItemLimitCategory = 0;\n"
+                      .encode() for base, limit in sorted(report.get("unique_families", {}).items(), key=lambda kv: int(kv[0])))
     characters = b"".join(b"-- " + p.name.encode() + b"\n" + p.read_bytes() + b"\n" for p in ordered_sql("characters"))
     return world, characters
 
