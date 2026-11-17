@@ -1,0 +1,7 @@
+cmake_minimum_required(VERSION 3.20)
+project(VolumetricCloudTests CXX)
+enable_testing()
+add_executable(cloud_tests test_clouds.cpp)
+target_compile_features(cloud_tests PRIVATE cxx_std_17)
+target_include_directories(cloud_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+add_test(NAME cloud_tests COMMAND cloud_tests)

@@ -1,0 +1,57 @@
+{
+  "archive": "R:\\Users\\Zach\\Documents\\GitHub\\wowdecomp\\state\\unified-collections-package-20261115-041006\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+  "archive_sha256": "4628cf5955c3866b07185de78cfc5a1d769042b241e4643fa41b0cfb35b999f8",
+  "before": {
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaCosmetics.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "c65c191d97d219a049c4d611504e7814dba356d41914e9318b9bf7b79a9fe33a"
+    },
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaCosmetics.toc": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "30f50c3445f780dbe3e5329686ac9a5330858230ca670b4203be11ad158c1b1d"
+    },
+    "Interface\\AddOns\\EsteriaCosmetics\\Companions.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "1e7bfb587847f4397630cbfbf7f8b43f89e1bbd787ca4fcf8ed9584b57174baf"
+    },
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaPetsData.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "2982c92f6e8f3a0bede599b72c36773c4a4922b91fa8fa4cc66c943129f2ae94"
+    },
+    "Interface\\AddOns\\EsteriaIncarnations\\EsteriaIncarnations.lua": {
+      "loose": "G:\\3.3.5a - Dev\\Interface\\AddOns\\EsteriaIncarnations\\EsteriaIncarnations.lua",
+      "sha256": "366aef604286bb51dd7f615849047a3a6e435d481e1b98998ba9b2fa2ab27ae5"
+    },
+    "Interface\\AddOns\\Manastorm_Transmog\\Manastorm_Transmog.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "5c1acc51b111ab2d081a13e38e3fad97439c017b3b33324d4176235bcc586bbe"
+    },
+    "Interface\\AddOns\\DragonUI\\modules\\esteria_microbuttons.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "0fc48ed2693254c359ad9dcc72cae618c07697920c190a6a08f469521fc77b2e"
+    },
+    "Interface\\AddOns\\DragonUI\\modules\\micromenu.lua": {
+      "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+      "sha256": "305e5e54f840795ec93e15610791a61089949a06e9d333a5e962cc36aac9486a"
+    }
+  },
+  "entries": {
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaCosmetics.lua": "c65c191d97d219a049c4d611504e7814dba356d41914e9318b9bf7b79a9fe33a",
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaCosmetics.toc": "30f50c3445f780dbe3e5329686ac9a5330858230ca670b4203be11ad158c1b1d",
+    "Interface\\AddOns\\EsteriaCosmetics\\Companions.lua": "1e7bfb587847f4397630cbfbf7f8b43f89e1bbd787ca4fcf8ed9584b57174baf",
+    "Interface\\AddOns\\EsteriaCosmetics\\EsteriaPetsData.lua": "2982c92f6e8f3a0bede599b72c36773c4a4922b91fa8fa4cc66c943129f2ae94",
+    "Interface\\AddOns\\EsteriaIncarnations\\EsteriaIncarnations.lua": "9a04ef73f149e2f1ac3d250fbc17de3e54db24904ef7e41700710c839ec6fed1",
+    "Interface\\AddOns\\Manastorm_Transmog\\Manastorm_Transmog.lua": "5c1acc51b111ab2d081a13e38e3fad97439c017b3b33324d4176235bcc586bbe",
+    "Interface\\AddOns\\DragonUI\\modules\\esteria_microbuttons.lua": "0fc48ed2693254c359ad9dcc72cae618c07697920c190a6a08f469521fc77b2e",
+    "Interface\\AddOns\\DragonUI\\modules\\micromenu.lua": "5ef5695ae47b961b1ed9ccb85cccc2013b495b2d4d4d00764c5e0949bf88e8c2"
+  },
+  "scope": "Collections tabs, companion catalog/services, embedded Incarnations/transmog and retired DragonUI journal/buttons",
+  "validation": [
+    "Lua 5.1 compilation of all packaged Lua files",
+    "MPQ entry readback"
+  ],
+  "live_acceptance": false,
+  "previous_overlay": "R:\\Users\\Zach\\Documents\\GitHub\\wowdecomp\\state\\unified-collections-package-20261115-041006\\previous-overlay.MPQ",
+  "installed_archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ",
+  "rollback": "After exiting the client, remove only G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzUnifiedCollections.MPQ"
+}

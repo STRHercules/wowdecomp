@@ -227,6 +227,8 @@ class CM2Model {
     // GPU copy of the above for the shader renderer, which skins from a vertex buffer shared by every instance.
     CGxBuf* m_bodyShapeBuf;
     CGxPool* m_bodyShapePool;
+    // Not in the original: set by an extension to receive ModelScript::OnModelBoneLocal for this model's bones.
+    bool m_boneHook;
 
     static void (*s_transformVertices[5])(CM2Model*, M2SkinSection*, uint8_t*, int32_t);
     static TSGrowableArray<M2ModelCallback> s_sequenceCallbacks;

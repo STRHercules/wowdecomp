@@ -284,3 +284,11 @@ both (e.g. two of one trinket).
   `_backups\manastorm-dev2-20261112-200044` (old ini + MPQ) and `_backups\manastorm-20261112-202523` (installer).
   Wow.exe and the shell MPQ unchanged. `Cache\WDB` not cleared yet (WoW was running): renamed caches show their old
   names until it is.
+
+## Live status of the level-80 changes (checked 2026-11-14)
+
+Read-only check of Live `acore_world` (ac-database) and the ac-worldserver binary. Image `esteria-coa:20261112a-housing` is the same build as `esteria-manastorm:dev2` (both created 2026-11-13T02:01Z).
+- **Level 80 quick fixes: IN LIVE.** `manastorm_cache_bracket` has 4 rows pointing at cache items 3390001-3390004 and those items exist ("Manastorm Cache (61-65)" ... "(76-79)").
+- **Level 80 difficulty and spell scaling: IN LIVE (code only inferred).** The worldserver binary contains the `ManastormExpansionLift` symbol; the binary is now 20261114e, so this shows the module code is present, not that 20261112a had it. Gadget MaxLevel 80 spell rows not checked.
+- **WotLK endgame caches: IN LIVE.** 2,106 copy items exist in `item_template` at 4500000-4699999 (the final count from the heroic-pool revision).
+- **Heroic dungeon pool and unique copies: IN LIVE.** The same 2,106 count matches the post-revision total, and 316 of those copies carry an ItemLimitCategory.

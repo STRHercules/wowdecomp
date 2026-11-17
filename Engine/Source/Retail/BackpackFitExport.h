@@ -16,6 +16,7 @@ inline bool ValidBackpackFitExport(const std::string& text) {
         std::string field,body;
         unsigned display=0;
         BackpackFit fit;
+        std::string state;
         if (!std::getline(row,field,';')) return false;
         try { size_t end=0;const auto parsed=std::stoul(field,&end);if (end!=field.size() || !parsed || parsed>5000000) return false;display=unsigned(parsed); }
         catch (...) { return false; }
@@ -26,7 +27,17 @@ inline bool ValidBackpackFitExport(const std::string& text) {
             try { size_t end=0;*values[i]=std::stof(field,&end);if (end!=field.size()) return false; }
             catch (...) { return false; }
         }
-        if (row.rdbuf()->in_avail() || !ValidBackpackFit(fit) || !keys.insert(std::to_string(display)+";"+body).second) return false;
+        if (row.rdbuf()->in_avail()) {
+            for (unsigned i=0;i<3;++i) {
+                if (!std::getline(row,field,';')) return false;
+                try { size_t end=0;float v=std::stof(field,&end);if(end!=field.size() || !std::isfinite(v) || std::fabs(v)>180) return false; }
+                catch (...) {return false;}
+            }
+            if (row.rdbuf()->in_avail()) {
+                if (!std::getline(row,state,';') || (state!="drawn" && state!="sheathed")) return false;
+            }
+        }
+        if (row.rdbuf()->in_avail() || !ValidBackpackFit(fit) || !keys.insert(std::to_string(display)+";"+body+";"+state).second) return false;
     }
     return true;
 }

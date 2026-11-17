@@ -1,0 +1,1294 @@
+-- Esteria Crates: the crate window (odds grid, unlock reel and reveal) and the Crates store tab of Collections.
+-- Server half: EsteriaWoW modules/mod-esteria-crates. The server rolls, charges and delivers before it answers; this
+-- file only shows the committed result. Nothing here chooses a reward, a price or odds.
+local ES = EsteriaStyle;
+local PFX_OUT, PFX_IN = "ECRC", "ECRS";
+local ART = "Interface\\AddOns\\EsteriaCrates\\Art\\";
+-- Large art shipped in Art/item-<entry>.blp (see make_art.py); other items fall back to their icon.
+local ITEM_ART = { [3450101] = true, [3450001] = true };
+
+-- The default UI is 768 units tall: the window plus its shadow (H + 2 * PAD) must stay inside it.
+local W, H, PAD = 820, 720, 20;
+local REEL_W, REEL_H = 780, 168;
+local CARD_W, CARD_H, STEP = 140, 158, 148;
+local GRID_W, GRID_H, GRID_STEP, PER_ROW = 120, 128, 128, 6;
+local REEL_LEN, WIN_AT = 48, 40;
+local SPIN_TIME, ANSWER_TIMEOUT = 7, 10;
+local ORANGE = { 1, 0.6, 0.2 };
+local GREEN = { 0.20, 0.52, 0.16 };
+local GREY = { 0.20, 0.20, 0.23 };
+local AMBER = { 0.50, 0.36, 0.08 };
+
+local db = { };
+local data = {};          -- crate entry -> everything the server told us about it
+local order = {};         -- crate entries in list order
+local current;            -- crate shown in the window
+local phase = "idle";     -- window: idle, pending, spin, reveal
+local pending = {};       -- request id -> { at, view } until the server answers it
+local counter = 0;
+local render, renderStore;
+
+local function send(body) SendAddonMessage(PFX_OUT, body, "WHISPER", UnitName("player")); end
+local function nextRequest() counter = counter + 1; return string.format("%x%x", time(), counter); end
+local function spaced(text) return (text:gsub("(.)", "%1 "):gsub(" $", "")); end
+local function rarityColor(r)
+    local c = ITEM_QUALITY_COLORS[r];
+    if c then return { c.r, c.g, c.b }; end
+    return { 0.9, 0.8, 0.5 };
+end
+local function rarityName(r) return _G["ITEM_QUALITY" .. r .. "_DESC"] or "Special"; end
+local function percentOf(weight, total)
+    local p = weight * 100 / total;
+    if p == math.floor(p) then return string.format("%d%%", p); end
+    return (string.format("%.2f", p):gsub("0+$", "")) .. "%";
+end
+local function sound(name) if not db.mute then PlaySound(name); end end
+local function coins(copper) return GetCoinTextureString(copper); end
+local function shown(region, value) if value then region:Show(); else region:Hide(); end end
+
+-- Item info the client has not cached yet: the server pushes it, but ask through a hidden tooltip as a fallback and
+-- redraw until it arrives.
+local scan = CreateFrame("GameTooltip", "EsteriaCratesScan", nil, "GameTooltipTemplate");
+local waiting, waitTimer = false, 0;
+local function itemInfo(id)
+    local name, _, quality, _, _, _, _, _, _, icon = GetItemInfo(id);
+    if not name then
+        scan:SetOwner(UIParent, "ANCHOR_NONE");
+        scan:SetHyperlink("item:" .. id .. ":0:0:0:0:0:0:0");
+        waiting = true;
+        return "Loading...", "Interface\\Icons\\INV_Misc_QuestionMark", quality;
+    end
+    return name, icon, quality;
+end
+local function artFor(id)
+    if ITEM_ART[id] then return ART .. "item-" .. id; end
+    return select(2, itemInfo(id));
+end
+
+-------------------------------------------------------------------------------- effects
+
+local FX = {};
+
+-- One OnUpdate drives every oscillator: fn(t) runs each frame while the owner is visible.
+local pulses, pulseDriver = {}, CreateFrame("Frame");
+local clock = 0;
+pulseDriver:SetScript("OnUpdate", function(_, elapsed)
+    clock = clock + elapsed;
+    for owner, fn in pairs(pulses) do
+        if owner:IsVisible() then fn(clock); end
+    end
+end);
+function FX.Pulse(owner, fn) pulses[owner] = fn; end
+
+-- Particle emitter: a pool of textures on `host`, positioned from its centre and simulated in one OnUpdate.
+function FX.Emitter(host)
+    local e = { host = host, free = {}, live = {} };
+    local driver = CreateFrame("Frame", nil, host);
+    driver:SetScript("OnUpdate", function(_, dt)
+        for i = #e.live, 1, -1 do
+            local p = e.live[i];
+            p.age = p.age + dt;
+            if p.age >= p.life then
+                p.tex:Hide();
+                table.remove(e.live, i);
+                e.free[#e.free + 1] = p.tex;
+            else
+                p.vx, p.vy = p.vx * (1 - p.drag * dt), (p.vy + p.gravity * dt) * (1 - p.drag * dt);
+                p.x, p.y = p.x + p.vx * dt, p.y + p.vy * dt;
+                local k = p.age / p.life;
+                local a = k < 0.15 and k / 0.15 or (1 - k) / 0.85;
+                local size = p.size * (1 + (p.grow - 1) * k);
+                p.tex:SetPoint("CENTER", host, "CENTER", p.x, p.y);
+                p.tex:SetWidth(size * p.stretch);
+                p.tex:SetHeight(size);
+                p.tex:SetAlpha(a * p.alpha);
+                if p.spin ~= 0 then p.tex:SetRotation(p.rot + p.spin * p.age); end
+            end
+        end
+    end);
+    -- o: x, y, count, speed {min,max}, angle {min,max} (degrees), life, size, grow, colors, gravity, drag, texture,
+    -- spread (start jitter), alpha, spin, stretch
+    function e:Emit(o)
+        if ES.reduceMotion and not o.always then return; end
+        for _ = 1, o.count or 1 do
+            local tex = table.remove(self.free);
+            if not tex then
+                tex = host:CreateTexture(nil, "OVERLAY");
+                tex:SetBlendMode("ADD");
+            end
+            tex:SetTexture(ART .. (o.texture or "spark"));
+            local c = o.colors[math.random(#o.colors)];
+            tex:SetVertexColor(c[1], c[2], c[3]);
+            local a = math.rad(o.angle and (o.angle[1] + math.random() * (o.angle[2] - o.angle[1])) or math.random() * 360);
+            local s = o.speed and (o.speed[1] + math.random() * (o.speed[2] - o.speed[1])) or 0;
+            local spread = o.spread or 0;
+            local sx, sy = type(spread) == "table" and spread[1] or spread, type(spread) == "table" and spread[2] or spread;
+            local p = {
+                tex = tex, age = 0, life = (o.life or 1) * (0.7 + math.random() * 0.6),
+                x = (o.x or 0) + (math.random() * 2 - 1) * sx, y = (o.y or 0) + (math.random() * 2 - 1) * sy,
+                vx = math.cos(a) * s, vy = math.sin(a) * s, gravity = o.gravity or 0, drag = o.drag or 0,
+                size = (o.size or 16) * (0.6 + math.random() * 0.8), grow = o.grow or 1, alpha = o.alpha or 1,
+                spin = o.spin and (math.random() * 2 - 1) * o.spin or 0, rot = math.random() * 6.28,
+                stretch = o.stretch or 1,
+            };
+            tex:ClearAllPoints();
+            tex:Show();
+            self.live[#self.live + 1] = p;
+        end
+    end
+    function e:Clear()
+        for _, p in ipairs(self.live) do p.tex:Hide(); self.free[#self.free + 1] = p.tex; end
+        self.live = {};
+    end
+    return e;
+end
+
+-- A soft additive glow texture.
+function FX.Glow(parent, layer, color, size)
+    local tex = parent:CreateTexture(nil, layer or "BACKGROUND");
+    tex:SetTexture(ART .. "glow");
+    tex:SetBlendMode("ADD");
+    tex:SetVertexColor(color[1], color[2], color[3]);
+    if size then tex:SetSize(size, size); end
+    return tex;
+end
+
+-- A soft drop shadow that extends `pad` beyond the frame.
+function FX.Shadow(frame, pad, alpha)
+    local tex = frame:CreateTexture(nil, "BACKGROUND");
+    tex:SetTexture(ART .. "shadow");
+    tex:SetPoint("TOPLEFT", -pad, pad - 4);
+    tex:SetPoint("BOTTOMRIGHT", pad, -pad - 4);
+    tex:SetAlpha(alpha or 0.8);
+    return tex;
+end
+
+-- A light streak that sweeps across a frame once.
+function FX.Shine(frame)
+    local tex = frame:CreateTexture(nil, "OVERLAY");
+    tex:SetTexture(ART .. "shine");
+    tex:SetBlendMode("ADD");
+    tex:Hide();
+    local key = tostring(tex);
+    return function(color)
+        if ES.reduceMotion then return; end
+        if color then tex:SetVertexColor(color[1], color[2], color[3]); end
+        local fw, fh = frame:GetWidth(), frame:GetHeight();
+        local sw = math.min(fh * 0.9, fw);
+        ES.Tween(key, 0.7, 0, function(p)
+            -- the band slides from fully left of the frame to fully right; only the part inside is drawn
+            local pos = -sw + (fw + sw) * p;
+            local l, r = math.max(0, pos), math.min(fw, pos + sw);
+            if r - l < 1 or p >= 1 then tex:Hide(); return; end
+            tex:ClearAllPoints();
+            tex:SetPoint("TOPLEFT", frame, "TOPLEFT", l, 0);
+            tex:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", l, 0);
+            tex:SetWidth(r - l);
+            tex:SetTexCoord((l - pos) / sw, (r - pos) / sw, 0, 1);
+            tex:SetAlpha(math.sin(p * math.pi) * 0.9);
+            tex:Show();
+        end);
+    end;
+end
+
+-------------------------------------------------------------------------------- shared widgets
+
+local function makeButton(parent, width, height, size, name)
+    local b = CreateFrame("Button", name, parent);
+    b:SetSize(width, height);
+    b.shadow = FX.Shadow(b, 8, 0.6);
+    b.bg = ES.Solid(b, "BORDER", GREEN, 1);
+    b.bg:SetAllPoints();
+    b.sheen = ES.Solid(b, "ARTWORK", { 1, 1, 1 }, 1);
+    b.sheen:SetPoint("TOPLEFT"); b.sheen:SetPoint("TOPRIGHT"); b.sheen:SetHeight(height / 2);
+    b.sheen:SetGradientAlpha("VERTICAL", 1, 1, 1, 0.02, 1, 1, 1, 0.14);
+    b.edge = ES.Border(b, { 1, 1, 1 }, 0.22);
+    b.text = ES.Text(b, size or 14, { 1, 1, 1 });
+    b.text:SetPoint("CENTER");
+    b.shine = FX.Shine(b);
+    b:SetScript("OnEnter", function(self)
+        if self:IsEnabled() == 1 then ES.Tint(self.edge, ES.GOLD, 0.9); self.shine(); end
+    end);
+    b:SetScript("OnLeave", function(self) ES.Tint(self.edge, { 1, 1, 1 }, 0.22); end);
+    function b:Style(color, text, enabled)
+        self.bg:SetVertexColor(color[1], color[2], color[3], 1);
+        self.text:SetText(text);
+        if enabled then self:Enable(); self.text:SetAlpha(1); else self:Disable(); self.text:SetAlpha(0.5); end
+    end
+    return b;
+end
+
+local function makeCard(parent, w, h, iconSize)
+    local card = CreateFrame("Button", nil, parent);
+    card:SetSize(w, h);
+    card.shadow = FX.Shadow(card, 7, 0.55);
+    card.glow = FX.Glow(card, "BACKGROUND", ES.GOLD);
+    card.glow:SetPoint("TOPLEFT", -8, 8); card.glow:SetPoint("BOTTOMRIGHT", 8, -8);
+    card.glow:SetAlpha(0);
+    card.bg = ES.Solid(card, "BORDER", ES.INK, 1);
+    card.bg:SetAllPoints();
+    card.bar = ES.Solid(card, "ARTWORK", ES.GOLD, 1);
+    card.bar:SetPoint("BOTTOMLEFT"); card.bar:SetPoint("BOTTOMRIGHT"); card.bar:SetHeight(3);
+    card.edge = ES.Border(card, ES.GOLD_DIM, 0.6);
+    card.halo = FX.Glow(card, "ARTWORK", ES.GOLD, iconSize * 1.9);
+    card.halo:SetPoint("TOP", 0, 16 - iconSize * 0.45);
+    card.halo:SetAlpha(0.35);
+    card.icon = card:CreateTexture(nil, "ARTWORK");
+    card.icon:SetSize(iconSize, iconSize);
+    card.icon:SetPoint("TOP", 0, -16);
+    local iconFrame = CreateFrame("Frame", nil, card);
+    iconFrame:SetAllPoints(card.icon);
+    card.iconEdge = ES.Border(iconFrame, ES.GOLD, 0.8);
+    card.name = ES.Text(card, 11, ES.TEXT);
+    card.name:SetPoint("TOP", card.icon, "BOTTOM", 0, -8);
+    card.name:SetWidth(w - 12);
+    card.name:SetHeight(28);
+    card.name:SetJustifyV("TOP");
+    card.foot = ES.Text(card, 12, ES.GOOD);
+    card.foot:SetPoint("BOTTOMRIGHT", -8, 10);
+    card.grade = ES.Text(card, 9, ES.MUTED);
+    card.grade:SetPoint("BOTTOMLEFT", 8, 11);
+    card.owned = ES.Text(card, 9, ES.GOOD);
+    card.owned:SetPoint("TOPRIGHT", -5, -5);
+    card.shine = FX.Shine(card);
+    card:SetScript("OnEnter", function(self)
+        if not self.reward then return; end
+        ES.Tint(self.edge, rarityColor(self.reward.rarity), 1);
+        self.glow:SetAlpha(0.45);
+        self.shine(rarityColor(self.reward.rarity));
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetHyperlink("item:" .. self.reward.item .. ":0:0:0:0:0:0:0");
+        if self.total then
+            GameTooltip:AddLine(" ");
+            GameTooltip:AddDoubleLine("Chance", percentOf(self.reward.weight, self.total), 1, 1, 1, 1, 1, 1);
+            GameTooltip:AddDoubleLine("Exact odds", self.reward.weight .. " / " .. self.total, 0.6, 0.6, 0.6, 0.6, 0.6, 0.6);
+        end
+        GameTooltip:AddDoubleLine("Grade", rarityName(self.reward.rarity), 0.6, 0.6, 0.6, unpack(rarityColor(self.reward.rarity)));
+        if self.reward.count > 1 then GameTooltip:AddDoubleLine("Quantity", self.reward.count, 0.6, 0.6, 0.6, 1, 1, 1); end
+        GameTooltip:Show();
+    end);
+    card:SetScript("OnLeave", function(self)
+        if self.reward then ES.Tint(self.edge, rarityColor(self.reward.rarity), self.reward.rarity >= 5 and 0.9 or 0.4); end
+        if not self.won then self.glow:SetAlpha(0); end
+        GameTooltip:Hide();
+    end);
+    card:SetScript("OnClick", function(self)
+        if self.reward and IsModifiedClick("DRESSUP") then DressUpItemLink("item:" .. self.reward.item); end
+    end);
+    return card;
+end
+
+-- total: show odds against this total weight; nil hides them (reel cards).
+local function fillCard(card, reward, total)
+    card.reward, card.total, card.won = reward, total, nil;
+    local name, icon = itemInfo(reward.item);
+    local c = rarityColor(reward.rarity);
+    card.icon:SetTexture(icon);
+    card.name:SetText(reward.count > 1 and (name .. " x" .. reward.count) or name);
+    card.name:SetTextColor(c[1], c[2], c[3]);
+    card.bar:SetVertexColor(c[1], c[2], c[3], 1);
+    card.bg:SetGradientAlpha("VERTICAL", c[1] * 0.08, c[2] * 0.08, c[3] * 0.10, 0.97, c[1] * 0.32, c[2] * 0.32, c[3] * 0.32, 0.97);
+    card.halo:SetVertexColor(c[1], c[2], c[3]);
+    card.glow:SetVertexColor(c[1], c[2], c[3]);
+    card.glow:SetAlpha(0);
+    ES.Tint(card.edge, c, reward.rarity >= 5 and 0.9 or 0.4);
+    ES.Tint(card.iconEdge, c, 0.9);
+    card.foot:SetText(total and percentOf(reward.weight, total) or "");
+    if reward.rarity >= 5 then card.foot:SetTextColor(1, 0.55, 0.35); else card.foot:SetTextColor(0.55, 0.88, 0.5); end
+    card.grade:SetText(total and rarityName(reward.rarity) or "");
+    card.owned:SetText(total and reward.known and "Owned" or "");
+    card:SetAlpha(1);
+    card:Show();
+end
+
+local function checkbox(parent, label, key, anchor, x)
+    local box = CreateFrame("CheckButton", nil, parent, "UICheckButtonTemplate");
+    box:SetSize(22, 22);
+    box:SetPoint("LEFT", anchor, "RIGHT", x or 14, 0);
+    local text = ES.Text(box, 10, ES.MUTED);
+    text:SetPoint("LEFT", box, "RIGHT", 2, 0);
+    text:SetText(label);
+    box:SetScript("OnShow", function(self) self:SetChecked(db[key]); end);
+    box:SetScript("OnClick", function(self)
+        db[key] = self:GetChecked() and true or false;
+        ES.reduceMotion = db.reduceMotion;
+    end);
+    return text;
+end
+
+local function request(view, body)
+    local req = nextRequest();
+    pending[req] = { at = GetTime(), view = view };
+    send(body .. ":" .. req);
+    if renderStore then renderStore(); end
+end
+
+-------------------------------------------------------------------------------- window
+
+-- The outer frame only carries the drop shadow; everything visible lives on `frame.panel`.
+local frame = CreateFrame("Frame", "EsteriaCratesFrame", UIParent);
+frame:SetSize(W + 2 * PAD, H + 2 * PAD);
+frame:SetPoint("CENTER", 0, 10);
+frame:SetFrameStrata("DIALOG");
+frame:SetToplevel(true);
+frame:EnableMouse(true);
+frame:SetMovable(true);
+frame:SetClampedToScreen(true);
+frame:RegisterForDrag("LeftButton");
+frame:SetScript("OnDragStart", frame.StartMoving);
+frame:SetScript("OnDragStop", frame.StopMovingOrSizing);
+frame:Hide();
+tinsert(UISpecialFrames, "EsteriaCratesFrame");
+local outerShadow = frame:CreateTexture(nil, "BACKGROUND");
+outerShadow:SetTexture(ART .. "shadow");
+outerShadow:SetAllPoints();
+outerShadow:SetAlpha(0.95);
+
+local panel = CreateFrame("Frame", nil, frame);
+panel:SetSize(W, H);
+panel:SetPoint("CENTER");
+ES.Solid(panel, "BACKGROUND", ES.INK, 0.98):SetAllPoints();
+local topGlow = ES.Solid(panel, "BACKGROUND", { 0.16, 0.12, 0.26 }, 1);
+topGlow:SetPoint("TOPLEFT"); topGlow:SetPoint("TOPRIGHT"); topGlow:SetHeight(H * 0.55);
+topGlow:SetGradientAlpha("VERTICAL", 0.16, 0.12, 0.26, 0, 0.16, 0.12, 0.26, 0.85);
+ES.Border(panel, ES.GOLD_DIM, 1);
+local ambient = FX.Emitter(panel);
+
+local close = CreateFrame("Button", nil, panel, "UIPanelCloseButton");
+close:SetPoint("TOPRIGHT", 2, 2);
+
+local crateArt = CreateFrame("Frame", nil, panel);
+crateArt:SetSize(68, 68);
+crateArt:SetPoint("TOPLEFT", 20, -14);
+local crateGlow = FX.Glow(crateArt, "BACKGROUND", { 0.7, 0.35, 1 }, 140);
+crateGlow:SetPoint("CENTER");
+local crateIcon = crateArt:CreateTexture(nil, "ARTWORK");
+crateIcon:SetAllPoints();
+FX.Pulse(crateArt, function(t) crateGlow:SetAlpha(0.45 + 0.25 * math.sin(t * 2.2)); end);
+
+local title = ES.Text(panel, 24, ORANGE);
+title:SetPoint("TOPLEFT", crateArt, "TOPRIGHT", 14, -4);
+title:SetSize(500, 28);
+title:SetJustifyH("LEFT");
+local subtitle = ES.Text(panel, 11, ES.MUTED);
+subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 0, -8);
+subtitle:SetText("Unlock it to receive one of the items below.");
+local bagCount = ES.Text(panel, 13, ES.TEXT);
+bagCount:SetPoint("TOPRIGHT", -42, -24);
+local keyCount = ES.Text(panel, 12, ES.MUTED);
+keyCount:SetPoint("TOPRIGHT", bagCount, "BOTTOMRIGHT", 0, -8);
+
+-- reel: backdrop + motes below the scrolling strip, fades and pointer above it
+local reelBack = CreateFrame("Frame", nil, panel);
+reelBack:SetSize(REEL_W, REEL_H);
+reelBack:SetPoint("TOP", 0, -94);
+reelBack:SetFrameLevel(panel:GetFrameLevel() + 1);
+FX.Shadow(reelBack, 10, 0.7);
+local reelBg = ES.Solid(reelBack, "BORDER", { 0.02, 0.02, 0.04 }, 1);
+reelBg:SetAllPoints();
+reelBg:SetGradientAlpha("VERTICAL", 0.03, 0.02, 0.06, 1, 0.09, 0.06, 0.15, 1);
+local motes = FX.Emitter(reelBack);
+
+local reel = CreateFrame("ScrollFrame", nil, panel);
+reel:SetAllPoints(reelBack);
+reel:SetFrameLevel(panel:GetFrameLevel() + 2);
+local strip = CreateFrame("Frame", nil, reel);
+strip:SetSize(REEL_LEN * STEP, REEL_H);
+reel:SetScrollChild(strip);
+local reelCards = {};
+for i = 1, REEL_LEN do
+    local card = makeCard(strip, CARD_W, CARD_H, 56);
+    card:SetPoint("LEFT", (i - 1) * STEP + 4, 0);
+    reelCards[i] = card;
+end
+
+local over = CreateFrame("Frame", nil, panel);
+over:SetAllPoints(reelBack);
+over:SetFrameLevel(panel:GetFrameLevel() + 8);
+for _, side in ipairs({ "LEFT", "RIGHT" }) do
+    local fade = ES.Solid(over, "ARTWORK", ES.INK, 1);
+    fade:SetPoint("TOP" .. side); fade:SetPoint("BOTTOM" .. side); fade:SetWidth(130);
+    local a, b = 1, 0;
+    if side == "RIGHT" then a, b = 0, 1; end
+    fade:SetGradientAlpha("HORIZONTAL", 0.03, 0.04, 0.055, a, 0.03, 0.04, 0.055, b);
+end
+ES.Border(over, ES.GOLD_DIM, 0.5);
+local streaks = FX.Emitter(over);
+local pointerGlow = FX.Glow(over, "OVERLAY", ES.GOLD);
+pointerGlow:SetPoint("TOP", 0, 10); pointerGlow:SetPoint("BOTTOM", 0, -10); pointerGlow:SetWidth(46);
+local pointer = ES.Solid(over, "OVERLAY", ES.GOLD, 1);
+pointer:SetPoint("TOP", 0, 8); pointer:SetPoint("BOTTOM", 0, -8); pointer:SetWidth(3);
+for _, side in ipairs({ "TOP", "BOTTOM" }) do
+    local cap = over:CreateTexture(nil, "OVERLAY");
+    cap:SetTexture(ART .. "spark");
+    cap:SetBlendMode("ADD");
+    cap:SetVertexColor(ES.GOLD[1], ES.GOLD[2], ES.GOLD[3]);
+    cap:SetSize(34, 34);
+    cap:SetPoint("CENTER", pointer, side, 0, 0);
+end
+FX.Pulse(over, function(t)
+    pointerGlow:SetAlpha((phase == "spin" and 0.75 or 0.4) + 0.2 * math.sin(t * (phase == "spin" and 14 or 3)));
+end);
+
+local function weightedReward(c)
+    local roll = math.random(1, c.total);
+    for _, reward in ipairs(c.rewards) do
+        if roll <= reward.weight then return reward; end
+        roll = roll - reward.weight;
+    end
+    return c.rewards[#c.rewards];
+end
+
+-- Offset that puts the middle of card i (plus a visual nudge) under the pointer.
+local function offsetFor(i, nudge) return (i - 1) * STEP + 4 + CARD_W / 2 + (nudge or 0) - REEL_W / 2; end
+
+local function fillReel(c, winner)
+    -- Filler cards are decoration only: the winning card was chosen by the server.
+    for i = 1, REEL_LEN do
+        fillCard(reelCards[i], (winner and i == WIN_AT) and winner or weightedReward(c), nil);
+    end
+end
+
+local action = makeButton(panel, 320, 48, 15, "EsteriaCratesAction");
+action:SetPoint("TOP", reelBack, "BOTTOM", 0, -24);
+
+local skip = CreateFrame("Button", nil, panel);
+skip:SetSize(80, 24);
+skip:SetPoint("LEFT", action, "RIGHT", 16, 0);
+skip.text = ES.Text(skip, 11, ES.MUTED);
+skip.text:SetPoint("CENTER");
+skip.text:SetText("Skip >>");
+skip:SetScript("OnEnter", function(self) self.text:SetTextColor(1, 1, 1); end);
+skip:SetScript("OnLeave", function(self) self.text:SetTextColor(ES.MUTED[1], ES.MUTED[2], ES.MUTED[3]); end);
+skip:Hide();
+
+local status = ES.Text(panel, 11, ES.BAD);
+status:SetWidth(W - 80);
+status:SetPoint("TOP", action, "BOTTOM", 0, -7);
+
+local contains = ES.Text(panel, 11, ES.MUTED);
+contains:SetPoint("TOP", action, "BOTTOM", 0, -28);
+contains:SetText(spaced("CONTAINS ONE OF THE FOLLOWING"));
+for _, side in ipairs({ -1, 1 }) do
+    local line = ES.Solid(panel, "ARTWORK", ES.GOLD_DIM, 1);
+    line:SetSize(150, 1);
+    line:SetPoint(side < 0 and "RIGHT" or "LEFT", contains, side < 0 and "LEFT" or "RIGHT", side * 14, 0);
+    if side < 0 then line:SetGradientAlpha("HORIZONTAL", 0.54, 0.43, 0.18, 0, 0.54, 0.43, 0.18, 1);
+    else line:SetGradientAlpha("HORIZONTAL", 0.54, 0.43, 0.18, 1, 0.54, 0.43, 0.18, 0); end
+end
+
+local grid = CreateFrame("Frame", nil, panel);
+grid:SetSize(W - 40, 2 * GRID_H + 12);
+grid:SetPoint("TOP", contains, "BOTTOM", 0, -14);
+local gridCards = {};
+
+-- footer: its own strip, so the grid can never cover it
+local footer = CreateFrame("Frame", nil, panel);
+footer:SetPoint("BOTTOMLEFT", 1, 1); footer:SetPoint("BOTTOMRIGHT", -1, 1); footer:SetHeight(38);
+ES.Solid(footer, "BACKGROUND", { 0, 0, 0 }, 0.45):SetAllPoints();
+local footLine = ES.Solid(footer, "BORDER", ES.GOLD_DIM, 0.6);
+footLine:SetPoint("TOPLEFT"); footLine:SetPoint("TOPRIGHT"); footLine:SetHeight(1);
+local odds = ES.Text(footer, 10, ES.MUTED);
+odds:SetPoint("LEFT", 18, 0);
+local gold = ES.Text(footer, 12, ES.TEXT);
+gold:SetPoint("RIGHT", -18, 0);
+local motionLabel = checkbox(footer, "Reduce motion", "reduceMotion", odds, 24);
+checkbox(footer, "Mute", "mute", motionLabel);
+
+-------------------------------------------------------------------------------- reveal
+
+local reveal = CreateFrame("Frame", nil, panel);
+reveal:SetAllPoints();
+reveal:SetFrameLevel(panel:GetFrameLevel() + 30);
+reveal:EnableMouse(true);
+reveal:Hide();
+local revealBg = ES.Solid(reveal, "BACKGROUND", { 0, 0, 0 }, 0.88);
+revealBg:SetAllPoints();
+local flash = ES.Solid(reveal, "OVERLAY", { 1, 1, 1 }, 0);
+flash:SetAllPoints();
+flash:SetBlendMode("ADD");
+local RAY_Y = 120;
+local bigGlow = FX.Glow(reveal, "BORDER", ES.GOLD, 420);
+bigGlow:SetPoint("CENTER", 0, RAY_Y);
+local rays = reveal:CreateTexture(nil, "BORDER");
+rays:SetTexture(ART .. "rays");
+rays:SetBlendMode("ADD");
+rays:SetSize(600, 600);
+rays:SetPoint("CENTER", 0, RAY_Y);
+local rays2 = reveal:CreateTexture(nil, "BORDER");
+rays2:SetTexture(ART .. "rays");
+rays2:SetBlendMode("ADD");
+rays2:SetSize(380, 380);
+rays2:SetPoint("CENTER", 0, RAY_Y);
+local burst = FX.Emitter(reveal);
+local unboxed = ES.Text(reveal, 12, ES.MUTED);
+unboxed:SetPoint("TOP", 0, -64);
+unboxed:SetText(spaced("YOU UNBOXED"));
+local prizeHolder = CreateFrame("Frame", nil, reveal);
+prizeHolder:SetSize(96, 96);
+prizeHolder:SetPoint("CENTER", 0, RAY_Y);
+local prizeFrame = CreateFrame("Frame", nil, prizeHolder);
+prizeFrame:SetSize(96, 96);
+prizeFrame:SetPoint("CENTER");
+FX.Shadow(prizeFrame, 12, 0.9);
+local prizeIcon = prizeFrame:CreateTexture(nil, "ARTWORK");
+prizeIcon:SetAllPoints();
+local prizeEdge = ES.Border(prizeFrame, ES.GOLD, 1);
+local prizeGrade = ES.Text(reveal, 30, ES.GOLD);
+prizeGrade:SetPoint("TOP", prizeHolder, "BOTTOM", 0, -90);
+local prizeName = ES.Text(reveal, 21, ES.TEXT);
+prizeName:SetWidth(W - 80);
+prizeName:SetPoint("TOP", prizeGrade, "BOTTOM", 0, -14);
+local prizeFrom = ES.Text(reveal, 11, ES.MUTED);
+prizeFrom:SetPoint("TOP", prizeName, "BOTTOM", 0, -9);
+local prizeNote = ES.Text(reveal, 11, ES.GOLD);
+prizeNote:SetPoint("TOP", prizeFrom, "BOTTOM", 0, -6);
+local revealButtons = CreateFrame("Frame", nil, reveal);
+revealButtons:SetSize(380, 40);
+revealButtons:SetPoint("TOP", prizeNote, "BOTTOM", 0, -26);
+local again = makeButton(revealButtons, 250, 40, 12, "EsteriaCratesAgain");
+again:SetPoint("LEFT");
+local done = makeButton(revealButtons, 116, 40, 12);
+done:SetPoint("RIGHT");
+done:Style(GREY, spaced("CLOSE"), true);
+
+local spinAngle = 0;
+reveal:SetScript("OnUpdate", function(_, elapsed)
+    if db.reduceMotion then return; end
+    spinAngle = spinAngle + elapsed * 0.3;
+    rays:SetRotation(spinAngle);
+    rays2:SetRotation(-spinAngle * 1.7);
+    bigGlow:SetAlpha(0.55 + 0.15 * math.sin(spinAngle * 9));
+end);
+
+-------------------------------------------------------------------------------- state -> window
+
+local function canOpen(c) return c and c.crates > 0 and c.keys > 0; end
+
+local function refreshAction()
+    local c = data[current];
+    if not c or not c.total then return; end
+    if phase == "pending" or phase == "spin" then
+        action:Style(GREY, spaced("UNLOCKING") .. "...", false);
+    elseif c.crates < 1 and c.cratePrice > 0 then
+        action:Style(AMBER, "Buy " .. (c.crateName or "Crate") .. "   " .. coins(c.cratePrice), GetMoney() >= c.cratePrice);
+    elseif c.crates < 1 then
+        action:Style(GREY, spaced("NO CRATES LEFT"), false);
+    elseif c.keys < 1 then
+        action:Style(AMBER, "Buy " .. (c.keyName or "Key") .. "   " .. coins(c.keyPrice), GetMoney() >= c.keyPrice);
+    else
+        action:Style(GREEN, spaced("UNLOCK"), true);
+    end
+end
+
+render = function()
+    local c = data[current];
+    if not c or not c.total then return; end
+    local name = itemInfo(current);
+    local keyName, keyIcon = itemInfo(c.key);
+    c.crateName, c.keyName = name, keyName;
+    title:SetText(name);
+    crateIcon:SetTexture(artFor(current));
+    bagCount:SetText(c.crates .. " in your bags");
+    keyCount:SetText("|T" .. keyIcon .. ":16|t  " .. keyName .. ": " .. c.keys);
+    odds:SetText(string.format("Exact odds: weight / %d  -  pool %d", c.total, c.pool));
+    gold:SetText(coins(GetMoney()));
+
+    local n = #c.rewards;
+    for i = 1, n do
+        local card = gridCards[i] or makeCard(grid, GRID_W, GRID_H, 44);
+        gridCards[i] = card;
+        local row, col = math.floor((i - 1) / PER_ROW), (i - 1) % PER_ROW;
+        local inRow = math.min(PER_ROW, n - row * PER_ROW);
+        card:ClearAllPoints();
+        card:SetPoint("TOPLEFT", grid, "TOP", (col - inRow / 2) * GRID_STEP + 4, -row * (GRID_H + 12));
+        fillCard(card, c.rewards[i], c.total);
+    end
+    for i = n + 1, #gridCards do gridCards[i]:Hide(); end
+    if phase == "idle" and not c.reelFilled then
+        fillReel(c);
+        reel:SetHorizontalScroll(offsetFor(WIN_AT - 3));
+        c.reelFilled = true;
+    end
+    refreshAction();
+end
+
+-------------------------------------------------------------------------------- opening
+
+local spin = { t = 0 };
+
+local function burstAt(emitter, x, y, rarity, scale)
+    local c = rarityColor(rarity);
+    local colors = { c, ES.GOLD, { 1, 1, 1 } };
+    local n = (rarity >= 5 and 110 or rarity >= 4 and 60 or 26) * (scale or 1);
+    emitter:Emit({ x = x, y = y, count = n, speed = { 90, 420 }, life = 1.4, size = 22, grow = 0.3, colors = colors,
+        gravity = -160, drag = 1.6, texture = "spark", spin = 4 });
+    emitter:Emit({ x = x, y = y, count = n / 2, speed = { 40, 220 }, life = 2.2, size = 10, colors = colors,
+        gravity = 40, drag = 0.8, texture = "dot" });
+end
+
+local function showReveal()
+    phase = "reveal";
+    skip:Hide();
+    local w = data[current].won;
+    local name, icon = itemInfo(w.item);
+    local c = rarityColor(w.rarity);
+    rays:SetVertexColor(c[1], c[2], c[3]);
+    rays:SetAlpha(w.rarity >= 4 and 0.9 or 0.45);
+    rays2:SetVertexColor(1, 0.9, 0.6);
+    rays2:SetAlpha(w.rarity >= 5 and 0.7 or 0.25);
+    bigGlow:SetVertexColor(c[1], c[2], c[3]);
+    prizeIcon:SetTexture(icon);
+    ES.Tint(prizeEdge, c, 1);
+    prizeGrade:SetText(spaced(string.upper(rarityName(w.rarity))));
+    prizeGrade:SetTextColor(c[1], c[2], c[3]);
+    prizeName:SetText(w.count > 1 and (name .. " x" .. w.count) or name);
+    prizeName:SetTextColor(c[1], c[2], c[3]);
+    prizeFrom:SetText("from |cffff9933" .. (data[current].crateName or "") .. "|r");
+    prizeNote:SetText(w.where == 2 and "Your bags were full: it is in your Esteria Inventory."
+        or w.where == 1 and "Your bags and storage were full: it is in your mailbox."
+        or w.where == 3 and "You already have one and it's Unique: this one waits in your mailbox." or "");
+    local cc = data[current];
+    again:Style(GREEN, spaced("OPEN ANOTHER") .. "  (" .. math.min(cc.crates, cc.keys) .. " left)", canOpen(cc));
+    reveal:Show();
+    revealBg:SetAlpha(0);
+    revealButtons:SetAlpha(0);
+    ES.Tween("crate-reveal-bg", 0.3, 0, function(p) revealBg:SetAlpha(0.88 * p); end);
+    ES.Tween("crate-reveal-flash", 0.5, 0, function(p) flash:SetAlpha((1 - p) * (w.rarity >= 5 and 0.85 or 0.45)); end);
+    ES.Tween("crate-reveal-pop", 0.55, 0, function(p)
+        -- overshoot then settle
+        local s = p < 0.7 and (0.3 + 0.9 * (p / 0.7)) or (1.2 - 0.2 * ((p - 0.7) / 0.3));
+        prizeFrame:SetScale(math.max(0.05, s));
+    end);
+    ES.Tween("crate-reveal-text", 0.45, 0.25, function(p)
+        prizeGrade:SetAlpha(p); prizeName:SetAlpha(p); prizeFrom:SetAlpha(p); prizeNote:SetAlpha(p);
+        prizeGrade:SetPoint("TOP", prizeHolder, "BOTTOM", 0, -90 + 18 * (1 - p));
+    end);
+    ES.Tween("crate-reveal-buttons", 0.4, 0.6, function(p) revealButtons:SetAlpha(p); end);
+    burstAt(burst, 0, RAY_Y, w.rarity);
+    if w.rarity >= 5 then
+        -- golden rain for the jackpot
+        burst:Emit({ x = 0, y = 360, count = 70, speed = { 30, 120 }, angle = { 250, 290 }, life = 3, size = 14,
+            colors = { ES.GOLD, { 1, 0.6, 0.2 } }, gravity = -60, texture = "spark", spread = { 380, 10 }, spin = 3 });
+        sound("LEVELUPSOUND");
+    elseif w.rarity >= 4 then
+        sound("igQuestListComplete");
+    else
+        sound("igMainMenuOptionCheckBoxOn");
+    end
+end
+
+local function finishSpin()
+    reel:SetScript("OnUpdate", nil);
+    reel:SetHorizontalScroll(spin.to);
+    local winner = reelCards[WIN_AT];
+    for i = 1, REEL_LEN do if i ~= WIN_AT then reelCards[i]:SetAlpha(0.3); end end
+    winner.won = true;
+    winner.glow:SetAlpha(0.9);
+    winner.shine(rarityColor(winner.reward.rarity));
+    burstAt(streaks, offsetFor(WIN_AT) - spin.to, 0, winner.reward.rarity, 0.4);
+    ES.Tween("crate-settle", 0.7, 0, function(p) if p >= 1 and phase == "spin" then showReveal(); end end);
+end
+
+local function spinUpdate(_, elapsed)
+    spin.t = spin.t + elapsed;
+    local p = math.min(1, spin.t / spin.d);
+    local eased = 1 - (1 - p) ^ 4;
+    local x = spin.from + (spin.to - spin.from) * eased;
+    local speed = (x - (spin.x or x)) / math.max(elapsed, 0.001);
+    spin.x = x;
+    reel:SetHorizontalScroll(x);
+    local under = math.floor((x + REEL_W / 2 - 4) / STEP);
+    if under ~= spin.last then
+        spin.last = under;
+        sound("igMainMenuOptionCheckBoxOn");
+        -- a spark at the pointer for every card that passes it
+        streaks:Emit({ x = 0, y = math.random(-60, 60), count = 2, speed = { 60, 160 }, angle = { 150, 210 },
+            life = 0.5, size = 14, colors = { ES.GOLD, { 1, 1, 1 } }, texture = "spark", spin = 6 });
+    end
+    if speed > 600 and math.random() < 0.6 then
+        streaks:Emit({ x = REEL_W / 2, y = math.random(-80, 80), count = 1, speed = { speed * 0.5, speed * 0.8 },
+            angle = { 180, 180 }, life = 0.45, size = 3, stretch = 30, colors = { { 0.75, 0.7, 1 } }, texture = "dot",
+            alpha = 0.6 });
+    end
+    if p >= 1 then finishSpin(); end
+end
+
+local function startSpin(won)
+    local c = data[current];
+    phase = "spin";
+    c.won = won;
+    fillReel(c, won);
+    spin.t, spin.last, spin.x = 0, nil, nil;
+    spin.d = db.reduceMotion and 0.4 or SPIN_TIME;
+    spin.from = offsetFor(4);
+    spin.to = offsetFor(WIN_AT, math.random(-CARD_W / 2 + 14, CARD_W / 2 - 14));
+    reel:SetHorizontalScroll(spin.from);
+    skip:Show();
+    reel:SetScript("OnUpdate", spinUpdate);
+    refreshAction();
+end
+
+local function setStatus(text, good)
+    local c = good and ES.GOOD or ES.BAD;
+    status:SetTextColor(c[1], c[2], c[3]);
+    status:SetText(text or "");
+end
+
+local function open()
+    if phase ~= "idle" or not canOpen(data[current]) then return; end
+    phase = "pending";
+    reveal:Hide();
+    burst:Clear();
+    setStatus("");
+    refreshAction();
+    request("window", "O:" .. current);
+end
+
+StaticPopupDialogs["ESTERIA_CRATES_BUY"] = {
+    text = "Buy %s for %s?\n\nThis gold is removed from the game.",
+    button1 = YES,
+    button2 = NO,
+    OnAccept = function(_, info) if info and not next(pending) then request(info.view, info.body); end end,
+    timeout = 0,
+    whileDead = 1,
+    hideOnEscape = 1,
+};
+
+-- kind "crate" or "key"; confirms with the server's current price and quantity.
+local function buy(view, crate, kind, quantity)
+    local c = data[crate];
+    local price = kind == "crate" and c.cratePrice or c.keyPrice;
+    local name = kind == "crate" and (c.crateName or "crate") or (c.keyName or "key");
+    local popup = StaticPopup_Show("ESTERIA_CRATES_BUY", quantity .. " x " .. name, coins(price * quantity));
+    if popup then
+        popup.data = { view = view, body = (kind == "crate" and "C:" or "B:") .. crate .. ":" .. quantity .. ":" .. price };
+    end
+end
+
+action:SetScript("OnClick", function()
+    local c = data[current];
+    if phase ~= "idle" or not c or next(pending) then return; end
+    if c.crates < 1 and c.cratePrice > 0 then buy("window", current, "crate", 1);
+    elseif c.keys < 1 then buy("window", current, "key", 1);
+    else open(); end
+end);
+skip:SetScript("OnClick", function() if phase == "spin" then spin.t = spin.d; end end);
+again:SetScript("OnClick", function()
+    reveal:Hide();
+    burst:Clear();
+    phase = "idle";
+    open();
+end);
+done:SetScript("OnClick", function() frame:Hide(); end);
+
+frame:SetScript("OnShow", function()
+    ES.Tween("crate-window", 0.25, 0, function(p) frame:SetAlpha(p); panel:SetScale(0.94 + 0.06 * p); end);
+end);
+frame:SetScript("OnHide", function()
+    -- The reward is already delivered; closing only stops the show.
+    reel:SetScript("OnUpdate", nil);
+    reveal:Hide();
+    skip:Hide();
+    burst:Clear();
+    streaks:Clear();
+    if phase ~= "pending" then phase = "idle"; end
+    if data[current] then data[current].reelFilled = false; end
+end);
+
+-- ambient motes drifting up through the reel and the window
+local moteTimer = 0;
+reelBack:SetScript("OnUpdate", function(_, elapsed)
+    moteTimer = moteTimer + elapsed;
+    if moteTimer < 0.12 then return; end
+    moteTimer = 0;
+    motes:Emit({ x = 0, y = -REEL_H / 2, spread = { REEL_W / 2, 4 }, count = 1, speed = { 8, 26 }, angle = { 80, 100 },
+        life = 4, size = 8, colors = { { 0.55, 0.45, 1 }, { 0.35, 0.6, 1 }, ES.GOLD }, texture = "dot", alpha = 0.7 });
+    if math.random() < 0.35 then
+        ambient:Emit({ x = 0, y = -H / 2, spread = { W / 2, 4 }, count = 1, speed = { 10, 30 }, angle = { 80, 100 },
+            life = 7, size = 6, colors = { { 0.6, 0.5, 1 }, ES.GOLD }, texture = "dot", alpha = 0.5 });
+    end
+end);
+
+-------------------------------------------------------------------------------- store (Collections tab)
+
+local store = CreateFrame("Frame", "EsteriaCratesStore", UIParent);
+store:Hide();
+local storeSelected;
+local storeStatus;
+
+local function quantityControl(parent)
+    local q = CreateFrame("Frame", nil, parent);
+    q:SetSize(96, 26);
+    q.value = 1;
+    q.text = ES.Text(q, 14, ES.TEXT);
+    q.text:SetPoint("CENTER");
+    local function step(delta)
+        local c = data[storeSelected];
+        q.value = math.max(1, math.min(c and c.maxBuy or 10, q.value + delta));
+        renderStore();
+    end
+    for _, spec in ipairs({ { "LEFT", "-", -1 }, { "RIGHT", "+", 1 } }) do
+        local b = CreateFrame("Button", nil, q);
+        b:SetSize(26, 26);
+        b:SetPoint(spec[1]);
+        ES.Solid(b, "BACKGROUND", GREY, 1):SetAllPoints();
+        b.edge = ES.Border(b, ES.GOLD_DIM, 0.8);
+        local t = ES.Text(b, 15, ES.TEXT);
+        t:SetPoint("CENTER");
+        t:SetText(spec[2]);
+        b:SetScript("OnClick", function() step(spec[3]); sound("igMainMenuOptionCheckBoxOn"); end);
+        b:SetScript("OnEnter", function(self) ES.Tint(self.edge, ES.GOLD, 1); end);
+        b:SetScript("OnLeave", function(self) ES.Tint(self.edge, ES.GOLD_DIM, 0.8); end);
+    end
+    return q;
+end
+
+-- one purchase row: icon, name, owned, unit price, quantity, buy button
+local function purchaseRow(parent, kind)
+    local row = CreateFrame("Frame", nil, parent);
+    row:SetSize(500, 58);
+    ES.Solid(row, "BACKGROUND", { 0, 0, 0 }, 0.35):SetAllPoints();
+    row.edge = ES.Border(row, ES.GOLD_DIM, 0.45);
+    row.icon = row:CreateTexture(nil, "ARTWORK");
+    row.icon:SetSize(42, 42);
+    row.icon:SetPoint("LEFT", 8, 0);
+    local hit = CreateFrame("Frame", nil, row);
+    hit:SetAllPoints(row.icon);
+    hit:EnableMouse(true);
+    hit:SetScript("OnEnter", function(self)
+        if not row.item then return; end
+        GameTooltip:SetOwner(self, "ANCHOR_RIGHT");
+        GameTooltip:SetHyperlink("item:" .. row.item .. ":0:0:0:0:0:0:0");
+        GameTooltip:Show();
+    end);
+    hit:SetScript("OnLeave", function() GameTooltip:Hide(); end);
+    -- 500 wide: icon 60, text 180, quantity 96, buy 130, gaps
+    row.name = ES.Text(row, 12, ES.TEXT);
+    row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 10, -4);
+    row.name:SetSize(180, 14);
+    row.name:SetJustifyH("LEFT");
+    row.info = ES.Text(row, 10, ES.MUTED);
+    row.info:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 10, 4);
+    row.info:SetSize(180, 12);
+    row.info:SetJustifyH("LEFT");
+    row.buy = makeButton(row, 130, 34, 11, kind == "crate" and "EsteriaCratesStoreBuyCrate" or "EsteriaCratesStoreBuyKey");
+    row.buy:SetPoint("RIGHT", -10, 0);
+    row.qty = quantityControl(row);
+    row.qty:SetPoint("RIGHT", row.buy, "LEFT", -12, 0);
+    row.buy:SetScript("OnClick", function()
+        if storeSelected and not next(pending) then buy("store", storeSelected, kind, row.qty.value); end
+    end);
+    return row;
+end
+
+local list = CreateFrame("Frame", nil, store);
+list:SetPoint("TOPLEFT", 18, -18);
+list:SetPoint("BOTTOMLEFT", 18, 18);
+list:SetWidth(290);
+ES.Solid(list, "BACKGROUND", { 0, 0, 0 }, 0.35):SetAllPoints();
+ES.Border(list, ES.GOLD_DIM, 0.5);
+local listTitle = ES.Text(list, 12, ES.MUTED);
+listTitle:SetPoint("TOPLEFT", 16, -14);
+listTitle:SetText(spaced("CRATES"));
+local listRows = {};
+
+local hero = CreateFrame("Frame", nil, store);
+hero:SetPoint("TOPLEFT", list, "TOPRIGHT", 18, 0);
+hero:SetPoint("TOPRIGHT", -18, -18);
+hero:SetHeight(392);
+local heroBg = ES.Solid(hero, "BACKGROUND", { 0.10, 0.07, 0.18 }, 1);
+heroBg:SetAllPoints();
+heroBg:SetGradientAlpha("HORIZONTAL", 0.16, 0.08, 0.28, 0.95, 0.03, 0.04, 0.06, 0.6);
+ES.Border(hero, ES.GOLD_DIM, 0.6);
+local heroHolder = CreateFrame("Frame", nil, hero);
+heroHolder:SetSize(220, 220);
+heroHolder:SetPoint("LEFT", 34, 12);
+local heroArt = CreateFrame("Frame", nil, heroHolder);
+heroArt:SetSize(220, 220);
+heroArt:SetPoint("CENTER");
+local heroFx = FX.Emitter(heroHolder);
+local heroGlow = FX.Glow(heroArt, "BACKGROUND", { 0.7, 0.35, 1 }, 420);
+heroGlow:SetPoint("CENTER");
+local heroRays = heroArt:CreateTexture(nil, "BACKGROUND");
+heroRays:SetTexture(ART .. "rays");
+heroRays:SetBlendMode("ADD");
+heroRays:SetSize(380, 380);
+heroRays:SetPoint("CENTER");
+heroRays:SetAlpha(0.35);
+local heroShadow = heroArt:CreateTexture(nil, "BORDER");
+heroShadow:SetTexture(ART .. "glow");
+heroShadow:SetVertexColor(0, 0, 0);
+heroShadow:SetSize(200, 40);
+heroShadow:SetPoint("BOTTOM", 0, -14);
+local heroIcon = heroArt:CreateTexture(nil, "ARTWORK");
+heroIcon:SetSize(200, 200);
+heroIcon:SetPoint("CENTER");
+FX.Pulse(heroArt, function(t)
+    if ES.reduceMotion then return; end
+    heroIcon:SetPoint("CENTER", 0, 6 * math.sin(t * 1.6));
+    heroShadow:SetAlpha(0.55 - 0.15 * math.sin(t * 1.6));
+    heroGlow:SetAlpha(0.5 + 0.2 * math.sin(t * 1.3));
+    heroRays:SetRotation(t * 0.12);
+end);
+local heroName = ES.Text(hero, 24, ORANGE);
+heroName:SetSize(500, 28);
+heroName:SetJustifyH("LEFT");
+heroName:SetPoint("TOPLEFT", heroHolder, "TOPRIGHT", 30, 4);
+local heroSub = ES.Text(hero, 11, ES.MUTED);
+heroSub:SetPoint("TOPLEFT", heroName, "BOTTOMLEFT", 0, -8);
+local heroOdds = ES.Text(hero, 11, ES.TEXT);
+heroOdds:SetPoint("TOPLEFT", heroSub, "BOTTOMLEFT", 0, -8);
+local crateRow = purchaseRow(hero, "crate");
+crateRow:SetPoint("TOPLEFT", heroOdds, "BOTTOMLEFT", 0, -16);
+local keyRow = purchaseRow(hero, "key");
+keyRow:SetPoint("TOPLEFT", crateRow, "BOTTOMLEFT", 0, -10);
+local openButton = makeButton(hero, 300, 46, 15, "EsteriaCratesStoreOpen");
+openButton:SetPoint("TOPLEFT", keyRow, "BOTTOMLEFT", 0, -18);
+storeStatus = ES.Text(hero, 11, ES.GOOD);
+storeStatus:SetPoint("TOPLEFT", openButton, "BOTTOMLEFT", 2, -8);
+storeStatus:SetWidth(480);
+storeStatus:SetJustifyH("LEFT");
+local storeGold = ES.Text(hero, 12, ES.TEXT);
+storeGold:SetPoint("BOTTOMRIGHT", -14, 12);
+
+local featured = CreateFrame("Frame", nil, store);
+featured:SetPoint("TOPLEFT", hero, "BOTTOMLEFT", 0, -16);
+featured:SetPoint("BOTTOMRIGHT", -18, 18);
+local featuredTitle = ES.Text(featured, 12, ES.MUTED);
+featuredTitle:SetPoint("TOPLEFT", 4, -2);
+featuredTitle:SetText(spaced("FEATURED RARE REWARDS"));
+local featuredFx = FX.Emitter(featured);
+local featuredCards = {};
+for i = 1, 5 do
+    local card = makeCard(featured, 150, 172, 64);
+    card:SetPoint("TOPLEFT", (i - 1) * 166 + 4, -28);
+    card:Hide();
+    featuredCards[i] = card;
+end
+local featuredTimer, featuredNext = 0, 1;
+
+local function storeSetStatus(text, good)
+    local c = good and ES.GOOD or ES.BAD;
+    storeStatus:SetTextColor(c[1], c[2], c[3]);
+    storeStatus:SetText(text or "");
+end
+
+-- Rewards worth showing off: epic and better first; a random pick that isn't already on show.
+local function featuredPick(c, exclude)
+    local pool = {};
+    for _, reward in ipairs(c.rewards) do
+        if reward.rarity >= 4 and not exclude[reward.item] then pool[#pool + 1] = reward; end
+    end
+    if #pool == 0 then
+        for _, reward in ipairs(c.rewards) do if not exclude[reward.item] then pool[#pool + 1] = reward; end end
+    end
+    return pool[math.random(math.max(1, #pool))];
+end
+
+local function fillFeatured(c)
+    local used = {};
+    for i, card in ipairs(featuredCards) do
+        local reward = featuredPick(c, used);
+        if reward then used[reward.item] = true; fillCard(card, reward, c.total); else card:Hide(); end
+    end
+end
+
+local function selectCrate(crate)
+    storeSelected = crate;
+    crateRow.qty.value, keyRow.qty.value = 1, 1;
+    local c = data[crate];
+    if c and c.total then fillFeatured(c); end
+    renderStore();
+    if not ES.reduceMotion then
+        ES.Tween("crate-hero", 0.35, 0, function(p) heroArt:SetAlpha(p); heroArt:SetScale(0.85 + 0.15 * p); end);
+        heroFx:Emit({ x = 0, y = 0, count = 30, speed = { 40, 200 }, life = 1.2, size = 18, drag = 1.5,
+            colors = { { 0.8, 0.5, 1 }, ES.GOLD }, texture = "spark", spin = 3 });
+    end
+end
+
+renderStore = function()
+    if not store:IsShown() then return; end
+    waiting = false;
+    storeGold:SetText(coins(GetMoney()));
+    for i, crate in ipairs(order) do
+        local c = data[crate];
+        local row = listRows[i];
+        if not row then
+            row = CreateFrame("Button", nil, list);
+            row:SetSize(262, 74);
+            row:SetPoint("TOPLEFT", 14, -40 - (i - 1) * 82);
+            row.bg = ES.Solid(row, "BACKGROUND", { 0.12, 0.08, 0.2 }, 1);
+            row.bg:SetAllPoints();
+            row.edge = ES.Border(row, ES.GOLD_DIM, 0.6);
+            row.icon = row:CreateTexture(nil, "ARTWORK");
+            row.icon:SetSize(58, 58);
+            row.icon:SetPoint("LEFT", 8, 0);
+            row.name = ES.Text(row, 12, ORANGE);
+            row.name:SetPoint("TOPLEFT", row.icon, "TOPRIGHT", 10, -4);
+            row.name:SetWidth(180);
+            row.name:SetJustifyH("LEFT");
+            row.info = ES.Text(row, 10, ES.MUTED);
+            row.info:SetPoint("BOTTOMLEFT", row.icon, "BOTTOMRIGHT", 10, 4);
+            row.shine = FX.Shine(row);
+            row:SetScript("OnClick", function(self) selectCrate(self.crate); sound("igMainMenuOptionCheckBoxOn"); end);
+            row:SetScript("OnEnter", function(self) ES.Tint(self.edge, ES.GOLD, 1); self.shine(); end);
+            row:SetScript("OnLeave", function(self) ES.Tint(self.edge, self.crate == storeSelected and ES.GOLD or ES.GOLD_DIM, 0.6); end);
+            listRows[i] = row;
+        end
+        row.crate = crate;
+        row.icon:SetTexture(artFor(crate));
+        row.name:SetText((itemInfo(crate)));
+        row.info:SetText(c.crates .. " owned   |   " .. c.keys .. " keys");
+        ES.Tint(row.edge, crate == storeSelected and ES.GOLD or ES.GOLD_DIM, crate == storeSelected and 1 or 0.6);
+        row:Show();
+    end
+    for i = #order + 1, #listRows do listRows[i]:Hide(); end
+
+    local c = data[storeSelected];
+    shown(hero, c ~= nil);
+    shown(featured, c ~= nil and c.total ~= nil);
+    if not c then return; end
+    local name = itemInfo(storeSelected);
+    local keyName, keyIcon = itemInfo(c.key);
+    c.crateName, c.keyName = name, keyName;
+    heroIcon:SetTexture(artFor(storeSelected));
+    heroName:SetText(name);
+    heroSub:SetText("Needs: |T" .. keyIcon .. ":14|t " .. keyName .. "    |    Pool " .. c.pool);
+    if c.total then
+        local byGrade, grades = {}, {};
+        for _, reward in ipairs(c.rewards) do
+            if not byGrade[reward.rarity] then grades[#grades + 1] = reward.rarity; end
+            byGrade[reward.rarity] = (byGrade[reward.rarity] or 0) + reward.weight;
+        end
+        table.sort(grades);
+        local parts = {};
+        for _, r in ipairs(grades) do
+            local col = rarityColor(r);
+            parts[#parts + 1] = string.format("|cff%02x%02x%02x%s %s|r", col[1] * 255, col[2] * 255, col[3] * 255,
+                rarityName(r), percentOf(byGrade[r], c.total));
+        end
+        heroOdds:SetText(table.concat(parts, "    "));
+    else
+        heroOdds:SetText("");
+    end
+
+    crateRow.item, keyRow.item = storeSelected, c.key;
+    crateRow.icon:SetTexture(artFor(storeSelected));
+    crateRow.name:SetText(name);
+    crateRow.info:SetText("Have " .. c.crates .. "  |  " .. (c.cratePrice > 0 and (coins(c.cratePrice) .. " each") or "Found in the world"));
+    keyRow.icon:SetTexture(artFor(c.key));
+    keyRow.name:SetText(keyName);
+    keyRow.info:SetText("Have " .. c.keys .. "  |  " .. coins(c.keyPrice) .. " each");
+    for _, row in ipairs({ crateRow, keyRow }) do
+        local price = row == crateRow and c.cratePrice or c.keyPrice;
+        local total = price * row.qty.value;
+        row.qty.text:SetText(row.qty.value);
+        row.buy:Style(AMBER, "Buy  " .. coins(total), price > 0 and GetMoney() >= total and not next(pending));
+        shown(row.qty, price > 0);
+    end
+    if canOpen(c) then
+        openButton:Style(GREEN, spaced("OPEN CRATE") .. "  (" .. math.min(c.crates, c.keys) .. ")", true);
+    else
+        openButton:Style(GREY, c.crates < 1 and "You need a crate" or "You need a key", false);
+    end
+end
+
+openButton:SetScript("OnClick", function()
+    if storeSelected then EsteriaCrates_Open(storeSelected); end
+end);
+
+store:SetScript("OnShow", function()
+    send("L");
+    ES.Tween("crate-store", 0.3, 0, function(p) store:SetAlpha(p); end);
+end);
+store:SetScript("OnUpdate", function(_, elapsed)
+    -- rising sparkles around the hero crate, and one featured card swapped every few seconds
+    featuredTimer = featuredTimer + elapsed;
+    if math.random() < elapsed * 6 then
+        heroFx:Emit({ x = math.random(-80, 80), y = -80, count = 1, speed = { 20, 50 }, angle = { 80, 100 },
+            life = 2.5, size = 10, colors = { { 0.8, 0.5, 1 }, ES.GOLD, { 0.5, 0.7, 1 } }, texture = "dot" });
+    end
+    local c = data[storeSelected];
+    if featuredTimer > 4 and c and c.total and not ES.reduceMotion then
+        featuredTimer = 0;
+        local card = featuredCards[featuredNext];
+        featuredNext = featuredNext % #featuredCards + 1;
+        local onShow = {};
+        for _, other in ipairs(featuredCards) do if other.reward then onShow[other.reward.item] = true; end end
+        local reward = featuredPick(c, onShow);
+        if reward and card:IsShown() then
+            ES.Tween("crate-featured-" .. featuredNext, 0.5, 0, function(p)
+                card:SetAlpha(p < 0.5 and 1 - p * 2 or (p - 0.5) * 2);
+                if p >= 0.5 and card.reward ~= reward then
+                    fillCard(card, reward, c.total);
+                    card:SetAlpha(0);
+                    card.shine(rarityColor(reward.rarity));
+                    local x = card:GetLeft() and (card:GetLeft() + card:GetWidth() / 2 - (featured:GetLeft() + featured:GetWidth() / 2)) or 0;
+                    featuredFx:Emit({ x = x, y = 0, count = 16, speed = { 30, 140 }, life = 1, size = 14, drag = 1.2,
+                        colors = { rarityColor(reward.rarity), ES.GOLD }, texture = "spark", spin = 4 });
+                end
+            end);
+        end
+    end
+end);
+
+-- Collections calls this when its Crates tab is selected.
+function EsteriaCrates_Embed(parent)
+    store:SetParent(parent);
+    store:ClearAllPoints();
+    store:SetAllPoints(parent);
+    store:SetFrameLevel(parent:GetFrameLevel() + 1);
+    store:Show();
+    renderStore();
+end
+
+-- Opens the unlock window for a crate (from the store, a bag or a link).
+function EsteriaCrates_Open(crate)
+    if current ~= crate and data[current] then data[current].reelFilled = false; end
+    current = crate;
+    phase = "idle";
+    frame:Show();
+    send("D:" .. crate);
+    render();
+end
+
+local ERRORS = {
+    nocrate = "You have no crate of this kind left.",
+    nokey = "You need a matching key.",
+    state = "You can't do that right now (combat, dead, or inventory busy).",
+    money = "You don't have enough gold.",
+    bags = "Your bags are full.",
+    price = "The price changed. Check the new price and try again.",
+    quantity = "You can't buy that many at once.",
+    notsold = "This crate isn't sold here.",
+    busy = "Too fast. Try again.",
+};
+
+-------------------------------------------------------------------------------- messages
+
+local function renderAll()
+    if frame:IsShown() then render(); end
+    if store:IsShown() then renderStore(); end
+end
+
+local function entry(crate)
+    crate = tonumber(crate);
+    data[crate] = data[crate] or { crates = 0, keys = 0, cratePrice = 0, keyPrice = 0, rewards = {} };
+    return data[crate], crate;
+end
+
+local handlers = {};
+function handlers.OPEN(crate)
+    EsteriaCrates_Open(tonumber(crate));
+end
+function handlers.LC(crate, key, keyPrice, cratePrice, crates, keys, pool)
+    local c, id = entry(crate);
+    if not data[id].listed then order[#order + 1] = id; data[id].listed = true; end
+    c.key, c.keyPrice, c.cratePrice = tonumber(key), tonumber(keyPrice), tonumber(cratePrice);
+    c.crates, c.keys, c.pool = tonumber(crates), tonumber(keys), tonumber(pool);
+end
+function handlers.LE()
+    if not storeSelected or not data[storeSelected] then storeSelected = order[1]; end
+    for _, crate in ipairs(order) do send("D:" .. crate); end
+    renderStore();
+end
+function handlers.H(crate, key, price, crates, keys, pool, total, n, maxBuy, cratePrice)
+    local c = entry(crate);
+    c.key, c.keyPrice = tonumber(key), tonumber(price);
+    c.crates, c.keys = tonumber(crates), tonumber(keys);
+    c.pool, c.n, c.maxBuy, c.cratePrice = tonumber(pool), tonumber(n), tonumber(maxBuy), tonumber(cratePrice) or 0;
+    c.incomingTotal = tonumber(total);
+    c.incoming = {};
+end
+function handlers.R(crate, idx, item, count, weight, rarity, known)
+    local c = entry(crate);
+    if not c.incoming then return; end
+    c.incoming[tonumber(idx) + 1] = { item = tonumber(item), count = tonumber(count), weight = tonumber(weight),
+        rarity = tonumber(rarity), known = known == "1" };
+end
+function handlers.RE(crate)
+    local c, id = entry(crate);
+    if not c.incoming then return; end
+    local first = not c.total;
+    c.rewards, c.total, c.incoming = c.incoming, c.incomingTotal, nil;
+    if first and id == storeSelected then fillFeatured(c); end
+    renderAll();
+end
+function handlers.W(req, crate, idx, item, count, where)
+    if not pending[req] then return; end
+    pending[req] = nil;
+    local won = {};
+    for k, v in pairs(data[current].rewards[tonumber(idx) + 1] or { item = tonumber(item), count = tonumber(count),
+        weight = 0, rarity = 4 }) do won[k] = v; end
+    won.where = tonumber(where) or 0; -- 0 bags, 1 mail, 2 Esteria storage, 3 mail (Unique already held)
+    startSpin(won);
+end
+local function bought(req, qty, what)
+    if not pending[req] then return; end
+    local view = pending[req].view;
+    pending[req] = nil;
+    sound("LOOTWINDOWCOINSOUND");
+    local text = "Bought " .. qty .. " " .. what .. (qty == "1" and "." or "s.");
+    if view == "store" then
+        storeSetStatus(text, true);
+        heroFx:Emit({ x = 0, y = 0, count = 24, speed = { 40, 180 }, life = 1, size = 16, drag = 1.5,
+            colors = { ES.GOLD, { 1, 1, 0.6 } }, texture = "spark", spin = 3 });
+    else
+        setStatus(text, true);
+    end
+    renderAll();
+end
+function handlers.K(req, _, qty) bought(req, qty, "key"); end
+function handlers.P(req, _, qty) bought(req, qty, "crate"); end
+function handlers.E(req, code)
+    if not pending[req] then return; end
+    local view = pending[req].view;
+    pending[req] = nil;
+    if phase == "pending" then phase = "idle"; end
+    local text = ERRORS[code] or ("Refused: " .. code);
+    if view == "store" then storeSetStatus(text); else setStatus(text); end
+    refreshAction();
+    renderStore();
+end
+
+local driver = CreateFrame("Frame");
+driver:RegisterEvent("PLAYER_LOGIN");
+driver:RegisterEvent("CHAT_MSG_ADDON");
+driver:RegisterEvent("PLAYER_MONEY");
+driver:SetScript("OnEvent", function(_, event, prefix, message, _, sender)
+    if event == "PLAYER_LOGIN" then
+        EsteriaCratesDB = EsteriaCratesDB or {};
+        db = EsteriaCratesDB;
+        ES.reduceMotion = db.reduceMotion;
+        send("HI");
+    elseif event == "PLAYER_MONEY" then
+        renderAll();
+    elseif prefix == PFX_IN and sender == UnitName("player") and message then
+        local args = {};
+        for part in (message .. ":"):gmatch("([^:]*):") do args[#args + 1] = part; end
+        local handler = handlers[table.remove(args, 1)];
+        if handler then handler(unpack(args)); end
+    end
+end);
+driver:SetScript("OnUpdate", function(_, elapsed)
+    for req, p in pairs(pending) do
+        if GetTime() - p.at > ANSWER_TIMEOUT then
+            pending[req] = nil;
+            if phase == "pending" then phase = "idle"; end
+            refreshAction();
+            local text = "No answer from the server. Your bags show what happened.";
+            if p.view == "store" then storeSetStatus(text); send("L");
+            else setStatus(text); if current then send("D:" .. current); end end
+        end
+    end
+    if waiting and (frame:IsShown() or store:IsShown()) then
+        waitTimer = waitTimer + elapsed;
+        if waitTimer > 0.4 then waitTimer = 0; renderAll(); end
+    end
+end);
+
+SLASH_ESTERIACRATES1 = "/crates";
+SlashCmdList.ESTERIACRATES = function()
+    if EsteriaCosmetics_Show then EsteriaCosmetics_Show("Crates"); end
+end;

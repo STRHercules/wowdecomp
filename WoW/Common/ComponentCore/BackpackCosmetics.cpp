@@ -109,7 +109,8 @@ bool Anchor(CM2Model* parent, uint32_t geoset, Retail::CloakAnchor& anchor) {
         for (auto* child = parent->m_attachList; child; child = child->m_attachNext)
             if (child->IsLoaded(0,0) && child->HasSkinParent(parent) && child->m_shared->m_skinData)
                 if (!collect(child)) return false;
-    if (!Retail::FindCloakAnchor(vertices, data.m_bones.m_count, anchor)) return false;
+    // Key 4 is the player's spine; cape bones can sway even along the cloak's upper edge.
+    if (!Retail::FindCloakAnchor(vertices, data.m_bones.m_count, anchor, parent->FindBoneIndexByKey(4))) return false;
     return Retail::FitCloakBack(surface, anchor);
 }
 
@@ -152,6 +153,14 @@ bool Sync(CM2Model* parent, const Retail::BackpackAppearance* appearance, uint32
         child->Release();
         child = Child(parent);
     } else child->SetAttachmentFrame(anchor.bone, position, scale);
+    if (child) {
+        C44Matrix rotation(1.0f);
+        constexpr float radians=3.14159265359f/180;
+        rotation.RotateAroundX(fit.pitch*radians);
+        rotation.RotateAroundY(fit.yaw*radians);
+        rotation.RotateAroundZ(fit.roll*radians);
+        child->SetWorldTransform(rotation);
+    }
     if (!child || !child->IsLoaded(0, 0)) return false;
     HideCloak(parent);
     return true;

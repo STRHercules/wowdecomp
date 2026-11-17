@@ -22,6 +22,10 @@ void ExtensionMgr::OnModelAnimated(CM2Model* model) {
     CALL_HOOKS(ModelScript, script->OnModelAnimated(*model));
 }
 
+void ExtensionMgr::OnModelBoneLocal(CM2Model* model, uint32_t boneIndex, C44Matrix& local) {
+    CALL_HOOKS(ModelScript, script->OnModelBoneLocal(*model, boneIndex, local));
+}
+
 void ExtensionMgr::OnModelSharedDestroy(CM2Shared* shared) {
     CALL_HOOKS(ModelScript, script->OnModelSharedDestroy(*shared));
 }

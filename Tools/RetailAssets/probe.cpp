@@ -36,6 +36,32 @@ int main(int argc, char** argv) {
         }
         return failed ? 1 : 0;
     }
+    // --extract-batch <list> <dir>: like --batch, but writes each name's original bytes (Inspect) to
+    // <dir>/<file part of the name>; names already on disk are skipped so an interrupted run resumes.
+    if (argc == 5 && std::string(argv[2]) == "--extract-batch") {
+        Retail::SourceScope scope(Retail::SourceKind::Retail);
+        Retail::CascSource source(Retail::SourceKind::Retail);
+        std::string error;
+        if (!source.Configure(argv[1], error)) { std::fprintf(stderr, "configure: %s\n", error.c_str()); return 1; }
+        std::ifstream list(argv[3]);
+        int failed = 0;
+        for (std::string name; std::getline(list, name);) {
+            if (!name.empty() && name.back() == '\r') name.pop_back();
+            if (name.empty()) continue;
+            const auto slash = name.find_last_of("/\\");
+            const std::string path = std::string(argv[4]) + "/" + (slash == std::string::npos ? name : name.substr(slash + 1));
+            if (std::ifstream(path, std::ios::binary).good()) { std::printf("have %s\n", name.c_str()); continue; }
+            std::vector<uint8_t> bytes;
+            error.clear();
+            if (source.Inspect(name.c_str(), bytes, error)) {
+                std::ofstream output(path, std::ios::binary);
+                if (output.write(reinterpret_cast<const char*>(bytes.data()), bytes.size())) std::printf("ok %s %zu\n", name.c_str(), bytes.size());
+                else { std::printf("fail %s: cannot write %s\n", name.c_str(), path.c_str()); ++failed; }
+            } else { std::printf("fail %s: %s\n", name.c_str(), error.c_str()); ++failed; }
+            std::fflush(stdout);
+        }
+        return failed ? 1 : 0;
+    }
     const bool character = argc > 3 && std::string(argv[3]) == "--character";
     if (character) {
         for (int i = 3; i + 1 < argc; ++i) argv[i] = argv[i + 1];

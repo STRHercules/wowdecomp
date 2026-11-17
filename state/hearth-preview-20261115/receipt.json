@@ -1,0 +1,25 @@
+{
+  "executable": "G:\\3.3.5a - Dev\\WowCollectionsPreview.exe",
+  "executable_sha256": "215eb2f473a731eac70a02bf77eed8c79cfd881e11a61cd41e15a45a0f4eb1b1",
+  "archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzzzHearthPreview.MPQ",
+  "archive_sha256": "741740faa8850ff2dfa910d4cdb69090dbb10d77cf5e2e72d1bb97901efc88e4",
+  "lua_sha256": "8e96c4e3200a9a30e6ac7c6affafe1a2d70c0d8c57e9769a4de9e22f338adecd",
+  "addon_baseline_archive": "G:\\3.3.5a - Dev\\Data\\Patch-ZzzzzzzzzzzFortniteBackpacks.MPQ",
+  "addon_baseline_sha256": "84b16cf71beba749a5d5ad2a3d6ee6136cef3be512b9618ba96572c36a363ccc",
+  "patch_scope": "Only six hearth-preview edits to the winning installed Lua file; one-entry overlay",
+  "existing_executables_preserved": {
+    "Wow.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057",
+    "WowCosmetics.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057",
+    "WowMountPreviewFix.exe": "416b80f68e175277629411e3632d9d9f6b10f3754960df9dfed28296eba46937"
+  },
+  "validation": [
+    "Release WowClient build passed",
+    "staged Lua regression passed",
+    "MPQ readback passed",
+    "mount bounds regression passed"
+  ],
+  "includes_mount_preview_fix": true,
+  "live_acceptance": false,
+  "activation": "Restart using WowCollectionsPreview.exe; the running client is unchanged",
+  "rollback": "Remove the new HearthPreview MPQ and WowCollectionsPreview.exe after exiting the client"
+}

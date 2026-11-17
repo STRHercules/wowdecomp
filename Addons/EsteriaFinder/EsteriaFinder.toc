@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Esteria Adventure Finder
+## Notes: The Dungeon Finder and the Manastorm in one window. Opens from the Dungeon Finder micro button, its key binding, /finder or /lfd.
+## OptionalDeps: EsteriaManastorm
+esteria_style.lua
+EsteriaFinder.lua

@@ -26,8 +26,11 @@ inline bool ParseBackpacks(const std::string& text, std::map<uint32_t, BackpackA
         std::string extra;
         if (!(row >> item.display >> item.model >> item.width >> item.height >> item.depth)) return false;
         row >> std::ws;
-        if (!row.eof() && (!(row >> item.fit.scale >> item.fit.x >> item.fit.y >> item.fit.z) || row >> extra))
-            return false;
+        if (!row.eof()) {
+            if (!(row >> item.fit.scale >> item.fit.x >> item.fit.y >> item.fit.z)) return false;
+            row >> std::ws;
+            if (!row.eof() && (!(row >> item.fit.pitch >> item.fit.yaw >> item.fit.roll) || row >> extra)) return false;
+        }
         if (!ValidBackpackFit(item.fit) ||
             !item.display || item.display > 5000000 || item.model.size() > 240 ||
             item.model.compare(0, 16, "custom/fortnite/") || item.model.find("..") != std::string::npos ||

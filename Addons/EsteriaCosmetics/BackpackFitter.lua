@@ -6,17 +6,27 @@ local current,body,loading
 local pending,pendingAt
 local fields={{"scale","Scale multiplier",0.1,4,0.01,1},
     {"x","Depth: forward / back",-3,3,0.005,0},
-    {"y","Side: left / right",-3,3,0.005,0},{"z","Height: up / down",-3,3,0.005,0}}
+    {"y","Side: left / right",-3,3,0.005,0},{"z","Height: up / down",-3,3,0.005,0},
+    {"pitch","Rotation X (degrees)",-180,180,0.5,0},{"yaw","Rotation Y (degrees)",-180,180,0.5,0},{"roll","Rotation Z (degrees)",-180,180,0.5,0}}
 local function defaults()
     for _,r in ipairs(EsteriaCosmeticsData or {}) do
-        if r.display==current then return {scale=r.fitScale or 1,x=r.fitX or 0,y=r.fitY or 0,z=r.fitZ or 0} end
+        if r.display==current then return {scale=r.fitScale or 1,x=r.fitX or 0,y=r.fitY or 0,z=r.fitZ or 0,pitch=r.fitPitch or 0,yaw=r.fitYaw or 0,roll=r.fitRoll or 0} end
     end
-    return {scale=1,x=0,y=0,z=0}
+    return {scale=1,x=0,y=0,z=0,pitch=0,yaw=0,roll=0}
 end
 local function key(display,model) return display..";"..model end
 local function profiles()
     EsteriaCosmeticsDB=EsteriaCosmeticsDB or {}
     EsteriaCosmeticsDB.backpackFits=EsteriaCosmeticsDB.backpackFits or {}
+    local migrate=EsteriaCosmeticsDB.backpackRotationDefaults~=2
+    for _,p in pairs(EsteriaCosmeticsDB.backpackFits) do
+        if type(p)=="table" then
+            if migrate and p.pitch==-7.5 then p.pitch=0 end
+            if migrate and p.roll==7.5 then p.roll=0 end
+            p.pitch=p.pitch or 0;p.yaw=p.yaw or 0;p.roll=p.roll or 0
+        end
+    end
+    EsteriaCosmeticsDB.backpackRotationDefaults=2
     return EsteriaCosmeticsDB.backpackFits
 end
 local function valid(p)
@@ -31,7 +41,7 @@ local function values()
 end
 local function apply(p)
     if not current or not body or not EsteriaBackpackSetFit then return false end
-    local ok=EsteriaBackpackSetFit(current,body,p.scale,p.x,p.y,p.z)
+    local ok=EsteriaBackpackSetFit(current,body,p.scale,p.x,p.y,p.z,p.pitch,p.yaw,p.roll)
     if ok and EsteriaCosmetics_RefitPreview then EsteriaCosmetics_RefitPreview() end
     return ok
 end
@@ -91,9 +101,9 @@ local function cycle(direction)
     status:SetText("Applying "..row.name.." — current fit saved")
 end
 local function export()
-    local rows={"# display;body_model;scale_multiplier;x;y;z"}
+    local rows={"# display;body_model;scale_multiplier;x;y;z;pitch;yaw;roll"}
     local keys={}; for k,p in pairs(profiles()) do if valid(p) then keys[#keys+1]=k end end; table.sort(keys)
-    for _,k in ipairs(keys) do local p=profiles()[k]; rows[#rows+1]=("%d;%s;%.6f;%.6f;%.6f;%.6f"):format(p.display,p.body,p.scale,p.x,p.y,p.z) end
+    for _,k in ipairs(keys) do local p=profiles()[k]; rows[#rows+1]=("%d;%s;%.6f;%.6f;%.6f;%.6f;%.6f;%.6f;%.6f"):format(p.display,p.body,p.scale,p.x,p.y,p.z,p.pitch,p.yaw,p.roll) end
     if not EsteriaBackpackExportFits then status:SetText("Restart with the updated client to export files.");return end
     local ok,path=EsteriaBackpackExportFits(table.concat(rows,"\n").."\n")
     if ok then
@@ -103,7 +113,7 @@ local function export()
 end
 local function build()
     frame=CreateFrame("Frame","EsteriaBackpackFitter",UIParent)
-    frame:SetSize(500,445);frame:SetPoint("CENTER");frame:SetFrameStrata("DIALOG");frame:EnableMouse(true)
+    frame:SetSize(500,620);frame:SetPoint("CENTER");frame:SetFrameStrata("DIALOG");frame:EnableMouse(true)
     frame:SetMovable(true);frame:SetClampedToScreen(true);frame:RegisterForDrag("LeftButton")
     frame:SetScript("OnDragStart",frame.StartMoving);frame:SetScript("OnDragStop",frame.StopMovingOrSizing)
     frame:Hide();tinsert(UISpecialFrames,"EsteriaBackpackFitter")
@@ -131,8 +141,8 @@ local function build()
         e:SetScript("OnEscapePressed",function(self)self:ClearFocus();self:SetText(("%.3f"):format(s:GetValue())) end)
         controls[f[1]]={slider=s,edit=e};s:SetScript("OnValueChanged",changed)
     end
-    status=ES.Text(frame,11,ES.MUTED);status:SetPoint("TOPLEFT",20,-342);status:SetWidth(460);status:SetJustifyH("LEFT")
-    local note=ES.Text(frame,10,ES.MUTED);note:SetPoint("TOPLEFT",20,-364);note:SetWidth(460);note:SetJustifyH("LEFT")
+    status=ES.Text(frame,11,ES.MUTED);status:SetPoint("TOPLEFT",20,-513);status:SetWidth(460);status:SetJustifyH("LEFT")
+    local note=ES.Text(frame,10,ES.MUTED);note:SetPoint("TOPLEFT",20,-535);note:SetWidth(460);note:SetJustifyH("LEFT")
     note:SetText("Previous/Next saves the current fit. Export writes all saved fits to WTF/Esteria/BackpackFits.")
     makeButton(frame,"Save",20,function()
         if saveCurrent() then status:SetText("Saved local fit") end
@@ -165,7 +175,7 @@ events:SetScript("OnEvent",function(_,event,prefix,message,_,sender)
         return
     end
     if event=="PLAYER_LOGIN" and EsteriaBackpackSetFit then
-        for _,p in pairs(profiles()) do if valid(p) then EsteriaBackpackSetFit(p.display,p.body,p.scale,p.x,p.y,p.z) end end
+        for _,p in pairs(profiles()) do if valid(p) then EsteriaBackpackSetFit(p.display,p.body,p.scale,p.x,p.y,p.z,p.pitch,p.yaw,p.roll) end end
     end
     if frame and frame:IsShown() then refresh() end
 end)

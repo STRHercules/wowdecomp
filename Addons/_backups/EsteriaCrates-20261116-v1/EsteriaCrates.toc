@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Esteria Crates
+## Notes: Loot crate window: odds, keys and the unlock reel. Needs mod-esteria-crates on the server.
+## SavedVariables: EsteriaCratesDB
+esteria_style.lua
+EsteriaCrates.lua

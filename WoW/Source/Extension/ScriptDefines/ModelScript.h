@@ -4,6 +4,7 @@
 #include <cstdint>
 #include "WoW/Source/Extension/ScriptObject.h"
 
+class C44Matrix;
 class CM2Model;
 class CM2Shared;
 
@@ -68,6 +69,25 @@ class ModelScript : public ScriptObject {
     // their parent. Every visible model every frame, on the main thread: keep it cheap. The
     // dispatcher skips the loop entirely when no ModelScript is registered.
     virtual void OnModelAnimated(CM2Model& model) {}
+
+    // CM2Model::AnimateMT [0x82F0F0], once per animated bone (bone or M2 flags 0x280) of a model
+    // whose m_boneHook a script set, before the bone's matrix is built: local is the bone's local
+    // transform about its pivot, rotation x scale x procedural transform in the 3x3 part and
+    // pivot + animated translation in d0..d2 (the values the stock code passes through
+    // C44Matrix(C4Quaternion) and C44Matrix::Translate). The engine then un-pivots it
+    // (Translate(-pivot)), multiplies by the parent bone's matrix and applies billboarding, so a
+    // replaced local moves the bone, its children and everything attached to it (weapons, cloaks,
+    // backpacks animate after their parent's bones in the same AnimateMT call) this frame. Bones
+    // run parent first in boneIndex order.
+    //
+    // Threading: with M2UseThreads (default 1) AnimateMT runs for half the models on the M2
+    // worker thread while the main thread runs the other half, so this may fire on either. The
+    // main thread is blocked in CM2Scene::Animate until both finish. Touch only model and data
+    // the script prepared before CM2Scene::Animate (a pose snapshot written on the main thread,
+    // e.g. from OnWorldUpdate); call no engine function. Set or clear model.m_boneHook only on the
+    // main thread outside CM2Scene::Animate (any other hook). No hook runs for models without
+    // m_boneHook, so the cost is one flag test per animated model.
+    virtual void OnModelBoneLocal(CM2Model& model, uint32_t boneIndex, C44Matrix& local) {}
 
     // Start of ~CM2Model: the instance is about to release its shared and free its arrays;
     // everything is still valid for reading.

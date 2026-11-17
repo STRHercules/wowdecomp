@@ -87,8 +87,8 @@ class CSimpleModel : public CSimpleFrame {
     void SetCameraByID(uint32_t id);
     void SetCameraByIndex(uint32_t index);
     void SetLight(const CM2Light& light);
-    void SetSequence(uint32_t sequence);
-    int32_t SetSequenceTime(uint32_t sequence, int32_t time);
+    virtual void SetSequence(uint32_t sequence);
+    virtual int32_t SetSequenceTime(uint32_t sequence, int32_t time);
 };
 
 #endif

@@ -1,10 +1,43 @@
 constexpr uint32_t WingPreviewSocket = 0xfffffffcu;
+constexpr uint32_t HearthPreviewSocket = 0xfffe0000u;
 std::string WingPath(const char* name) {
     std::string path=name;
     std::replace(path.begin(),path.end(),'\\','/');
     std::transform(path.begin(),path.end(),path.begin(),[](unsigned char c){return char(std::tolower(c));});
     if (path.size()>4 && path.substr(path.size()-4)==".mdx") path.replace(path.size()-4,4,".m2");
     return path;
+}
+
+bool AttachPreviewEffect(CM2Model* parent,const SpellVisualEffectNameRec* effect,uint32_t attachmentId,
+    uint32_t previewId,const SpellVisualKitModelAttachRec* attach=nullptr) {
+    const auto& data=*parent->m_shared->m_data;
+    if (!effect || !effect->m_fileName || !*effect->m_fileName ||
+        attachmentId>=data.m_attachmentIndicesById.m_count ||
+        data.m_attachmentIndicesById[attachmentId]>=data.m_attachments.m_count) return true;
+    const auto& socket=data.m_attachments[data.m_attachmentIndicesById[attachmentId]];
+    const auto path=WingPath(effect->m_fileName);
+    auto* child=parent->m_attachList;
+    while (child && (child->m_attachmentId!=previewId || !child->m_shared ||
+        WingPath(child->m_shared->m_fileName)!=path)) child=child->m_attachNext;
+    if (!child) {
+        child=parent->m_scene->CreateModel(path.c_str(),0);
+        if (!child) return false;
+        child->AttachToParent(parent,previewId,nullptr,1);
+        child->SetAttachmentFrame(socket.m_bone,socket.m_position,1.0f);
+        C44Matrix local(effect->m_scale);
+        if (attach) {
+            local.RotateAroundX(attach->m_roll);
+            local.RotateAroundY(attach->m_pitch);
+            local.RotateAroundZ(attach->m_yaw);
+            local.Translate(C3Vector(attach->m_offset[0],attach->m_offset[1],attach->m_offset[2]));
+        }
+        child->SetWorldTransform(local);
+        child->Release();
+    }
+    if (!child->IsLoaded(0,0)) return false;
+    child->SetEmittersEnabled(1);
+    child->SetRibbonsEnabled(1);
+    return true;
 }
 
 int WingPreview(lua_State* L) {
@@ -20,36 +53,50 @@ int WingPreview(lua_State* L) {
     if (data.m_attachmentIndicesById.m_count<=16 || data.m_attachmentIndicesById[16]>=data.m_attachments.m_count) {
         lua_pushboolean(L,false); return 1;
     }
-    const auto& socket=data.m_attachments[data.m_attachmentIndicesById[16]];
     bool ready=true, found=false;
     for (uint32_t i=0;i<SpellVisualsGetModelAttachRecCount(visual->m_stateKit);++i) {
         const auto* attach=SpellVisualsGetModelAttachRec(visual->m_stateKit,i);
         const auto* effect=attach ? g_spellVisualEffectNameDB.GetRecord(attach->m_spellVisualEffectNameID) : nullptr;
         if (!effect || attach->m_attachmentID!=16) continue;
         found=true;
-        const auto path=WingPath(effect->m_fileName);
-        auto* child=parent->m_attachList;
-        while (child && (child->m_attachmentId!=WingPreviewSocket || !child->m_shared ||
-            WingPath(child->m_shared->m_fileName)!=path)) child=child->m_attachNext;
-        if (!child) {
-            child=parent->m_scene->CreateModel(path.c_str(),0);
-            if (!child) { ready=false; continue; }
-            child->AttachToParent(parent,WingPreviewSocket,nullptr,1);
-            child->SetAttachmentFrame(socket.m_bone,socket.m_position,1.0f);
-            C44Matrix local(effect->m_scale);
-            local.RotateAroundX(attach->m_roll);
-            local.RotateAroundY(attach->m_pitch);
-            local.RotateAroundZ(attach->m_yaw);
-            local.Translate(C3Vector(attach->m_offset[0],attach->m_offset[1],attach->m_offset[2]));
-            child->SetWorldTransform(local);
-            child->Release();
-        }
-        if (child->IsLoaded(0,0)) {
-            child->SetEmittersEnabled(1);
-            child->SetRibbonsEnabled(1);
-        } else ready=false;
+        if (!AttachPreviewEffect(parent,effect,16,WingPreviewSocket,attach)) ready=false;
     }
     lua_pushboolean(L,found && ready);
+    return 1;
+}
+
+int HearthPreview(lua_State* L) {
+    auto* frame=static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L,CSimpleModel::GetObjectType()));
+    const int spellId=luaL_checkint(L,2);
+    const double clock=luaL_optnumber(L,3,0);
+    auto* parent=frame->m_model;
+    SpellRec spell;
+    if (!parent || !parent->IsLoaded(0,0) || !std::isfinite(clock) || clock<0 ||
+        spellId<=0 || !g_spellDB.GetRecord(spellId,&spell)) { lua_pushboolean(L,false); return 1; }
+    const auto* visual=GetSpellVisual(&spell);
+    const auto* kit=visual ? g_spellVisualKitDB.GetRecord(visual->m_precastKit) : nullptr;
+    if (!kit) { lua_pushboolean(L,false); return 1; }
+    const auto animation=parent->ResolveSequenceFallback(kit->m_animID>=0 ? uint32_t(kit->m_animID) : 0);
+    const auto index=parent->FindSequenceIndex(parent->m_shared->m_data,animation,0);
+    if (index!=0xffff) {
+        const auto duration=parent->m_shared->m_data->m_sequences[index].m_duration;
+        frame->SetSequenceTime(animation,int32_t(std::fmod(clock,std::max(1u,duration))));
+    }
+    bool ready=true;
+    const int effects[]={kit->m_headEffect,kit->m_chestEffect,kit->m_baseEffect,kit->m_leftHandEffect,
+        kit->m_rightHandEffect,kit->m_breathEffect,kit->m_leftWeaponEffect,kit->m_rightWeaponEffect,
+        kit->m_specialEffect[0],kit->m_specialEffect[1],kit->m_specialEffect[2],kit->m_worldEffect};
+    const uint32_t sockets[]={20,34,19,21,22,17,0,1,23,24,25,19};
+    for (uint32_t i=0;i<std::size(effects);++i) {
+        if (effects[i]>0 && !AttachPreviewEffect(parent,g_spellVisualEffectNameDB.GetRecord(effects[i]),
+            sockets[i],HearthPreviewSocket+i)) ready=false;
+    }
+    for (uint32_t i=0;i<SpellVisualsGetModelAttachRecCount(kit->m_id);++i) {
+        const auto* attach=SpellVisualsGetModelAttachRec(kit->m_id,i);
+        if (attach && !AttachPreviewEffect(parent,g_spellVisualEffectNameDB.GetRecord(attach->m_spellVisualEffectNameID),
+            attach->m_attachmentID,HearthPreviewSocket+uint32_t(std::size(effects))+i,attach)) ready=false;
+    }
+    lua_pushboolean(L,ready);
     return 1;
 }
 
@@ -59,9 +106,13 @@ int CosmeticFit(lua_State* L) {
     const float zoom=std::max(0.2f,std::min(2.0f,static_cast<float>(luaL_optnumber(L,3,1))));
     auto* parent=frame->m_model;
     if (!parent || !parent->IsLoaded(0,0) || !std::isfinite(facing)) { lua_pushboolean(L,false); return 1; }
+    CAaBox sourceBounds;
+    bool pending=false;
+    const bool m3=ASECM3::Client::PreviewModelBounds(parent,sourceBounds,pending);
+    if (pending) { lua_pushboolean(L,false); return 1; }
     // Hidden loading frames still need a pose before measuring animated scale and child attachments.
     parent->ForceAnimate();
-    if (!parent->m_boneMatrices || !std::isfinite(parent->m_matrixF4.Determinant()) ||
+    if ((!m3 && !parent->m_boneMatrices) || !std::isfinite(parent->m_matrixF4.Determinant()) ||
         std::fabs(parent->m_matrixF4.Determinant())<1e-12f) { lua_pushboolean(L,false); return 1; }
     const C44Matrix toParent=parent->m_matrixF4.Inverse(parent->m_matrixF4.Determinant());
     C3Vector low(1e9f,1e9f,1e9f),high(-1e9f,-1e9f,-1e9f);
@@ -85,8 +136,15 @@ int CosmeticFit(lua_State* L) {
                 C3Vector posed(0,0,0);
                 unsigned total=0;
                 for (unsigned k=0;k<4;++k) {
-                    if (!vertex.m_weights[k] || vertex.m_indices[k]>=data.m_bones.m_count) continue;
-                    const auto p=vertex.m_position*model->m_boneMatrices[vertex.m_indices[k]];
+                    if (!vertex.m_weights[k]) continue;
+                    uint32_t bone=vertex.m_indices[k];
+                    if (n<skin->m_bones.m_count) {
+                        const uint32_t combo=uint32_t(section.m_boneComboIndex)+skin->m_bones[n][k];
+                        if (combo>=data.m_boneCombos.m_count) continue;
+                        bone=data.m_boneCombos[combo];
+                    }
+                    if (bone>=data.m_bones.m_count) continue;
+                    const auto p=vertex.m_position*model->m_boneMatrices[bone];
                     const float weight=vertex.m_weights[k]/255.0f;
                     posed.x+=p.x*weight; posed.y+=p.y*weight; posed.z+=p.z*weight;
                     total+=vertex.m_weights[k];
@@ -102,10 +160,13 @@ int CosmeticFit(lua_State* L) {
                 mask&4 ? data.m_bounds.m_extent.t.z : data.m_bounds.m_extent.b.z)*transform);
         }
     };
-    include(parent);
+    // M3 geometry belongs to the native binding, not its ErrorCube M2 host.
+    if (m3) { low=sourceBounds.b; high=sourceBounds.t; }
+    else include(parent);
     bool ready=true;
     for (auto* child=parent->m_attachList;child;child=child->m_attachNext) {
-        if (child->m_attachmentId!=WingPreviewSocket && child->m_attachmentId!=0xfffffffdu) continue;
+        if (child->m_attachmentId!=WingPreviewSocket && child->m_attachmentId!=0xfffffffdu &&
+            (child->m_attachmentId&0xffff0000u)!=HearthPreviewSocket) continue;
         if (!child->IsLoaded(0,0)) { ready=false; continue; }
         include(child);
     }

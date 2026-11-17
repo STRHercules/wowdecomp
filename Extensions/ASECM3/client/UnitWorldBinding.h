@@ -30,6 +30,8 @@ const char* PrepareMountModel(CGUnit_C* unit,const char* path,int32_t displayId,
 void AttachMountModel(CGUnit_C* unit);
 void RemoveMountModel(CGUnit_C* unit,CM2Model* expected=nullptr);
 CM2Model* CreatePreviewModel(CM2Scene* scene,const char* path);
+// True means this is an M3 preview; pending stays true until its source bounds are ready.
+bool PreviewModelBounds(CM2Model* model,CAaBox& box,bool& pending);
 void UpdatePreviewModel(CM2Model* model);
 void RemovePreviewModel(CM2Model* model);
 void SetUnitAction(CGUnit_C* unit,uint32_t action);

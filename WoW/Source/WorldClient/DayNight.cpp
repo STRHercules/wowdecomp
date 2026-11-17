@@ -1,6 +1,7 @@
 #include "WoW/Source/WorldClient/DayNight__DNInfo.h"
 #include <cmath>
 #include "WoW/Source/WorldClient/HD/HdTime.h"
+#include "WoW/Source/WorldClient/Clouds/VolumetricClouds.h"
 #include <new>
 #include <typeinfo>
 #include <cstdio>
@@ -1842,7 +1843,7 @@ void DayNight::RenderSky(CPortalView* view) {
         DayNight::g_planets.m_moon.Render();
         DayNight::g_planets.m_moon2.Render();
         DayNight::g_sky.Render();
-        DayNight::g_clouds.Render();
+        if (!VolumetricClouds::Render(rect)) DayNight::g_clouds.Render();
     }
 
     if (s_skyScene) {

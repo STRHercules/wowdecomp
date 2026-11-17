@@ -38,11 +38,17 @@ PATCHES = {
         ('<Script file="micromenu.lua"/>', '<Script file="esteria_microbuttons.lua"/>\n    <Script file="micromenu.lua"/>', 1),
     ],
     "modules" + B + "micromenu.lua": [
-        # the strip: Esteria's seven buttons sit after Collections
+        # the strip: Esteria's five buttons sit after Collections (Transmog lives in the Collections window, the
+        # Manastorm in the Adventure Finder behind the Dungeon Finder button)
         ('MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),',
-         'MicroButtonFor("Transmog"), MicroButtonFor("Cosmetics"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Incarnation"), MicroButtonFor("Manastorm"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
-        # seven more buttons of 26 px each: the strip starts further left
-        ("-180", "-388", 3),
+         'MicroButtonFor("Cosmetics"), MicroButtonFor("Flight"), MicroButtonFor("Fate"), MicroButtonFor("Radio"), MicroButtonFor("Neighborhood"),\n    MicroButtonFor("MainMenu"), (MicroButtonFor("Help")),', 1),
+        ('-- The strip\'s default anchor allows for an eleventh button, which Pets & Mounts now supplies.',
+         'for i = #MICRO_BUTTONS, 1, -1 do\n'
+         '    if MICRO_BUTTONS[i] == _G.CollectionsMicroButton then table.remove(MICRO_BUTTONS, i) end\n'
+         'end\n\n'
+         '-- The strip\'s default anchor allows for an eleventh button, which Pets & Mounts now supplies.', 1),
+        # five more buttons of 26 px each: the strip starts further left
+        ("-180", "-336", 3),
         # one row, however many buttons the profile's saved column count allows
         ("local columns = math.floor(tonumber(config.columns) or 12)", "local columns = math.floor(math.max(tonumber(config.columns) or 12, 16))", 1),
         # atlas rows for the new sheets
@@ -119,6 +125,20 @@ def wing(d, S, c):
         d.polygon([(ox, oy), (mid[0] + wx, mid[1] + wy), tip, (mid[0] - wx, mid[1] - wy)], fill=c + (255,), outline=(60, 40, 10, 255))
     d.ellipse([ox - 5 * S, oy - 5 * S, ox + 5 * S, oy + 5 * S], fill=c + (255,), outline=(60, 40, 10, 255))
 
+
+def speed(d, S, c):
+    # a swept wing racing forward with speed streaks behind it: the speedflying talents mark
+    cx, cy = 36 * S, 41 * S
+    ink = (60, 40, 10, 255)
+    for dy, x0, x1 in ((-10, -27, -11), (-1, -30, -8), (8, -25, -10)):
+        d.rounded_rectangle([cx + x0 * S, cy + (dy - 1.6) * S, cx + x1 * S, cy + (dy + 1.6) * S], radius=2 * S,
+                            fill=c + (255,), outline=ink)
+    feathers = [((-6, -4), (16, -22), (10, -6)), ((-6, -1), (20, -12), (12, 0)), ((-6, 2), (22, -1), (12, 5)),
+                ((-6, 5), (18, 10), (8, 9))]
+    for base, tip, back in feathers:
+        d.polygon([(cx + base[0] * S, cy + base[1] * S), (cx + tip[0] * S, cy + tip[1] * S),
+                   (cx + back[0] * S, cy + back[1] * S)], fill=c + (255,), outline=ink)
+    d.ellipse([cx - 9 * S, cy - 5 * S, cx - 1 * S, cy + 7 * S], fill=c + (255,), outline=ink)
 
 def compass(d, S, c):
     # a four-pointed star in a ring: the Paths of Fate mark
@@ -242,6 +262,7 @@ def main():
     entries[DUI + "modules" + B + "esteria_microbuttons.lua"] = (REPO / "Addons" / "EsteriaShell" / "esteria_microbuttons.lua").read_bytes()
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-transmog.tga"] = tga(sheet(tunic))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-flight.tga"] = tga(sheet(wing))
+    entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-speed.tga"] = tga(sheet(speed))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-fate.tga"] = tga(sheet(compass))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-neighborhood.tga"] = tga(sheet(house))
     entries[DUI + "Textures" + B + "Micromenu" + B + "esteria-incarnation.tga"] = tga(sheet(paw))
@@ -270,6 +291,10 @@ def main():
     entries.update(tree(REPO / "Addons" / "EsteriaToolChest", "Interface" + B + "AddOns" + B + "EsteriaToolChest" + B))
     # The Manastorm window (Extensions/Manastorm; its data comes from Tools/ManastormPort/manastorm_client.py)
     entries.update(tree(REPO / "Addons" / "EsteriaManastorm", "Interface" + B + "AddOns" + B + "EsteriaManastorm" + B))
+    # The Adventure Finder (Dungeon Finder + Manastorm tabs), opened by the Dungeon Finder micro button
+    entries.update(tree(REPO / "Addons" / "EsteriaFinder", "Interface" + B + "AddOns" + B + "EsteriaFinder" + B))
+    entries["Interface" + B + "AddOns" + B + "EsteriaFinder" + B + "esteria_style.lua"] = (
+        REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     entries["Interface" + B + "AddOns" + B + "EsteriaManastorm" + B + "esteria_style.lua"] = (
         REPO / "Tools" / "RetailAssets" / "glue" / "esteria_style.lua").read_bytes()
     entries["Interface" + B + "AddOns" + B + "EsteriaToolChest" + B + "esteria_style.lua"] = (

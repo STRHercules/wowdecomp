@@ -42,6 +42,8 @@ class CGCharacterModelBase : public CSimpleModel {
     int32_t ShowThis() override;
     int32_t IsDrawable() override;
     void UpdateModel() override;
+    void SetSequence(uint32_t sequence) override;
+    int32_t SetSequenceTime(uint32_t sequence, int32_t time) override;
     void OnModelLoaded(CM2Model* model) override;
     virtual CM2Model* GetDuplicateUnitCharacterModel(CGUnit_C* unit);
 

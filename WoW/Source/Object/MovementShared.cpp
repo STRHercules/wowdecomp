@@ -7,6 +7,7 @@
 #include "Engine/Source/Tempest/C3Spline.h"
 #include "Engine/Source/Tempest/C44Matrix.h"
 #include "Engine/Source/Tempest/CMath.h"
+#include "WoW/Source/Extension/ExtensionMgr.h"
 #include "WoW/Source/Net/Types.h"
 #include "WoW/Source/Object/CMovementGlobals.h"
 #include "WoW/Source/Object/CMovementStatus.h"
@@ -1761,7 +1762,9 @@ int32_t CMovementShared::Jump(int32_t checkHover) {
         return 0;
     }
 
-    this->StartFalling((flags & MOVEMENTFLAG_SWIMMING) ? -9.0967484f : -7.9555473f);
+    float velocity = (flags & MOVEMENTFLAG_SWIMMING) ? -9.0967484f : -7.9555473f;
+    sExtensionMgr->OnMoverStartFalling(this, velocity);
+    this->StartFalling(velocity);
     return 1;
 }
 

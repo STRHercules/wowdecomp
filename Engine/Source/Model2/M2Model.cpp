@@ -4159,6 +4159,7 @@ CM2Model::CM2Model() {
     this->m_bodyShapeVertices = nullptr;
     this->m_bodyShapeBuf = nullptr;
     this->m_bodyShapePool = nullptr;
+    this->m_boneHook = false;
 
     if (!CM2Model::s_transformVertices[0]) {
         CM2Model::s_transformVertices[0] = CM2Model::TransformVertices_cpp;
@@ -5747,6 +5748,11 @@ void CM2Model::AnimateMT(const C44Matrix* view, const C3Vector& diffuse, const C
             local.d0 = offset.x + local.d0;
             local.d1 = offset.y + local.d1;
             local.d2 = offset.z + local.d2;
+
+            if (this->m_boneHook) {
+                sExtensionMgr->OnModelBoneLocal(this, i, local);
+            }
+
             local.Translate(C3Vector(-boneData->m_pivot.x, -boneData->m_pivot.y, -boneData->m_pivot.z));
             boneMatrix = local * *parentMatrix;
         } else {
@@ -8304,7 +8310,9 @@ bool CM2Model::CopyAttachmentFrameFrom(const CM2Model* source) {
         if (found == s_attachmentFrames.end()) return false;
         frame = found->second;
     }
-    return this->SetAttachmentFrame(frame.bone, frame.position, frame.scale);
+    const bool changed=this->SetAttachmentFrame(frame.bone, frame.position, frame.scale);
+    this->SetWorldTransform(source->m_worldTransform);
+    return changed;
 }
 
 bool CM2Model::HasAttachmentFrame() const {

@@ -1,0 +1,19 @@
+{
+  "executable": "G:\\3.3.5a - Dev\\WowMountPreviewFix.exe",
+  "sha256": "416b80f68e175277629411e3632d9d9f6b10f3754960df9dfed28296eba46937",
+  "source": "R:\\Users\\Zach\\Documents\\GitHub\\wowdecomp\\bin\\Win\\WowClientRetailInventory.exe",
+  "prior_same_name_backup": null,
+  "existing_clients_preserved": {
+    "Wow.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057",
+    "WowCosmetics.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057"
+  },
+  "m3_mount_entries": 578,
+  "tests": [
+    "test_mount_preview.py passed",
+    "test_cosmetics.py passed",
+    "Release WowClient build passed"
+  ],
+  "scope": "M3 source bounds and asynchronous preview readiness in both native fitters",
+  "build_context": "Current checkout including pre-existing native changes; separate test executable",
+  "live_visual_acceptance": false
+}

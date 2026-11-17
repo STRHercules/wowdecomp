@@ -1,0 +1,12 @@
+## Interface: 30300
+## Title: Garrison Architect
+## Notes: Retail WoD architect table
+## Dependencies: EsteriaGarrison
+
+Compat.lua
+Plots.lua
+Atlas.lua
+Blizzard_GarrisonBuildingUI.lua
+Wrap.lua
+Stub.xml
+Blizzard_GarrisonBuildingUI.xml

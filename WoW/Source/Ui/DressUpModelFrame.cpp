@@ -8,6 +8,7 @@
 #include "Engine/Source/lua-5.1/src/lua.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "WoW/Common/ComponentCore/CharacterComponent.h"
+#include "WoW/Common/ComponentCore/RetailRace.h"
 #include "Engine/Source/Frame/CSimpleModel.h"
 #include "Engine/Source/Frame/ModelSnapshot.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
@@ -353,6 +354,12 @@ static bool HandItemsCompatible(uint32_t mainHandType, uint32_t offHandType, boo
 CM2Model* CGDressUpModelFrame::GetDuplicateUnitCharacterModel(CGUnit_C* unit) {
     if (!unit) {
         return nullptr;
+    }
+
+    // Native display records name the Wrath body; the live Retail body owns custom emote sequences and saved forms.
+    if ((unit->m_obj->m_type & TYPEMASK_PLAYER) && RetailRaceMapped(unit->m_unit->m_unitFieldBytes0[0]) &&
+        unit->m_unit->m_unitFieldDisplayid == unit->m_unit->m_unitFieldNativedisplayid) {
+        return CGCharacterModelBase::GetDuplicateUnitCharacterModel(unit);
     }
 
     CreatureDisplayInfoRec* display = g_creatureDisplayInfoDB.GetRecord(unit->m_unit->m_unitFieldNativedisplayid);

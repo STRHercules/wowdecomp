@@ -651,6 +651,17 @@ dd.RefreshValue = function(self)
 end
 BlizzardOptionsPanel_RegisterControl(dd, panel)
 dd:RefreshValue()
+
+local clouds = CreateFrame("CheckButton", "WowDecompVolumetricClouds", panel, "OptionsCheckButtonTemplate")
+clouds:SetPoint("TOPLEFT", dd, "BOTTOMLEFT", 18, -8)
+clouds.type = CONTROLTYPE_CHECKBOX
+clouds.cvar = "skyClouds"
+clouds.tooltipText = "Ray marched clouds that follow the zone and weather. Requires Vulkan and adds GPU work. Off restores the existing clouds."
+_G[clouds:GetName() .. "Text"]:SetText("Volumetric Clouds")
+clouds:SetScript("OnClick", function(self) BlizzardOptionsPanel_CheckButton_OnClick(self) end)
+panel.options = panel.options or {}
+panel.options.skyClouds = { text = "Volumetric Clouds", tooltip = clouds.tooltipText }
+BlizzardOptionsPanel_RegisterControl(clouds, panel)
 )lua";
 
     FrameScript_Execute(script, "NativeDistanceOptions", nullptr);

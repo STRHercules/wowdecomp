@@ -185,19 +185,25 @@ def default_fits():
     known = {entry["display"] for entry in json.loads(ID_MANIFEST.read_text()).values()}
     with DEFAULT_FITS.open(encoding="utf-8-sig", newline="") as source:
         for row in csv.reader((line for line in source if line.strip() and not line.startswith("#")), delimiter=";"):
-            if len(row) != 6:
+            if len(row) not in (6,9):
                 raise ValueError("Invalid default backpack fit row")
             display = int(row[0])
             fit = tuple(map(float, row[2:]))
             if display in fits or display not in known:
                 raise ValueError("Unknown or duplicate default backpack display")
-            if not all(math.isfinite(v) for v in fit) or not 0.1 <= fit[0] <= 4 or any(abs(v) > 3 for v in fit[1:]):
+            if not all(math.isfinite(v) for v in fit) or not 0.1 <= fit[0] <= 4 or any(abs(v) > 3 for v in fit[1:4]) or any(abs(v)>180 for v in fit[4:]):
                 raise ValueError("Default backpack fit outside runtime limits")
             fits[display] = fit
     if fits.keys() != known:
         raise ValueError("Default fits must cover every backpack display")
     return fits
 
+
+def row_fit(row,display,fits):
+    if display in fits:return fits[display]
+    if row.get("family")=="pet":
+        return tuple(json.loads(Path(__file__).with_name("family-default-fits.json").read_text())["pet_backpacks"])
+    return (1,0,0,0)
 
 def generated_lua(rows, ids, wing_rows):
     fits = default_fits()
@@ -207,7 +213,7 @@ def generated_lua(rows, ids, wing_rows):
         fields={"id":assigned["source"],"item":assigned["token"],"display":assigned["display"],
                 "name":row["name"],"model":row["model"],"width":row["width"],"height":row["height"],
                 "depth":row["depth"],"icon":row_icon(row,assigned["display"])}
-        fields.update(zip(("fitScale", "fitX", "fitY", "fitZ"), fits.get(assigned["display"], (1, 0, 0, 0))))
+        fields.update(zip(("fitScale", "fitX", "fitY", "fitZ", "fitPitch", "fitYaw", "fitRoll"), row_fit(row,assigned["display"],fits)))
         lines.append("    {"+", ".join(k+"="+(lua(v) if isinstance(v,str) else str(v)) for k,v in fields.items())+"},")
     lines.append("}")
     wing_lines=["-- Generated from the installed exclusive spell group 9100 and effective client visual graph.","EsteriaCosmeticsWings = {"]
@@ -224,7 +230,7 @@ def file_manifest(root):
 def package(out, assets, rows, ids, client_root, storm):
     fits = default_fits()
     runtime="".join(f"{ids[r['slug']]['display']};{r['model']};{r['width']:.9g};{r['height']:.9g};{r['depth']:.9g};"
-                    + ";".join(f"{v:.6f}" for v in fits.get(ids[r['slug']]['display'], (1, 0, 0, 0))) + "\n" for r in rows)
+                    + ";".join(f"{v:.6f}" for v in row_fit(r,ids[r['slug']]['display'],fits)) + "\n" for r in rows)
     entries={p.relative_to(assets/"patch-root").as_posix().replace("/","\\"):p.read_bytes()
              for p in (assets/"patch-root").rglob("*") if p.is_file()}
     entries["EsteriaCosmetics\\Backpacks.csv"]=runtime.encode()

@@ -1,0 +1,48 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<Font name="GameFontNormalMed3" inherits="GameFontNormal" virtual="true"/>
+	<Font name="GameFontHighlightMedium" inherits="GameFontHighlight" virtual="true"/>
+	<Font name="GameFontBlackSmall" inherits="GameFontNormalSmall" virtual="true"/>
+	<Button name="GarrisonFollowerPortraitTemplate" virtual="true">
+		<Size x="56" y="56"/>
+	</Button>
+	<Button name="MainHelpPlateButton" virtual="true">
+		<Size x="32" y="32"/>
+	</Button>
+	<Button name="GarrisonMissionFollowerOrCategoryListButtonTemplate" virtual="true">
+		<Size x="260" y="20"/>
+	</Button>
+	<Frame name="TooltipBackdropTemplate" virtual="true">
+		<Backdrop bgFile="Interface\DialogFrame\UI-DialogBox-Background" edgeFile="Interface\Tooltips\UI-Tooltip-Border" tile="true">
+			<EdgeSize><AbsValue val="16"/></EdgeSize>
+			<TileSize><AbsValue val="16"/></TileSize>
+			<BackgroundInsets><AbsInset left="4" right="4" top="4" bottom="4"/></BackgroundInsets>
+		</Backdrop>
+	</Frame>
+	<Frame name="GarrisonListTemplateHeader" virtual="true">
+		<Scripts>
+			<OnLoad>
+				self.Initialize = function() end
+				self.SetSortFuncs = function() end
+				self.ScrollBox = { SetDataProvider = function() end }
+			</OnLoad>
+		</Scripts>
+	</Frame>
+	<Frame name="BaseBasicFrameTemplate" virtual="true">
+		<Layers>
+			<Layer level="OVERLAY">
+				<FontString name="$parentTitleText" parentKey="TitleText" inherits="GameFontNormal">
+					<Anchors>
+						<Anchor point="TOP" x="0" y="-5"/>
+					</Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Frames>
+			<Button name="$parentClose" inherits="UIPanelCloseButton">
+				<Anchors>
+					<Anchor point="TOPRIGHT" x="2" y="1"/>
+				</Anchors>
+			</Button>
+		</Frames>
+	</Frame>
+</Ui>

@@ -487,6 +487,19 @@ constexpr float kMaxFarClip = 10000.0f;
     bool GetFacets(CFrustum* frustum, FacetData* facets, uint32_t flags, uint32_t* status);
     int32_t GetFlightBoundsLower(const C3Vector& pos, float* height);
     int32_t Intersect(const C3Vector& start, const C3Vector& end, C3Vector* hit, float* distance, uint32_t flags, HitTestDebug* debug);
+    // Not in the original: the GUID CMap::Intersect left in s_lastCollisionGUID (0xCD7768). Read it right after an
+    // Intersect that hit: the WMO's or collidable doodad's object GUID, 0 for terrain or an untagged model. It is
+    // reset only when flags include a WMO/M2 bit (0x40F300FF); otherwise it still holds an earlier ray's value.
+    WOWGUID GetLastIntersectGUID();
+    // Not in the original: the world collision triangles inside `box` (world yards), i.e. exactly what
+    // World::GetFacets(box, flags) returns: what CMovement_C collides with. Writes up to maxTris triangles as
+    // 3 C3Vector each to `out`, wound counter-clockwise about the facet's collision normal (front face = solid side).
+    // `outIds` (optional, maxTris entries) gets each triangle's object GUID: the WMO's or tagged doodad/gameobject's,
+    // 0 for terrain, untagged doodads and placeholder boxes. Default flags are the local player's ground movement
+    // (terrain 0x100, WMO 0x10, doodads 0x1, gameobjects 0x100000, 0x80000000 = return the AABB of not-yet-loaded
+    // cells/WMO groups instead of failing). `status` gets COLLISION_GATHER_* bits. Main thread only.
+    enum : uint32_t { COLLISION_GATHER_TRUNCATED = 0x1, COLLISION_GATHER_INCOMPLETE = 0x2 };
+    uint32_t GatherCollisionTriangles(const CAaBox& box, C3Vector* out, uint32_t maxTris, uint64_t* outIds = nullptr, uint32_t flags = 0x80100111, uint32_t* status = nullptr);
     void ObjectSetModel(CMapEntity* entity, CM2Model* model);
     void ObjectSetMoveable(CMapEntity* entity, int32_t moveable);
     int32_t ObjectIsLoaded(CMapBaseObj* object);
@@ -552,6 +565,7 @@ class CWorld {
     static int32_t ConsoleCommand_CharacterAmbient(const char* command, const char* arguments);
     static int32_t ConsoleCommand_DetailDoodadAlpha(const char* command, const char* arguments);
     static int32_t ConsoleCommand_MaxLOD(const char* command, const char* arguments);
+    static int32_t ConsoleCommand_CollisionTris(const char* command, const char* arguments); // not in the original
     static int32_t ConsoleCommand_SetShadow(const char* command, const char* arguments);
     static int32_t ConsoleCommand_ShowCull(const char* command, const char* arguments);
     static int32_t ConsoleCommand_ShowDetailDoodads(const char* command, const char* arguments);

@@ -18,8 +18,9 @@ struct CloakAnchor {
     float width = 0;
 };
 
-// Use the cloak's upper edge, not its independently animated lower cloth bones.
-inline bool FindCloakAnchor(const std::vector<CloakVertex>& vertices, uint32_t boneCount, CloakAnchor& out) {
+// Measure the cloak edge, but mount rigid accessories to the torso when that bone is available.
+inline bool FindCloakAnchor(const std::vector<CloakVertex>& vertices, uint32_t boneCount, CloakAnchor& out,
+                            uint32_t torsoBone = 0xffffffffu) {
     if (vertices.empty() || !boneCount) return false;
     float bottom = vertices.front().position[2], top = bottom;
     for (const auto& vertex : vertices) {
@@ -48,6 +49,7 @@ inline bool FindCloakAnchor(const std::vector<CloakVertex>& vertices, uint32_t b
     out.bone = std::max_element(votes.begin(), votes.end(), [](const auto& a, const auto& b) {
         return a.second < b.second;
     })->first;
+    if (torsoBone < boneCount) out.bone = static_cast<uint16_t>(torsoBone);
     out.width = right - left;
     return true;
 }

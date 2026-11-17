@@ -1,0 +1,14 @@
+## Interface: 30300
+## Title: Esteria Collections
+## Notes: Mounts, pets, incarnations, transmogrification, hearthstones, weapons, wings, backpacks and emotes (/collections).
+## Dependencies: EsteriaEmotes, EsteriaIncarnations, Manastorm_Transmog
+## SavedVariables: EsteriaCosmeticsDB
+EsteriaCosmeticsData.lua
+EsteriaCosmeticsWings.lua
+EsteriaCollectionsData.lua
+EsteriaPetsData.lua
+Companions.lua
+EsteriaPickaxesData.lua
+EsteriaCosmetics.lua
+BackpackFitter.lua
+PickaxeFitter.lua

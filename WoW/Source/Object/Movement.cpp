@@ -1706,7 +1706,9 @@ float CMovement_C::GetTimeJustFallen(float elapsed, float timeFallen, C3Vector* 
         moveTime = sqrt(move2D.x * move2D.x + move2D.y * move2D.y) / speed * elapsed;
     }
 
-    float fallTime = this->CalcTimeFallen(this->m_fallStartZ - this->m_position.z - move->z, impact);
+    float fallDistance = this->m_fallStartZ - this->m_position.z - move->z;
+    float fallTime = this->CalcTimeFallen(fallDistance, impact);
+    sExtensionMgr->OnMoverFallTime(this, fallDistance, impact, fallTime);
 
     if (!(timeFallen < fallTime)) {
         move->x = 0.0f;
@@ -3135,7 +3137,9 @@ int32_t CMovement_C::GetMoveFacets(float distance, uint32_t elapsed, C3Vector di
     C3Vector move(direction.x * distance, direction.y * distance, direction.z * distance);
 
     if (this->m_flags & MOVEMENTFLAG_FALLING) {
-        move.z = move.z - this->RelDistanceFallen(elapsed + this->m_fallTimeMs);
+        float fallen = this->RelDistanceFallen(elapsed + this->m_fallTimeMs);
+        sExtensionMgr->OnMoverFallDistance(this, MOVER_FALL_SITE_MOVE_FACETS, elapsed + this->m_fallTimeMs, fallen);
+        move.z = move.z - fallen;
     }
 
     uint32_t flags = this->m_flags;
@@ -3650,6 +3654,7 @@ uint32_t CMovement_C::Fall(uint32_t time, uint32_t elapsed, float distance, cons
     }
 
     float fallen = this->RelDistanceFallen(elapsed + this->m_fallTimeMs);
+    sExtensionMgr->OnMoverFallDistance(this, MOVER_FALL_SITE_FALL, elapsed + this->m_fallTimeMs, fallen);
     C3Vector move(direction.x * distance, distance * direction.y, -fallen);
 
     if (fabs(sqrt(move.y * move.y + move.z * move.z + move.x * move.x)) < 0.00000023841858f) {
@@ -3660,7 +3665,9 @@ uint32_t CMovement_C::Fall(uint32_t time, uint32_t elapsed, float distance, cons
     uint32_t result;
 
     if (s_moveFacets.facets.m_count) {
+        sExtensionMgr->OnMoverFallDown(this, MOVER_FALL_SITE_FALL, time, elapsed, move);
         result = this->FallDown(time, elapsed, move, 1);
+        sExtensionMgr->OnMoverFallDownDone(this, MOVER_FALL_SITE_FALL, result);
     } else {
         this->m_position.x = move.x + this->m_position.x;
         this->m_position.y = move.y + this->m_position.y;
@@ -3682,12 +3689,20 @@ int32_t CMovement_C::WillPassObstacle(const C2Vector& direction, const C3Vector&
     this->SaveMoveState(state);
     this->StartFalling(0.0f);
     float fallen = this->RelDistanceFallen(time);
+    sExtensionMgr->OnMoverFallDistance(this, MOVER_FALL_SITE_FLOOR_PROBE, time, fallen);
     C3Vector move(this->m_moveDir2D.x, this->m_moveDir2D.y, -fallen);
 
-    for (uint32_t t = 0; t < time; t += this->FallDown(0, time - t, move, 0)) {
+    for (uint32_t t = 0; t < time;) {
         if (!(this->m_flags & MOVEMENTFLAG_FALLING)) {
             break;
         }
+
+        // Not in the original: the seam gets a per-call copy; stock passes the same move every pass.
+        C3Vector step = move;
+        sExtensionMgr->OnMoverFallDown(this, MOVER_FALL_SITE_FLOOR_PROBE, 0, time - t, step);
+        uint32_t consumed = this->FallDown(0, time - t, step, 0);
+        sExtensionMgr->OnMoverFallDownDone(this, MOVER_FALL_SITE_FLOOR_PROBE, consumed);
+        t += consumed;
     }
 
     this->RestoreMoveState(state);
@@ -3806,7 +3821,14 @@ int32_t CMovement_C::AttemptStepUp(const C2Vector& direction, C3Vector normal) {
 
     this->m_position.z = this->m_position.z - downDist;
 
-    if (facetIndex == s_moveFacets.facets.m_count || !IsSurfaceTooSteep(facetIndex) || this->WillPassObstacle(move, saved, upDist - downDist)) {
+    // Not in the original: the floor probe seam sees (and may replace) WillPassObstacle's verdict.
+    auto passes = [&]() {
+        int32_t result = this->WillPassObstacle(move, saved, upDist - downDist);
+        sExtensionMgr->OnMoverFloorProbe(this, move, saved, upDist - downDist, result);
+        return result != 0;
+    };
+
+    if (facetIndex == s_moveFacets.facets.m_count || !IsSurfaceTooSteep(facetIndex) || passes()) {
         this->m_position = saved;
 
         if (!(this->m_flags & MOVEMENTFLAG_SPLINE_ELEVATION)) {
@@ -4081,7 +4103,10 @@ uint32_t CMovement_C::HoverMove(uint32_t time, uint32_t elapsed, float distance,
     }
 
     if (noGround && this->TryStartFalling()) {
-        uint32_t result = this->Fall(time, elapsed, distance, C2Vector(direction));
+        float fallDistance = distance;
+        C2Vector fallDirection(direction);
+        sExtensionMgr->OnMoverFall(this, MOVER_FALL_SITE_HOVER_MOVE, time, elapsed, fallDistance, fallDirection);
+        uint32_t result = this->Fall(time, elapsed, fallDistance, fallDirection);
 
         if (result) {
             return result;
@@ -4273,7 +4298,10 @@ uint32_t CMovement_C::CollideRequestMove(uint32_t time, uint32_t elapsed, C3Vect
         if (this->CanCollideWhileFlying()) {
             used = this->Swim(stepTime, step, stepDist, direction);
         } else if (this->m_flags & MOVEMENTFLAG_FALLING) {
-            used = this->Fall(stepTime, step, stepDist, C2Vector(direction));
+            float fallDistance = stepDist;
+            C2Vector fallDirection(direction);
+            sExtensionMgr->OnMoverFall(this, MOVER_FALL_SITE_COLLIDE_REQUEST_MOVE, stepTime, step, fallDistance, fallDirection);
+            used = this->Fall(stepTime, step, fallDistance, fallDirection);
         } else if (this->m_flags & MOVEMENTFLAG_HOVER) {
             used = this->HoverMove(stepTime, step, stepDist, direction);
         } else {

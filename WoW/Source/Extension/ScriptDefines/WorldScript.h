@@ -6,6 +6,7 @@
 
 class C3Vector;
 class CGCamera;
+class CGObject_C;
 
 // The world scene: the server's world-session messages, map boundaries and the world tick. Map
 // hooks fire from WoW/Source/WorldClient/World.cpp, the tick from WoW/Source/Ui/WorldFrame.cpp,
@@ -49,6 +50,15 @@ class WorldScript : public ScriptObject {
     // frame and the projection and sound listener are not set up yet. A script may change camera.m_position and the
     // facing; the camera recomputes both from its own state next frame, so a change lasts one frame.
     virtual void OnCameraUpdated(CGCamera& camera) {}
+
+    // End of CGCamera::UpdateTargetFacing [0x604490], called by MakeRelativeTo, SetTelescope and
+    // CalcTargetCamera (its only callers): yaw, pitch and roll are the camera's composed view
+    // angles following target (yaw includes the target's facing, pitch the ground tilt, clamped to
+    // the pitch limits) and are already stored with CSimpleCamera::SetFacing. They are the caller's
+    // locals, consumed right after this to build the camera basis, eye position and collision
+    // sweep, so a change applies this frame. Several calls per frame, main thread; target is never
+    // null here (the function returns early without one).
+    virtual void OnCameraTargetFacing(CGCamera& camera, CGObject_C& target, float& yaw, float& pitch, float& roll) {}
 };
 
 #endif

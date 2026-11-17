@@ -1145,6 +1145,7 @@ int32_t STORMAPI SFile::OpenEx(SArchive* archive, const char* name, uint32_t fla
             if (bytes->empty() || bytes->size() > UINT32_MAX) return 0;
             auto* file = new (0u, __FILE__, __LINE__) SFileImpl(SFILE_RETAIL);
             file->m_size = static_cast<uint32_t>(bytes->size());
+            file->m_position = 0; // SFileImpl's constructor leaves it uninitialised; reads start at m_data + m_position
             file->m_name = Blizzard::String::Duplicate(name);
             file->m_data = static_cast<uint8_t*>(Blizzard::Memory::Allocate(file->m_size, 0, __FILE__, __LINE__));
             if (!file->m_data) { delete file; return 0; }

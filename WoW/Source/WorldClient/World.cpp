@@ -1751,6 +1751,7 @@ void CWorld::Initialize() {
     ConsoleCommandRegister("showSimpleDoodads", CWorld::ConsoleCommand_ShowSimpleDoodads, CATEGORY_GRAPHICS, nullptr);
     ConsoleCommandRegister("detailDoodadAlpha", CWorld::ConsoleCommand_DetailDoodadAlpha, CATEGORY_GRAPHICS, nullptr);
     ConsoleCommandRegister("characterAmbient", CWorld::ConsoleCommand_CharacterAmbient, CATEGORY_GRAPHICS, nullptr);
+    ConsoleCommandRegister("collisionTris", CWorld::ConsoleCommand_CollisionTris, CATEGORY_DEBUG, "[half-extent yards, default 12]");
 
     ZonesInitialize();
 }
@@ -4251,6 +4252,45 @@ void World::ObjectSetHidden(CMapEntity* entity, int32_t hidden) {
 // OFFSET: 0x0077F310
 int32_t World::Intersect(const C3Vector& start, const C3Vector& end, C3Vector* hit, float* distance, uint32_t flags, HitTestDebug* debug) {
     return CMap::Intersect(const_cast<C3Vector*>(&start), const_cast<C3Vector*>(&end), hit, distance, flags, debug);
+}
+
+WOWGUID World::GetLastIntersectGUID() {
+    return s_lastCollisionGUID;
+}
+
+uint32_t World::GatherCollisionTriangles(const CAaBox& box, C3Vector* out, uint32_t maxTris, uint64_t* outIds, uint32_t flags, uint32_t* status) {
+    // Reused across calls so steady-state queries do not allocate; main thread only, like every CMap query.
+    static FacetData s_facets;
+
+    CAaBox query = box;
+    uint32_t result = World::GetFacets(&query, &s_facets, flags, nullptr) ? 0 : COLLISION_GATHER_INCOMPLETE;
+    uint32_t available = s_facets.facets.Count();
+    uint32_t count = available < maxTris ? available : maxTris;
+
+    if (count < available) {
+        result |= COLLISION_GATHER_TRUNCATED;
+    }
+
+    for (uint32_t i = 0; i < count; i++) {
+        const CFacet& facet = s_facets.facets.m_data[i];
+        C3Vector e1 = facet.v[1] - facet.v[0];
+        C3Vector e2 = facet.v[2] - facet.v[0];
+        float dot = (e1.y * e2.z - e1.z * e2.y) * facet.plane.n.x + (e1.z * e2.x - e1.x * e2.z) * facet.plane.n.y + (e1.x * e2.y - e1.y * e2.x) * facet.plane.n.z;
+        bool flip = dot < 0.0f; // sources disagree on winding; the plane normal is the side movement collides from
+        out[i * 3 + 0] = facet.v[0];
+        out[i * 3 + 1] = facet.v[flip ? 2 : 1];
+        out[i * 3 + 2] = facet.v[flip ? 1 : 2];
+
+        if (outIds) {
+            outIds[i] = i < s_facets.facetIds.Count() ? s_facets.facetIds.m_data[i] : 0;
+        }
+    }
+
+    if (status) {
+        *status = result;
+    }
+
+    return count;
 }
 
 // VERIFY: e6c442dd manual

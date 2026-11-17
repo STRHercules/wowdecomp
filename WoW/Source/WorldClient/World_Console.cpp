@@ -119,6 +119,39 @@ int32_t CWorld::ConsoleCommand_MaxLOD(const char* command, const char* arguments
     return 1;
 }
 
+// Not in the original: self-check for World::GatherCollisionTriangles around the current world position.
+int32_t CWorld::ConsoleCommand_CollisionTris(const char* command, const char* arguments) {
+    static C3Vector s_tris[8192 * 3];
+    static uint64_t s_ids[8192];
+
+    float half = 12.0f;
+    sscanf(arguments, "%f", &half);
+    C3Vector center = World::s_currentWorldPos;
+    CAaBox box;
+    box.b = C3Vector(center.x - half, center.y - half, center.z - 22.5f);
+    box.t = C3Vector(center.x + half, center.y + half, center.z + 22.5f);
+
+    uint32_t status = 0;
+    uint32_t count = World::GatherCollisionTriangles(box, s_tris, 8192, s_ids, 0x80100111, &status);
+    uint32_t tagged = 0;
+    uint32_t outside = 0;
+
+    for (uint32_t i = 0; i < count; i++) {
+        const C3Vector* v = &s_tris[i * 3];
+        float minX = v[0].x < v[1].x ? (v[0].x < v[2].x ? v[0].x : v[2].x) : (v[1].x < v[2].x ? v[1].x : v[2].x);
+        float maxX = v[0].x > v[1].x ? (v[0].x > v[2].x ? v[0].x : v[2].x) : (v[1].x > v[2].x ? v[1].x : v[2].x);
+        float minY = v[0].y < v[1].y ? (v[0].y < v[2].y ? v[0].y : v[2].y) : (v[1].y < v[2].y ? v[1].y : v[2].y);
+        float maxY = v[0].y > v[1].y ? (v[0].y > v[2].y ? v[0].y : v[2].y) : (v[1].y > v[2].y ? v[1].y : v[2].y);
+        tagged += s_ids[i] != 0;
+        // Placeholder boxes for unloaded cells are huge, so only flag triangles that miss the box entirely in XY.
+        outside += maxX < box.b.x || minX > box.t.x || maxY < box.b.y || minY > box.t.y;
+    }
+
+    ConsolePrintf("collisionTris: %u triangles (%u with object GUID), %u outside box%s%s", count, tagged, outside,
+        (status & World::COLLISION_GATHER_TRUNCATED) ? ", TRUNCATED" : "", (status & World::COLLISION_GATHER_INCOMPLETE) ? ", INCOMPLETE" : "");
+    return outside == 0;
+}
+
 // VERIFY: c74f284a manual
 // OFFSET: 0x0077F700
 int32_t CWorld::ConsoleCommand_DetailDoodadAlpha(const char* command, const char* arguments) {

@@ -131,9 +131,10 @@ end
 -- reports OnAnimFinished for them), so the preview drives the clock itself: SetSequenceTime every frame, wrapped at
 -- the emote's cycle length, never lets the sequence end.
 local function danceModel(parent)
-    local model = CreateFrame("PlayerModel", nil, parent)
+    local model = CreateFrame("DressUpModel", nil, parent)
+    model:SetSheathed(true)
     model.facing = -0.4
-    model:SetScript("OnShow", function(self) self:SetUnit("player"); self:SetFacing(self.facing) end)
+    model:SetScript("OnShow", function(self) self:SetSheathed(true); self:SetUnit("player"); self:SetFacing(self.facing) end)
     model:SetScript("OnUpdate", function(self, elapsed)
         if self.emote then
             self.clock = (self.clock + elapsed * 1000) % self.duration

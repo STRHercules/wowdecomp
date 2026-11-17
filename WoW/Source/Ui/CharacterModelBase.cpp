@@ -101,6 +101,18 @@ int32_t CGCharacterModelBase::GetScriptMetaTable() {
 
 // VERIFY: 8f4f2545 auto
 // OFFSET: 0x005971B0
+void CGCharacterModelBase::SetSequence(uint32_t sequence) {
+    CSimpleModel::SetSequence(sequence);
+    this->m_sequenceSet = 1;
+}
+
+int32_t CGCharacterModelBase::SetSequenceTime(uint32_t sequence, int32_t time) {
+    const auto result = CSimpleModel::SetSequenceTime(sequence, time);
+    // Preserve explicitly driven emote/cast poses through the character frame's idle reset.
+    this->m_sequenceSet = 1;
+    return result;
+}
+
 void CGCharacterModelBase::UpdateModel() {
     CSimpleModel::UpdateModel();
 

@@ -1,0 +1,18 @@
+## Interface: 30300
+## Title: Esteria Garrison
+## Notes: Draenor garrison architect and landing page with retail Lunarfall / Frostwall art. Needs Casc and EsteriaGarrison.Enable.
+## Version: 0.3
+
+Textures.lua
+Landing.lua
+Retail\Compat.lua
+Retail\Plots.lua
+Retail\Atlas.lua
+Retail\Blizzard_GarrisonBuildingUI.lua
+Retail\Wrap.lua
+Retail\Stub.xml
+Retail\Blizzard_GarrisonBuildingUI.xml
+Garrison.lua
+_mission_types.lua
+_mission_rewards.lua
+Missions.lua

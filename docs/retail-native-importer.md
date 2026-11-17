@@ -1,11 +1,14 @@
 # Native Retail content imports for Esteria
 
-Status: architecture with a first implemented weapon backend. See the
-[current import workflow](retail-import-workflow.md) for original-byte acquisition,
-persistent IDs, additive client records and scoped server installation. Automatic
-Retail metadata discovery, mounts, armor and the general native format pipeline
-described below remain future work. The current backend uses explicit resolved
-file IDs and authored test gameplay metadata.
+Status: additive weapon and mount backends are implemented, with original-byte
+acquisition, persistent IDs, supplemental client records and scoped server installation.
+See the [weapon workflow](retail-import-workflow.md), [native mount integration](retail-native-mounts.md)
+and [independent Retail/Forever acquisition and caches](cdn-downloads.md).
+Weapons use explicit resolved file IDs and authored test gameplay metadata; mounts
+use resolved, build-pinned recipes and target-server donor spells. Automatic human-name
+item/set discovery, a general armor-set importer and full native format fidelity
+remain future work. Implementation and installed/static verification do not establish
+in-game acceptance.
 The user accepted the native hand attachment proof in character selection on 2026-10-17.
 
 ## Intended contract
@@ -54,25 +57,31 @@ Retail gameplay systems cannot be assumed to exist on the Esteria server.
 
 ## Client storage and identity
 
-A proposed layout beneath the development client's Data directory is:
+The implemented importer layout beneath the development client's Data directory is:
 
 ```text
 Data/Retail/
-  Cache/<product>-<build>/       # CASC-managed source cache
-  Packs/<pack-name>/
-    manifest.json               # source graph, target mappings and capabilities
-    receipt.json                # installed hashes, versions and validation state
+  allocations.sqlite
+  installed.json
+  Assets/<product>-<build>/     # original decoded assets for offline packs
+  Packs/<pack-name>/            # manifest.json, receipt.json, originals, tables, SQL
+  Registries/<revision>/        # merged supplemental rows, equipment and aliases
+  RetailCasc.ini               # mode=files for imported packs
 ```
 
 The storage design must preserve CascLib's expected cache layout and its ancestor
 manifest rules; copying an arbitrary collection of files into Data is insufficient.
 Installation paths are configurable and must not be embedded in a distributable pack.
 
-The client mounts each pack's manifest as an asset source. Original asset references
-must resolve within the pack's pinned build: a naked FileDataID is not a globally
-immutable identity across builds. Multiple source builds require separate source
-instances and build-qualified model/texture cache keys. The current process-wide
-single-build source does not yet provide that capability.
+The installer verifies pack manifests and publishes a registry/configuration; the
+client reads that configuration, not each pack manifest. Original asset references
+must resolve within the pinned build: a naked FileDataID is not a globally immutable
+identity across builds. Retail and Forever now have independent source instances,
+asset namespaces and product/build/locale-qualified durable caches. Each runtime
+source is configured once and requires a restart to change builds. The importer
+registry still accepts only one product/build across its installed packs; arbitrary
+simultaneous builds within a source remain unsupported. See [cache storage and packed
+distribution](cdn-downloads.md) for the online/local acquisition layout and workers.
 
 Packs share downloaded dependencies when their build/content identity agrees.
 They must be complete for offline use after acquisition, rather than depending on
@@ -95,14 +104,18 @@ Never treat a Retail item ID, display ID or FileDataID as a free Esteria ID.
 | Mount | Creature/model/display definitions and a usable summon/learn path with matching client spell data and server behavior; optional acquisition item |
 
 Generate records for the detected Esteria server schema and runtime, not a guessed
-generic server. The server source/database location and effective client/server
-table baselines still need discovery before implementing that adapter.
+generic server. The current tools use the supplied Esteria source checkout, scan
+client providers and running server tables, and snapshot the actual database schema.
+They generate guarded additive SQL; mounts also publish separate DBC continuations.
+This adapter targets the current Esteria Docker deployment, not arbitrary servers.
 
-Client records can be added through merged target tables or a native supplemental
-registry, but all relevant lookup paths must see the same new records. Supplemental
-records are a proposed extension, not an existing database capability. Server item
-queries, inventory/equipment, tooltips, inspection and appearance lookups must agree
-on the new item/display identity.
+The native supplemental registry is implemented: the normal file/database loading
+path merges supported WDBC additions in memory, preserving existing rows and string
+data and rejecting conflicting new IDs or invalid new strings. Weapon packs add Item
+and ItemDisplayInfo; mounts also add CreatureModelData, CreatureDisplayInfo, Spell,
+SpellIcon and SkillLineAbility. Server item queries, inventory/equipment, tooltips,
+inspection and appearance lookups must agree on the new item/display identity;
+registration alone does not prove those live behaviors.
 
 Importing the original visual does not import Retail combat or progression code.
 Item stats, set bonuses, procs, mount movement and requirements need an explicit
@@ -112,7 +125,7 @@ an ordinary Esteria spell as an exact Retail mechanic without implementing it.
 
 ## Native client work still required
 
-The current prototype reads original CASC data but prepares a legacy-compatible
+The current native loader reads original CASC data but prepares a legacy-compatible
 buffer in memory, including model version/layout, blend and material adjustments.
 It emits no converted art file. It does not yet implement a general native Retail
 model/appearance pipeline or satisfy literal "no modification anywhere".
@@ -121,13 +134,17 @@ The long-term loader should parse the original supported formats into explicit
 runtime structures, retaining their semantics and leaving source data immutable.
 Extend the renderer/animation systems when the original features require it.
 
-- Complete standalone item loading and supplemental item/display registration.
-- Implement shared skeletons, newer animation layouts, materials and effects needed
-  by the selected assets. The current adapter rejects several of these features.
-- Implement creature/mount display resolution and normal rider/animation behavior.
-- Implement armor texture composition, geosets, race/sex variants, attached geometry
-  and associated visibility rules for Esteria's actual playable bodies.
-- Add build-qualified source/cache identity, asynchronous acquisition and pack mounting.
+- Extend the implemented standalone item and creature/mount paths as new graphs require.
+  Supplemental item/display registration and mount learning/summon integration exist.
+- Shared SKELs and their SKPD parents, model-only AFM2 animations and split
+  AFM2/AFSB/AFSA track payloads are supported in acquisition and runtime preparation.
+  Continue closing material/effect gaps: some Retail features are approximated or
+  omitted, so successful parsing is not a claim of full visual fidelity.
+- Complete a general armor-set import path covering texture composition, geosets,
+  race/sex variants, attached geometry and visibility on Esteria's actual playable bodies.
+- Build on the implemented source/cache isolation, background acquisition workers
+  and registry mounting to support explicit pack revisions and multiple simultaneous
+  builds within a source.
 
 Armor acceptance must use the existing custom race/body and appearance contracts.
 Do not truncate custom race masks or substitute a stock body silently. Exact Retail
@@ -154,10 +171,12 @@ The accepted sword screenshot establishes character-selection hand rendering onl
 
 ## Implementation sequence
 
-1. Build the manifest/ledger and source metadata resolver; add one supported weapon
-   as a new client/server item with original assets and no existing-record overrides.
-2. Add a mount with the native format features its complete graph requires and a
-   real server summon/learn integration.
+1. Implemented: manifest/ledger and resolved-file weapon imports as additive
+   client/server items. Automatic human-name item/set metadata resolution is pending.
+2. Implemented: resolved mount recipes with original asset graphs and server
+   summon/learn integration. Complete live acceptance per pack; the mount guide records
+   learning and mounted-world rendering evidence separately from pending movement,
+   flight, persistence and renderer-defect checks.
 3. Add the armor appearance resolver and renderer features required for a complete
    selected tier set on the target bodies.
 4. Expand named requests to complete sets/variant groups, repeatable pack updates

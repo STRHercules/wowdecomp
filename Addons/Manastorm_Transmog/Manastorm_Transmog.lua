@@ -3136,6 +3136,7 @@ local function BuildWindow()
 
     local close = CreateFrame("Button", nil, win, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", 0, 0)
+    win.cosmeticsClose=close
 
     win.status = win:CreateFontString(nil, "ARTWORK", "GameFontNormal")
     win.status:SetPoint("BOTTOMLEFT", P(M + 12), P(BAND / 2 - 7))
@@ -3282,13 +3283,30 @@ local function BuildWindow()
 end
 
 function ManastormTransmog_Show()
+    if EsteriaCosmetics_Show then EsteriaCosmetics_Show("Transmog");return end
     if not win then BuildWindow() end
     if not win:IsShown() then win:Show() end
 end
 
 function ManastormTransmog_Toggle()
+    if EsteriaCosmetics_Toggle then EsteriaCosmetics_Toggle("Transmog");return end
     if not win then BuildWindow() end
     if win:IsShown() then win:Hide() else win:Show() end
+end
+
+function ManastormTransmog_Hide()
+    if win and win:IsShown() then win:Hide();return not win:IsShown() end
+    return true
+end
+
+function ManastormTransmog_Embed(parent)
+    if not win then BuildWindow() end
+    win:SetParent(parent);win:ClearAllPoints();win:SetPoint("CENTER",parent,"CENTER")
+    win:SetScale(math.min(parent:GetWidth()/win:GetWidth(),parent:GetHeight()/win:GetHeight()))
+    win:SetMovable(false);win:SetScript("OnDragStart",nil)
+    win.cosmeticsClose:SetScript("OnClick",function() parent:GetParent():Hide() end)
+    for i=#UISpecialFrames,1,-1 do if UISpecialFrames[i]=="ManastormTransmogFrame" then table.remove(UISpecialFrames,i) end end
+    win:Show()
 end
 
 ------------------------------------------------------------------------------------------------------

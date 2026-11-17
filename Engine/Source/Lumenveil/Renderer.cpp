@@ -3,6 +3,7 @@
 // sizes and formats are the mod's; where a part is not ported yet (see Renderer.h) its stage stays empty and its
 // flag in the composite constants stays off, as the mod has it when that part is switched off.
 #include "Engine/Source/Lumenveil/Renderer.h"
+#include "Engine/Source/Lumenveil/WetExclusions.h"
 
 #include "Engine/Source/Lumenveil/Core/belt_lantern.h"
 #include "Engine/Source/Lumenveil/Core/cloud_noise.h"
@@ -1526,6 +1527,14 @@ bool LumenveilRenderer::RenderWetSurfaces(GxEffects::Texture* fogTexture, const 
         { 1.0f, 0.0f, 0.0f, kGlintCellShare },
     };
     SetConstants(kWetRegister, &constants[0].x, kWetConstants);
+    Float4 exclusions[17] = {};
+    const auto bounds=Lumenveil::CurrentWetExclusions();
+    exclusions[0].x=static_cast<float>(bounds.size());
+    for(size_t i=0;i<bounds.size();++i) {
+        exclusions[1+i*2]={bounds[i].low[0]-in.camPos[0],bounds[i].low[1]-in.camPos[1],bounds[i].low[2]-in.camPos[2],0};
+        exclusions[2+i*2]={bounds[i].high[0]-in.camPos[0],bounds[i].high[1]-in.camPos[1],bounds[i].high[2]-in.camPos[2],0};
+    }
+    SetConstants(29,&exclusions[0].x,17);
     for (uint32_t stage = 0; stage < GxEffects::kMaxTextures; ++stage) {
         Bind(stage, nullptr, false);
     }

@@ -1297,6 +1297,12 @@ bool PrepareSkin(std::vector<uint8_t>& b, const std::vector<uint8_t>& m, std::st
             // Other two-texture explicit shaders (the skyriding speed aura's 0x8021): draw with Diffuse_T1_T2 /
             // Combiners_Mod_Mod. shortcut: approximate combiner, map the shader exactly if an effect looks wrong.
             b[p] = 0x12; b[p + 1] = 0x80;
+        } else if ((shader & 0x8000) && U16(b, p + 12) > 3) {
+            // Retail character-body combiners on NPC models (0x801c with six layers: the garrison's Fiona, Nixxie,
+            // Fen Tao): draw the base layer (the display's skin) with the Mod combiner, as degradeShaders does for
+            // player bodies. shortcut: loses the extra layers; map the combiner if an NPC looks flat.
+            b[p] = 0x10; b[p + 1] = 0;
+            b[p + 12] = 1; b[p + 13] = 0;
         } else if (shader & 0x8000) {
             return Fail(error, ("Retail explicit shader is not implemented yet: 0x" + HexWord(shader) + " in batch " + std::to_string(i) + " (textures " + std::to_string(U16(b, U32(b, 40) + size_t(i) * 24 + 14)) + ")").c_str());
         }

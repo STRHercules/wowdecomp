@@ -35,6 +35,8 @@ sampler2D sDepthBeforeWater : register(s7);
 sampler2D sFog : register(s8);
 sampler2D sMaterial : register(s9);
 sampler2D sMaterialTag : register(s10);
+float4 cWetExclusionCount : register(c29);
+float4 cWetExclusionBounds[16] : register(c30);
 
 static const float4 kUnchanged = float4(0, 0, 0, 1);
 static const float kPi = 3.14159265;
@@ -457,6 +459,11 @@ float4 main(float2 targetPixel : VPOS) : COLOR0
     float4 normal = SurfaceNormal(pixel, surface);
     bool thin = normal.w > 0;
     float3 fromCamera = ViewToWorldDirection(surface);
+    [unroll] for (int excluded=0;excluded<8;++excluded)
+    {
+        if (excluded<cWetExclusionCount.x && all(fromCamera>=cWetExclusionBounds[excluded*2].xyz) &&
+            all(fromCamera<=cWetExclusionBounds[excluded*2+1].xyz)) return kUnchanged;
+    }
     float3 worldNormal = ViewToWorldDirection(normal.xyz);
     float2 viewportUv = (pixel - ViewportOrigin()) / ViewportSize();
 

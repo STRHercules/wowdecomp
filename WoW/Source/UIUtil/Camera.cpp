@@ -23,6 +23,7 @@
 #include "Engine/Source/Tempest/CMath.h"
 #include "Engine/Source/Tempest/CWFrustum.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
+#include "WoW/Source/Extension/ExtensionMgr.h"
 #include "WoW/Source/DB/Rec/VehicleRec.h"
 #include "WoW/Source/Object/CMoveSpline.h"
 #include "WoW/Source/Object/Movement.h"
@@ -1413,6 +1414,7 @@ void CGCamera::UpdateTargetFacing(CGObject_C* target, float& yaw, float& pitch, 
     pitch = MIN_PITCH_ANGLE > pitch ? MIN_PITCH_ANGLE : (MAX_PITCH_ANGLE <= pitch ? MAX_PITCH_ANGLE : pitch);
 
     this->SetFacing(yaw, pitch, roll);
+    sExtensionMgr->OnCameraTargetFacing(this, target, yaw, pitch, roll);
 }
 
 // VERIFY: 9718580e manual

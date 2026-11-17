@@ -1,6 +1,7 @@
 #include <cmath>
 #include <cstdint>
 #include "Engine/Source/Model2/CM2SceneRender.h"
+#include "Engine/Source/Lumenveil/WetExclusions.h"
 #include "Engine/Source/Retail/SourceContext.h"
 #include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "Engine/Source/Gx/CGxBuf.h"
@@ -217,6 +218,20 @@ int32_t CM2SceneRender::LightingColorsMatch(const CM2Lighting* a, const CM2Light
 // VERIFY: 702a8f8e manual
 // OFFSET: 0x0081FB10
 void CM2SceneRender::SetupLighting() {
+    // Fur/cloth authoring bake has no wet-material layer; screen-depth sheen falsely lights its triangle planes.
+    if (this->m_curModel && this->m_curModel->m_shared &&
+        !SStrCmpI(this->m_curModel->m_shared->m_fileName,"custom/fortnite/pets/",21)) {
+        auto* model=this->m_curModel;
+        const auto world=model->m_matrixF4*model->m_scene->m_viewInv;
+        const auto& box=model->m_shared->m_data->m_bounds.m_extent;
+        std::array<float,3> low{1e9f,1e9f,1e9f},high{-1e9f,-1e9f,-1e9f};
+        for(unsigned bits=0;bits<8;++bits) {
+            const auto p=C3Vector(bits&1 ? box.t.x : box.b.x,bits&2 ? box.t.y : box.b.y,bits&4 ? box.t.z : box.b.z)*world;
+            const float values[]={p.x,p.y,p.z};
+            for(unsigned k=0;k<3;++k){low[k]=std::min(low[k],values[k]-0.05f);high[k]=std::max(high[k],values[k]+0.05f);}
+        }
+        Lumenveil::RegisterWetExclusion(model,low,high);
+    }
     M2Material* material = this->m_curMaterial;
     int32_t localLighting = !(material->m_flags & 1) && s_localLighting[material->m_blendMode];
     uint32_t shadow = this->m_curElement->m_shadowValue;

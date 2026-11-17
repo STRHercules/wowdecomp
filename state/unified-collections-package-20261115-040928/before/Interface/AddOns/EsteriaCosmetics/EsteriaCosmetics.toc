@@ -1,0 +1,12 @@
+## Interface: 30300
+## Title: Esteria Collections
+## Notes: Mounts, hearthstones, Fortnite weapons, wings, backpacks and emotes (/collections).
+## Dependencies: EsteriaEmotes
+## SavedVariables: EsteriaCosmeticsDB
+EsteriaCosmeticsData.lua
+EsteriaCosmeticsWings.lua
+EsteriaCollectionsData.lua
+EsteriaPickaxesData.lua
+EsteriaCosmetics.lua
+BackpackFitter.lua
+PickaxeFitter.lua

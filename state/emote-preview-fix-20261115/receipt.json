@@ -1,0 +1,23 @@
+{
+  "executable": "G:\\3.3.5a - Dev\\WowCollectionsPlaybackFix.exe",
+  "sha256": "cc2567b394540f7e224b19672b7c2d105e46f3a901fa06d5d49f8ca397fde370",
+  "backup": null,
+  "existing_clients_preserved": {
+    "Wow.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057",
+    "WowCosmetics.exe": "10ef6ef3f03bc13bf4607cad7e8be77636e83e6cf6380c408d3abb2f1729d057",
+    "WowMountPreviewFix.exe": "416b80f68e175277629411e3632d9d9f6b10f3754960df9dfed28296eba46937"
+  },
+  "includes": [
+    "Retail dress-up model selection fix",
+    "emote autoplay sequence reset fix",
+    "hearthstone player previews",
+    "M3 mount framing fix"
+  ],
+  "validation": [
+    "Release WowClient build passed",
+    "production dress-up model-selection and sequence/reset native harness passed",
+    "collections Lua tests passed"
+  ],
+  "live_visual_acceptance": false,
+  "activation": "Restart with this executable; no addon package change required"
+}

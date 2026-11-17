@@ -1,5 +1,6 @@
 import unittest
 import tempfile
+import json
 from pathlib import Path
 from unittest.mock import patch
 import stage
@@ -8,9 +9,11 @@ import stage
 class StageTests(unittest.TestCase):
     def test_exported_fits_cover_all_displays_and_generate_shared_ui_defaults(self):
         fits = stage.default_fits()
-        self.assertEqual(len(fits), 99)
-        self.assertEqual(fits[3400001], (1.43, 0, 0, 0.035))
-        self.assertEqual(fits[3400099], (1.69, 0, 0, 0.14))
+        self.assertEqual(set(fits), {r['display'] for r in json.loads(stage.ID_MANIFEST.read_text()).values()})
+        self.assertEqual(fits[3400001], (1.43, 0, 0, 0.035,0,0,0))
+        self.assertEqual(fits[3400099], (1.69, 0, 0, 0.14,0,0,0))
+        self.assertEqual(fits[3400100], (1.36, .37, 0, .45,0,0,0))
+        self.assertTrue(all(fit[4]==0 and fit[6]==0 for fit in fits.values()))
         row = {"slug":"pack", "name":"Pack", "model":"custom/fortnite/pack.m2", "width":1, "height":1, "depth":1}
         ids = {"pack":{"source":3400001,"token":3410001,"display":3400001}}
         generated, _ = stage.generated_lua([row], ids, [])

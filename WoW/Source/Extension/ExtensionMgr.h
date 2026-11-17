@@ -6,12 +6,16 @@
 #include "WoW/Source/Extension/ScriptDefines/AllScriptsObjects.h"
 
 class AuraData;
+class C2Vector;
 class C3Vector;
+class C44Matrix;
 class CDataStore;
 class CGCamera;
 class CGObject_C;
 class CGUnit_C;
 class CM2Model;
+class CMovementShared;
+class CMovement_C;
 class CM2Shared;
 class CMapArea;
 class CMapChunk;
@@ -89,6 +93,7 @@ class ExtensionMgr {
     void OnMapUnload();
     void OnWorldUpdate(float elapsedSec);
     void OnCameraUpdated(CGCamera* camera);
+    void OnCameraTargetFacing(CGCamera* camera, CGObject_C* target, float& yaw, float& pitch, float& roll);
 
     public: /* RenderScript */
     void OnFrameBegin(float elapsedSec);
@@ -131,6 +136,8 @@ class ExtensionMgr {
     void OnModelCreated(CM2Model* model);
     void OnModelLoaded(CM2Model* model);
     void OnModelAnimated(CM2Model* model);
+    // Called from AnimateMT, possibly on the M2 worker thread, only for a model with m_boneHook set.
+    void OnModelBoneLocal(CM2Model* model, uint32_t boneIndex, C44Matrix& local);
     void OnModelDestroy(CM2Model* model);
 
     public: /* UnitScript */
@@ -142,6 +149,15 @@ class ExtensionMgr {
     void OnUnitAuraEffectMaskUpdated(CGUnit_C* unit);
     void OnUnitWorldTransformUpdated(CGUnit_C* unit, float elapsed);
     void OnUnitMovementMessage(CGUnit_C* unit, uint32_t msgId, CDataStore* msg);
+    // The mover fall seams return at once unless a UnitScript is registered and movement belongs
+    // to CGUnit_C::s_activeMover. movement is a CMovementShared only for the Jump site.
+    void OnMoverStartFalling(CMovementShared* movement, float& velocity);
+    void OnMoverFallDistance(CMovement_C* movement, MoverFallSite site, uint32_t time, float& distance);
+    void OnMoverFallTime(CMovement_C* movement, float distance, int32_t upward, float& seconds);
+    void OnMoverFall(CMovement_C* movement, MoverFallSite site, uint32_t time, uint32_t elapsed, float& distance, C2Vector& direction);
+    void OnMoverFallDown(CMovement_C* movement, MoverFallSite site, uint32_t time, uint32_t elapsed, C3Vector& move);
+    void OnMoverFallDownDone(CMovement_C* movement, MoverFallSite site, uint32_t consumed);
+    void OnMoverFloorProbe(CMovement_C* movement, const C2Vector& direction, const C3Vector& position, float height, int32_t& result);
 
     public: /* UIScript */
     // Registration API: adds an XML element type (and CreateFrame type) backed by factory. Takes

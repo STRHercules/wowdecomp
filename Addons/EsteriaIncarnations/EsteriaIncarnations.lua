@@ -439,6 +439,7 @@ local function build()
     subtitle:SetText("Choose the body you take in each form and the demons you summon. Everyone sees your choice.")
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", 2, 2)
+    frame.cosmeticsClose=close
 
     buildRail()
     buildStage()
@@ -503,6 +504,7 @@ events:SetScript("OnEvent", function(_, event, prefix, message, _, sender)
 end)
 
 local function toggle()
+    if EsteriaCosmetics_Toggle then EsteriaCosmetics_Toggle("Incarnations");return end
     if not frame then build() end
     if #categories == 0 then
         DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[Incarnations]|r No incarnations are installed.")
@@ -513,24 +515,13 @@ end
 
 EsteriaIncarnations_Toggle = toggle   -- DragonUI's micro strip (Addons/EsteriaShell/esteria_microbuttons.lua)
 
--- Without DragonUI, a button on the stock micro bar, after Neighborhood's (or Help's) as EsteriaHousing does.
-if not _G.IncarnationMicroButton and MainMenuBarArtFrame then
-    local anchor = _G.NeighborhoodMicroButton or HelpMicroButton
-    local b = CreateFrame("Button", "IncarnationMicroButton", MainMenuBarArtFrame, "MainMenuBarMicroButton")
-    b:SetPoint("BOTTOMLEFT", anchor, "BOTTOMRIGHT", -3, 0)
-    b:SetNormalTexture("Interface\\Esteria\\IncarnationMicro-Up")
-    b:SetPushedTexture("Interface\\Esteria\\IncarnationMicro-Down")
-    b:SetDisabledTexture("Interface\\Esteria\\IncarnationMicro-Disabled")
-    b:SetHighlightTexture("Interface\\Buttons\\UI-MicroButton-Hilight")
-    b:SetScript("OnClick", toggle)
-    b:SetScript("OnEnter", function(self)
-        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
-        GameTooltip:SetText("Incarnations", 1, 0.82, 0.1)
-        GameTooltip:AddLine("Choose the body of your shapeshift forms and summoned demons.", 1, 1, 1, true)
-        GameTooltip:Show()
-    end)
-    b:SetScript("OnLeave", function() GameTooltip:Hide() end)
-    hooksecurefunc("VehicleMenuBar_MoveMicroButtons", function() b:SetParent(anchor:GetParent()) end)
+function EsteriaIncarnations_Embed(parent)
+    if not frame then build() end
+    frame:SetParent(parent);frame:ClearAllPoints();frame:SetPoint("TOPLEFT")
+    frame:SetMovable(false);frame:SetScript("OnDragStart",nil)
+    frame.cosmeticsClose:SetScript("OnClick",function() parent:GetParent():Hide() end)
+    for i=#UISpecialFrames,1,-1 do if UISpecialFrames[i]=="EsteriaIncarnationsFrame" then table.remove(UISpecialFrames,i) end end
+    frame:Show()
 end
 
 SLASH_ESTERIAINCARNATIONS1, SLASH_ESTERIAINCARNATIONS2 = "/incarnation", "/incarnations"

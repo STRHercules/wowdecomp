@@ -1,4 +1,4 @@
--- Esteria's own buttons on DragonUI's micro strip (Transmog, Speedflying talents, Paths of Fate, Incarnations, Manastorm, Radio,
+-- Esteria's own buttons on DragonUI's micro strip (Collections, Speedflying talents, Paths of Fate, Incarnations, Radio,
 -- Neighborhood), and the Talents
 -- button turned into Character Advancement. Loaded from modules.xml before micromenu.lua, which captures its
 -- button list in a file-scope local, so the buttons have to exist by the time it runs (as Pets & Mounts does).
@@ -13,16 +13,11 @@ local SHEETS = 'Interface\\AddOns\\DragonUI\\Textures\\Micromenu\\'
 local SPECS = {
     {
         stem = 'Cosmetics', sheet = SHEETS .. 'esteria-flight',
-        title = 'Cosmetics', text = 'Your wings, backpacks and emotes.',
+        title = 'Collections', text = 'Mounts, pets, incarnations, transmogrification, hearthstones, weapons, wings, backpacks and emotes.',
         click = 'EsteriaCosmetics_Toggle',
     },
     {
-        stem = 'Transmog', sheet = SHEETS .. 'esteria-transmog',
-        title = 'Transmogrification', text = 'Change the look of your gear.',
-        click = 'ManastormTransmog_Toggle',
-    },
-    {
-        stem = 'Flight', sheet = SHEETS .. 'esteria-flight',
+        stem = 'Flight', sheet = SHEETS .. 'esteria-speed',
         title = 'Speedflying Talents', text = 'Spend points on your speedflying talent tree.',
         click = 'EsteriaShell_ToggleFlight',
     },
@@ -30,16 +25,6 @@ local SPECS = {
         stem = 'Fate', sheet = SHEETS .. 'esteria-fate',
         title = 'Paths of Fate', text = 'Spend perk points on the paths your character walks.',
         click = 'EsteriaPerks_MicroClick',
-    },
-    {
-        stem = 'Incarnation', sheet = SHEETS .. 'esteria-incarnation',
-        title = 'Incarnations', text = 'Choose the body of your shapeshift forms and summoned demons.',
-        click = 'EsteriaIncarnations_Toggle',
-    },
-    {
-        stem = 'Manastorm', sheet = SHEETS .. 'esteria-manastorm',
-        title = 'The Manastorm', text = 'Descend into the endless Manastorm: choose a depth and your gadgets.',
-        click = 'EsteriaManastorm_Toggle',
     },
     {
         stem = 'Radio', sheet = 'Interface\\AddOns\\EverlookBroadcasting\\Textures\\radio-micro.blp',

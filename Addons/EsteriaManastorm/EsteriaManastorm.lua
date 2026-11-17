@@ -355,7 +355,9 @@ local function closeButton()
     end
     b:SetScript("OnEnter", function(self) ease(self, 1, 0.14, paint) end)
     b:SetScript("OnLeave", function(self) ease(self, 0, 0.2, paint) end)
-    b:SetScript("OnClick", function() frame:Hide() end)
+    -- embedded in the Adventure Finder, X closes the whole window (and is hidden: the finder has its own)
+    b:SetScript("OnClick", function() if M.onClose then M.onClose() else frame:Hide() end end)
+    M.close = b
 end
 
 -- Left column ---------------------------------------------------------------------------------------------------------
@@ -768,7 +770,7 @@ local function build()
     frame:SetScript("OnMouseDown", function() closeAll() end)
     frame:Hide()
     tinsert(UISpecialFrames, "EsteriaManastormFrame")
-    ES.Solid(frame, "BACKGROUND", ES.INK, 1):SetAllPoints()
+    -- no opaque fill under the art: 3.3.5 ignores texture sublevels, so a fill in the same layer could cover it
     buildBackground()
     ES.Border(frame, ES.GOLD, 0.7)
     closeButton()
@@ -1082,7 +1084,24 @@ events:SetScript("OnEvent", function(_, event, a, b)
     refresh()
 end)
 
+-- The Adventure Finder (Addons/EsteriaFinder) hosts this window as its Manastorm tab: shows it inside parent.
+function EsteriaManastorm_Embed(parent, onClose)
+    if not available() then return false end
+    if not frame then build() end
+    -- fill the tab: the layout is anchored to the edges (columns left/right, bars bottom), the art stretches
+    frame:SetParent(parent); frame:ClearAllPoints(); frame:SetPoint("TOPLEFT", parent, "TOPLEFT", 14, -10)
+    frame:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", -14, 14)
+    if M.close then M.close:Hide() end
+    frame:SetFrameLevel(parent:GetFrameLevel() + 2)
+    frame:SetMovable(false); frame:SetScript("OnDragStart", nil); frame:SetScript("OnDragStop", nil)
+    for i = #UISpecialFrames, 1, -1 do if UISpecialFrames[i] == "EsteriaManastormFrame" then table.remove(UISpecialFrames, i) end end
+    M.onClose = onClose
+    frame:Show()
+    return true
+end
+
 function EsteriaManastorm_Toggle()
+    if EsteriaFinder_Toggle then return EsteriaFinder_Toggle("Manastorm") end
     if not available() then
         DEFAULT_CHAT_FRAME:AddMessage("|cff9b7bff[Manastorm]|r The Manastorm needs the wowdecomp client.")
         return

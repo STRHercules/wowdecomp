@@ -21,6 +21,7 @@ const char* PrepareMountModel(CGUnit_C*,const char* path,int32_t,int32_t){return
 void AttachMountModel(CGUnit_C*){}
 void RemoveMountModel(CGUnit_C*,CM2Model*){}
 CM2Model* CreatePreviewModel(CM2Scene*,const char*){return nullptr;}
+bool PreviewModelBounds(CM2Model*,CAaBox&,bool& pending){pending=false;return false;}
 void UpdatePreviewModel(CM2Model*){}
 void RemovePreviewModel(CM2Model*){}
 void SetUnitAction(CGUnit_C*,uint32_t){}

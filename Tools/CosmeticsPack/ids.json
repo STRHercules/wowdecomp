@@ -1,4 +1,10 @@
 {
+  "animated_wolf_pup": {
+    "display": 3400100,
+    "index": 100,
+    "source": 3400100,
+    "token": 3410100
+  },
   "backpack_60s_hippie_b7407b2d": {
     "display": 3400001,
     "index": 1,
@@ -592,5 +598,53 @@
     "index": 99,
     "source": 3400099,
     "token": 3410099
+  },
+  "animated_bonesy": {
+    "index": 101,
+    "source": 3400101,
+    "token": 3410101,
+    "display": 3400101
+  },
+  "animated_cat": {
+    "index": 102,
+    "source": 3400102,
+    "token": 3410102,
+    "display": 3400102
+  },
+  "animated_dragon": {
+    "index": 103,
+    "source": 3400103,
+    "token": 3410103,
+    "display": 3400103
+  },
+  "animated_drift_fox": {
+    "index": 104,
+    "source": 3400104,
+    "token": 3410104,
+    "display": 3400104
+  },
+  "animated_fox": {
+    "index": 105,
+    "source": 3400105,
+    "token": 3410105,
+    "display": 3400105
+  },
+  "animated_hamster": {
+    "index": 106,
+    "source": 3400106,
+    "token": 3410106,
+    "display": 3400106
+  },
+  "animated_robo_kitty": {
+    "index": 107,
+    "source": 3400107,
+    "token": 3410107,
+    "display": 3400107
+  },
+  "animated_woodsy": {
+    "index": 108,
+    "source": 3400108,
+    "token": 3410108,
+    "display": 3400108
   }
 }

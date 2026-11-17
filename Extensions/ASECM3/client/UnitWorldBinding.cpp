@@ -282,6 +282,11 @@ void RemovePreviewModel(CM2Model* model){
  const auto found=previewBindings.find(model);if(found==previewBindings.end())return;
  autoEffects.erase(found->second.get());Disconnect(*found->second,nullptr);previewBindings.erase(found);
 }
+bool PreviewModelBounds(CM2Model* model,CAaBox& box,bool& pending){
+ pending=false;if(previewBindings.find(model)==previewBindings.end())return false;
+ UpdatePreviewModel(model);
+ pending=!UnitModelBounds(model,box);return true;
+}
 bool UnitCameraBounds(const CGUnit_C* unit,float& lower,float& upper,bool& pending){
  lower=upper=0;pending=false;if(!unit||!unit->m_obj)return false;const auto found=bindings.find(unit->m_obj->m_guid.m_guid);
  if(found==bindings.end()||found->second->identity!=unit)return false;const auto& source=found->second->source;

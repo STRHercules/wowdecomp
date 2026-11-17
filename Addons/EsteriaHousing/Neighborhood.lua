@@ -40,6 +40,19 @@ travel:SetScript("OnEnter", function(self)
   GameTooltip:Show()
 end)
 travel:SetScript("OnLeave", function() GameTooltip:Hide() end)
+-- every character owns a garrison (mod-esteria-garrison grants it at login); this opens its landing page
+local garrison = CreateFrame("Button", "EsteriaHousingNeighborhoodGarrison", f, "UIPanelButtonTemplate")
+garrison:SetSize(100, 20); garrison:SetPoint("TOP", travel, "BOTTOM", 0, -4); garrison:SetText("Garrison")
+garrison:SetScript("OnClick", function()
+  local open = SlashCmdList["ESTERIA_GARRISON_LANDING"]
+  if open then f:Hide(); open() else UIErrorsFrame:AddMessage("The Esteria Garrison addon is not loaded.", 1, 0.3, 0.3) end
+end)
+garrison:SetScript("OnEnter", function(self)
+  GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+  GameTooltip:AddLine("Your Garrison"); GameTooltip:AddLine("Open the garrison landing page: enter it, buildings, missions.", 1, 1, 1, true)
+  GameTooltip:Show()
+end)
+garrison:SetScript("OnLeave", function() GameTooltip:Hide() end)
 -- why travel is greyed, or the server's last word: one line under the name, cut short rather than wrapped
 local reason = f:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
 reason:SetPoint("TOPLEFT", hoodIcon, "BOTTOMLEFT", 0, -6); reason:SetSize(W - 40, 12); reason:SetJustifyH("LEFT")
@@ -325,7 +338,7 @@ local function ListFor(blocked)
       return a.plot < b.plot
     end)
     for _, p in ipairs(list) do
-      local text = p.status == "yours" and string.format("Plot %d: |cff40ff40Your home|r", p.plot)
+      local text = p.status == "yours" and string.format("Plot %d: |cff40ff40%s|r", p.plot, p.name ~= "" and p.name .. "'s home" or "Your home")
         or p.status == "visit" and string.format("Plot %d: |cff80c0ff%s|r", p.plot, p.name ~= "" and p.name .. "'s home" or "A neighbor's home")
         or string.format("Plot %d: For sale", p.plot)
       out[#out + 1] = { icon = PLOT_LOOK[p.status].icon, text = text, go = { "Go", GoPlot(info.id, p.plot), not blocked } }

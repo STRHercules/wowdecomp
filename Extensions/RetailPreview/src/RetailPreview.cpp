@@ -1,6 +1,7 @@
 #include "WoW/Source/Extension/ExtensionMgr.h"
 #if defined(WOWDECOMP_RETAIL_ASSETS)
 #include "Engine/Source/Frame/CSimpleModel.h"
+#include "Extensions/ASECM3/client/UnitWorldBinding.h"
 #include "Engine/Source/Base/Coordinate.h"
 #include "Engine/Source/Base/Handle.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
@@ -11,6 +12,7 @@
 #include "Engine/Source/Retail/CosmeticPreviewFit.h"
 #include "WoW/Source/DB/Rec/SpellRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualRec.h"
+#include "WoW/Source/DB/Rec/SpellVisualKitRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualEffectNameRec.h"
 #include "WoW/Source/DB/Rec/SpellVisualKitModelAttachRec.h"
 #include "WoW/Source/Magic/MagicClient/Spell_C.h"
@@ -41,6 +43,10 @@
 #include <sstream>
 #include <string>
 #include <map>
+#include <set>
+#include <tuple>
+#include "Engine/Source/Retail/PickaxeDefaults.h"
+#include "Engine/Source/Retail/PickaxeCatalog.h"
 #include <filesystem>
 #include <fstream>
 #include <ctime>
@@ -161,12 +167,19 @@ int Fit(lua_State* L) {
     if (!frame->m_model || !frame->m_model->IsLoaded(0, 0)) { lua_pushboolean(L, false); return 1; }
     const auto* data = frame->m_model->m_shared->m_data;
     C3Vector lo(1e9f, 1e9f, 1e9f), hi(-1e9f, -1e9f, -1e9f);
-    for (uint32_t i = 0; i < data->m_vertices.m_count; ++i) {
-        const C3Vector& p = data->m_vertices[i].m_position;
-        lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y); lo.z = std::min(lo.z, p.z);
-        hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y); hi.z = std::max(hi.z, p.z);
+    CAaBox sourceBounds;
+    bool pending=false;
+    const bool m3=ASECM3::Client::PreviewModelBounds(frame->m_model,sourceBounds,pending);
+    if (pending) { lua_pushboolean(L,false); return 1; }
+    if (m3) { lo=sourceBounds.b; hi=sourceBounds.t; }
+    else {
+        for (uint32_t i = 0; i < data->m_vertices.m_count; ++i) {
+            const C3Vector& p = data->m_vertices[i].m_position;
+            lo.x = std::min(lo.x, p.x); lo.y = std::min(lo.y, p.y); lo.z = std::min(lo.z, p.z);
+            hi.x = std::max(hi.x, p.x); hi.y = std::max(hi.y, p.y); hi.z = std::max(hi.z, p.z);
+        }
+        if (!data->m_vertices.m_count) { lo = data->m_bounds.m_extent.b; hi = data->m_bounds.m_extent.t; }
     }
-    if (!data->m_vertices.m_count) { lo = data->m_bounds.m_extent.b; hi = data->m_bounds.m_extent.t; }
     const C3Vector center((lo.x + hi.x) * 0.5f, (lo.y + hi.y) * 0.5f, (lo.z + hi.z) * 0.5f);
     const float dx = hi.x - lo.x, dy = hi.y - lo.y, dz = hi.z - lo.z;
     const float radius = std::max(0.1f, 0.5f * std::sqrt(dx * dx + dy * dy + dz * dz));
@@ -272,6 +285,7 @@ int32_t MountPreview(const char*, const char* arguments) {
 
 #include "JourneyShieldTrial.inl"
 #include "CosmeticPreview.inl"
+#include "PickaxeFit.inl"
 
 int CosmeticsPreview(lua_State* L) {
     auto* frame = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
@@ -293,26 +307,27 @@ int BackpackSetFit(lua_State* L) {
     const int display=luaL_checkint(L,1);
     const char* body=luaL_checkstring(L,2);
     const Retail::BackpackFit fit{float(luaL_checknumber(L,3)),float(luaL_checknumber(L,4)),
-        float(luaL_checknumber(L,5)),float(luaL_checknumber(L,6))};
+        float(luaL_checknumber(L,5)),float(luaL_checknumber(L,6)),float(luaL_optnumber(L,7,0)),
+        float(luaL_optnumber(L,8,0)),float(luaL_optnumber(L,9,0))};
     lua_pushboolean(L,display>0 && EsteriaBackpackSetFit(uint32_t(display),body,fit));
     return 1;
 }
 
-int BackpackExportFits(lua_State* L) {
+int ExportFitFile(lua_State* L, const char* kind) {
     size_t size=0;
     const char* data=luaL_checklstring(L,1,&size);
     if (!Retail::ValidBackpackFitExport(std::string(data,size))) return luaL_error(L,"Invalid backpack fit export");
     try {
-        const auto directory=std::filesystem::path(SFile::m_basePath)/"WTF"/"Esteria"/"BackpackFits";
+        const auto directory=std::filesystem::path(SFile::m_basePath)/"WTF"/"Esteria"/kind;
         std::filesystem::create_directories(directory);
         const std::time_t now=std::time(nullptr);
         std::tm time{};
         localtime_s(&time,&now);
         char stamp[32];
         std::strftime(stamp,sizeof(stamp),"%Y%m%d-%H%M%S",&time);
-        auto path=directory/(std::string("BackpackFits-")+stamp+".txt");
+        auto path=directory/(std::string(kind)+"-"+stamp+".txt");
         unsigned index=1;
-        while (std::filesystem::exists(path)) path=directory/(std::string("BackpackFits-")+stamp+"-"+std::to_string(index++)+".txt");
+        while (std::filesystem::exists(path)) path=directory/(std::string(kind)+"-"+stamp+"-"+std::to_string(index++)+".txt");
         std::ofstream output(path,std::ios::binary);
         output.write(data,std::streamsize(size));
         output.close();
@@ -326,6 +341,8 @@ int BackpackExportFits(lua_State* L) {
     }
     return 2;
 }
+int BackpackExportFits(lua_State* L) {return ExportFitFile(L,"BackpackFits");}
+int PickaxeExportFits(lua_State* L) {return ExportFitFile(L,"PickaxeFits");}
 
 class RetailPreview : public ClientScript {
     bool m_previewAttempted = false;
@@ -333,11 +350,17 @@ class RetailPreview : public ClientScript {
 public:
     RetailPreview() : ClientScript("RetailPreview") {}
     void OnStartup() override {
+        sExtensionMgr->RegisterLuaFunction("EsteriaPickaxeDefaultFit", PickaxeDefaultFit, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaPickaxeExportFits", PickaxeExportFits, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaPickaxeFitInfo", PickaxeFitInfo, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaPickaxeSetFit", PickaxeSetFit, FRAMESCRIPT_CONTEXTS_ALL);
+        new PickaxeFitModels();
         sExtensionMgr->RegisterLuaFunction("EsteriaBackpackExportFits", BackpackExportFits, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("EsteriaBackpackFitInfo", BackpackFitInfo, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("EsteriaBackpackSetFit", BackpackSetFit, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsFit", CosmeticFit, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsWingPreview", WingPreview, FRAMESCRIPT_CONTEXTS_ALL);
+        sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsHearthPreview", HearthPreview, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterLuaFunction("EsteriaCosmeticsPreview", CosmeticsPreview, FRAMESCRIPT_CONTEXTS_ALL);
         sExtensionMgr->RegisterConsoleCommand("journeyshield", JourneyCommand, CATEGORY_DEBUG, "Journey Mentor Shield cloak trial: on|off|model");
         sExtensionMgr->RegisterLuaFunction("JourneyShieldTrial", JourneyLua, FRAMESCRIPT_CONTEXTS_ALL);
@@ -358,6 +381,7 @@ public:
         }
     }
     void OnUpdate(float elapsed) override {
+        for (auto* model:pickaxeModels) ApplyPickaxeFit(model);
         SyncJourneyShield();
         m_elapsed += elapsed;
         if (!m_previewAttempted && m_elapsed > 2) {

@@ -6,8 +6,21 @@
 
 class AuraData;
 class C3Vector;
+class C2Vector;
 class CDataStore;
 class CGUnit_C;
+class CMovement_C;
+
+// Which stock call site a mover fall seam fires from (the 12340 return address in brackets). The
+// same function means different things per caller: WillPassObstacle's falls are a throwaway
+// step-down probe that CMovement_C::RestoreMoveState undoes, the others move the unit.
+enum MoverFallSite : uint32_t {
+    MOVER_FALL_SITE_MOVE_FACETS,          // CMovement_C::GetMoveFacets, sizing the query box [0x760154]
+    MOVER_FALL_SITE_FALL,                 // CMovement_C::Fall, the real fall step [0x7618F6, 0x7619A9]
+    MOVER_FALL_SITE_FLOOR_PROBE,          // CMovement_C::WillPassObstacle probe [0x761A20, 0x761A66]
+    MOVER_FALL_SITE_HOVER_MOVE,           // CMovement_C::HoverMove calling Fall [0x7629F5]
+    MOVER_FALL_SITE_COLLIDE_REQUEST_MOVE, // CMovement_C::CollideRequestMove calling Fall [0x763008]
+};
 
 // Units and players (CGUnit_C, WoW/Source/Object/ObjectClient/Unit_C.cpp): the method-level
 // seams of a unit's life that ObjectScript's create/update/remove/destroy does not see. Every hook
@@ -59,6 +72,48 @@ class UnitScript : public ScriptObject {
     // only for messages the unit is allowed to send. Observe only; NetScript::OnMessageSent sees
     // the same message a step later.
     virtual void OnUnitMovementMessage(CGUnit_C& unit, uint32_t msgId, CDataStore& msg) {}
+
+    // Mover fall seams. Each fires only for the active mover (CGUnit_C::s_activeMover: the unit
+    // this client moves, which is a vehicle or possessed unit instead of the player while one is
+    // controlled; compare mover.m_obj->m_guid with ClntObjMgrGetActivePlayer() for the player
+    // only), on the main thread, from inside the movement step. movement is &mover.m_movementData.
+    // Values passed by non-const reference hold the stock value and may be replaced.
+
+    // CMovementShared::Jump, at its StartFalling call [0x98846D]: a jump passed every check and
+    // velocity (the initial fall velocity, negative is upward: -7.9555 on land, -9.0967 swimming)
+    // is about to start the fall. Other StartFalling callers (ledges, knockback, the step-down
+    // probe) do not fire.
+    virtual void OnMoverStartFalling(CGUnit_C& mover, CMovement_C& movement, float& velocity) {}
+
+    // A RelDistanceFallen(time) result at one of three sites (MOVE_FACETS, FALL, FLOOR_PROBE):
+    // distance is how far the unit fell after time ms of fall (movement.m_fallTimeMs plus the step,
+    // or the probe's own time from 0), positive downward.
+    virtual void OnMoverFallDistance(CGUnit_C& mover, CMovement_C& movement, MoverFallSite site, uint32_t time, float& distance) {}
+
+    // The inverse, in CMovement_C::GetTimeJustFallen [0x75EB78]: seconds is the stock
+    // CalcTimeFallen(distance, upward) result, the fall time at which the unit has fallen distance
+    // (m_fallStartZ - target z). Used to find when within a step the unit reached a contact.
+    virtual void OnMoverFallTime(CGUnit_C& mover, CMovement_C& movement, float distance, int32_t upward, float& seconds) {}
+
+    // Right before CMovement_C::Fall is called from HoverMove or CollideRequestMove (site): the
+    // falling unit is about to move elapsed ms of its step, distance yards horizontally along
+    // direction (both copies, changing them affects only this call).
+    virtual void OnMoverFall(CGUnit_C& mover, CMovement_C& movement, MoverFallSite site, uint32_t time, uint32_t elapsed, float& distance, C2Vector& direction) {}
+
+    // Around CMovement_C::FallDown, the swept fall move with collision, from Fall or the floor
+    // probe (site FALL or FLOOR_PROBE). OnMoverFallDown fires before: move is the step's
+    // displacement (x/y horizontal, z the fall). OnMoverFallDownDone fires after with consumed,
+    // the ms FallDown used (its return value): position, flags and the fall clock are committed,
+    // and FallDown may have reset the fall clock (m_fallTimeMs 0, m_fallStartZ the current z)
+    // on contact.
+    virtual void OnMoverFallDown(CGUnit_C& mover, CMovement_C& movement, MoverFallSite site, uint32_t time, uint32_t elapsed, C3Vector& move) {}
+    virtual void OnMoverFallDownDone(CGUnit_C& mover, CMovement_C& movement, MoverFallSite site, uint32_t consumed) {}
+
+    // CMovement_C::AttemptStepUp after its WillPassObstacle call [0x76207F]: the stock step-down
+    // probe (a simulated fall from position along direction over height yards, undone with
+    // RestoreMoveState before returning) decided result, nonzero when the unit would clear the
+    // obstacle. The probe's own falls fired the seams above with site FLOOR_PROBE in between.
+    virtual void OnMoverFloorProbe(CGUnit_C& mover, CMovement_C& movement, const C2Vector& direction, const C3Vector& position, float height, int32_t& result) {}
 };
 
 #endif
