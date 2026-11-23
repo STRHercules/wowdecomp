@@ -10421,6 +10421,11 @@ int32_t CGUnit_C::HasAttachmentForEffect(uint32_t id, int32_t raw) const {
         return model->HasAttachment(s_effectAttachmentIds[4]);
     }
 
+    // x86 wrapped id -1 to the dword before the table; x64 zero-extends it 16 GB past the end.
+    if (id >= std::size(s_effectAttachmentIds)) {
+        return 0;
+    }
+
     return model->HasAttachment(s_effectAttachmentIds[id]);
 }
 
