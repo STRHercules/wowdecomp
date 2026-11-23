@@ -1821,6 +1821,16 @@ int32_t CGTooltip::SetUnit(const WOWGUID& guid, int32_t showHealth, const WOWGUI
 
         this->AddLine(title, nullptr, titleColor, titleColor, 0);
 
+        if (unit->IsEsteriaWanted()) {
+            const CImVector& wantedColor = *reinterpret_cast<const CImVector*>(&s_tooltipRedColor);
+            this->AddLine("Wanted", nullptr, wantedColor, wantedColor, 0);
+        }
+
+        if (unit->IsEsteriaExposedThief()) {
+            const CImVector& thiefColor = *reinterpret_cast<const CImVector*>(&s_tooltipRedColor);
+            this->AddLine("Exposed for pickpocketing", nullptr, thiefColor, thiefColor, 0);
+        }
+
         if (unit->m_obj->m_type & TYPEMASK_PLAYER) {
             uint32_t guildId = static_cast<CGPlayer_C*>(unit)->m_player->m_playerGuildid;
 

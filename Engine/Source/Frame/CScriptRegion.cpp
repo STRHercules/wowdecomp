@@ -7,6 +7,7 @@
 #include "Engine/Source/Frame/CSimpleAnimGroup.h"
 #include "Engine/Source/Frame/CSimpleFrame.h"
 #include "Engine/Source/Frame/CSimpleTop.h"
+#include "Engine/Source/Frame/RetailXML.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/FrameXML/LoadXML.h"
 #include "Engine/Source/FrameXML/XMLTree.h"
@@ -173,6 +174,10 @@ void CScriptRegion::LoadXML(XMLNode* node, CStatus* status) {
             lua_settop(L, -2);
         }
     }
+
+    // Not in the original: retail mixin/KeyValues/parentArray and relativeKey anchors.
+    RetailXML_LoadObject(this, this->GetScriptObjectParent(), node, status);
+    RetailXML_LoadRelativeAnchors(this, node, status);
 
     this->LoadXML_Animations(node, status);
 }

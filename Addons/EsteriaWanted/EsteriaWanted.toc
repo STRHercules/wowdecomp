@@ -1,0 +1,9 @@
+## Interface: 30300
+## Title: Esteria Wanted
+## Notes: Esteria PvP window, crime banners, wanted sightings and Wilderness status.
+esteria_style.lua
+CrimeBanner.lua
+WildernessBanner.lua
+BountyDebuff.lua
+CrimeWindow.lua
+EsteriaWanted.lua

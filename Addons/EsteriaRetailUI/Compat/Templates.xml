@@ -1,0 +1,39 @@
+<!-- Retail templates from addons the social windows use only in passing; build_addon.py points the retail files'
+     references at these (ActionButtonTemplate -> RetailActionButtonTemplate). Shaped like retail's: same keys. -->
+<Ui xmlns="http://www.blizzard.com/wow/ui/">
+	<CheckButton name="RetailActionButtonTemplate" virtual="true">
+		<Size x="45" y="45"/>
+		<Layers>
+			<Layer level="BACKGROUND">
+				<Texture parentKey="icon" setAllPoints="true"/>
+			</Layer>
+			<Layer level="ARTWORK">
+				<FontString parentKey="Count" inherits="NumberFontNormal" justifyH="RIGHT">
+					<Anchors><Anchor point="BOTTOMRIGHT" x="-2" y="2"/></Anchors>
+				</FontString>
+				<FontString parentKey="HotKey" inherits="NumberFontNormalSmallGray" justifyH="RIGHT">
+					<Anchors><Anchor point="TOPRIGHT" x="-1" y="-3"/></Anchors>
+				</FontString>
+				<FontString parentKey="Name" inherits="GameFontHighlightSmallOutline">
+					<Anchors><Anchor point="BOTTOM" y="2"/></Anchors>
+				</FontString>
+			</Layer>
+		</Layers>
+		<Frames>
+			<Cooldown parentKey="cooldown" setAllPoints="true"/>
+		</Frames>
+		<NormalTexture file="Interface\Buttons\UI-Quickslot2"/>
+		<PushedTexture file="Interface\Buttons\UI-Quickslot-Depress"/>
+		<HighlightTexture alphaMode="ADD" file="Interface\Buttons\ButtonHilight-Square"/>
+		<CheckedTexture alphaMode="ADD" file="Interface\Buttons\CheckButtonHilight"/>
+	</CheckButton>
+
+	<!-- Blizzard_ChannelFrame's voice-chat headset beside the stream dropdown. 3.3.5a has no voice chat: kept hidden. -->
+	<Script>RetailVoiceChatHeadsetButtonMixin = { SetCommunityInfo = function() end }</Script>
+	<Frame name="RetailVoiceChatHeadsetTemplate" hidden="true" virtual="true">
+		<Size x="24" y="24"/>
+		<Frames>
+			<Button parentKey="Button" mixin="RetailVoiceChatHeadsetButtonMixin" setAllPoints="true"/>
+		</Frames>
+	</Frame>
+</Ui>

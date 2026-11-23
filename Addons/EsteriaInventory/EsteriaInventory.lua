@@ -10,8 +10,9 @@ local MIN_W, MIN_H = 590, 300
 local ACTION = { browse = 0, deposit = 1, depositAll = 2, withdraw = 3, split = 4, merge = 5,
     expand = 6, favorite = 7, activate = 8, use = 9, equip = 10, sell = 11, setTag = 12, unlock = 13 }
 local sorts = { "Name", "Quality", "Count", "Category", "Tag" }
-local categories = { "All", "Equipment", "Consumables", "Materials", "Other", "Favorites" }
-local tabWidths = { 36, 87, 104, 78, 54, 76 }
+local categories = { "All", "Equipment", "Consumables", "Materials", "Other", "Favorites", "Ears", "Keyring" }
+local tabWidths = { 36, 87, 104, 78, 54, 76, 45, 67 }
+local EARS_CATEGORY, KEYRING_CATEGORY = 6, 7
 local border = { bgFile = "Interface\\Tooltips\\UI-Tooltip-Background", edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border",
     tile = true, tileSize = 16, edgeSize = 12, insets = { left = 3, right = 3, top = 3, bottom = 3 } }
 local dialog = { bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
@@ -20,7 +21,8 @@ local dialog = { bgFile = "Interface\\DialogFrame\\UI-DialogBox-Background",
 local DEFAULTS = { replaceBags = true, tileScale = 1, gap = 6, maxTiles = MAX_PAGE, scale = 1, alpha = 1,
     lockPosition = false, lockSize = false, showNames = false, qualityBorders = true, sounds = true,
     hints = true, remember = true, showGold = true, contextMenu = false, bagButton = true, showBankTab = true, guildBank = true,
-    autoSort = true }
+    autoSort = true, scrollMode = false, style = "esteria", accent = false, tileLook = "framed", viewMode = "grid",
+    textSize = 10, showBar = true, showStatus = true }
 local ART = "Interface\\EsteriaInventory\\"
 local tileBorder = { edgeFile = "Interface\\Tooltips\\UI-Tooltip-Border", edgeSize = 10,
     insets = { left = 2, right = 2, top = 2, bottom = 2 } }
@@ -36,6 +38,90 @@ local function db()
     return d
 end
 
+-- Esteria style kit: the flat look of the redone Esteria windows (Social, Cosmetics) drawn from WHITE8X8, so every
+-- colour follows the chosen style. This chunk is embedded on its own, so it carries its own copy of the kit.
+local WHITE, FONT = "Interface\\Buttons\\WHITE8X8", "Fonts\\FRIZQT__.TTF"
+local STYLES = {
+    { key = "esteria", name = "Esteria", note = "Ink and gold, like Social",
+      bg = { 0.03, 0.04, 0.055 }, panel = { 0.06, 0.07, 0.10 }, edge = { 0.91, 0.77, 0.42 }, dim = { 0.54, 0.43, 0.18 },
+      text = { 0.88, 0.86, 0.80 }, muted = { 0.60, 0.59, 0.55 }, primary = { 0.36, 0.25, 0.06 } },
+    { key = "midnight", name = "Midnight", note = "Deep navy, arcane blue",
+      bg = { 0.02, 0.03, 0.07 }, panel = { 0.05, 0.07, 0.13 }, edge = { 0.50, 0.70, 1.00 }, dim = { 0.22, 0.32, 0.55 },
+      text = { 0.85, 0.89, 0.96 }, muted = { 0.55, 0.60, 0.70 }, primary = { 0.10, 0.20, 0.42 } },
+    { key = "verdant", name = "Verdant", note = "Druidic greens and bark",
+      bg = { 0.03, 0.05, 0.03 }, panel = { 0.06, 0.09, 0.06 }, edge = { 0.55, 0.85, 0.45 }, dim = { 0.26, 0.42, 0.20 },
+      text = { 0.86, 0.90, 0.82 }, muted = { 0.56, 0.62, 0.52 }, primary = { 0.16, 0.30, 0.10 } },
+    { key = "crimson", name = "Crimson", note = "Blood red and iron",
+      bg = { 0.06, 0.02, 0.02 }, panel = { 0.10, 0.04, 0.04 }, edge = { 0.95, 0.35, 0.28 }, dim = { 0.50, 0.16, 0.12 },
+      text = { 0.93, 0.85, 0.82 }, muted = { 0.66, 0.55, 0.52 }, primary = { 0.40, 0.08, 0.06 } },
+    { key = "frost", name = "Frost", note = "Northrend ice and steel",
+      bg = { 0.05, 0.07, 0.09 }, panel = { 0.09, 0.12, 0.15 }, edge = { 0.70, 0.90, 0.98 }, dim = { 0.32, 0.45, 0.52 },
+      text = { 0.90, 0.95, 0.98 }, muted = { 0.58, 0.66, 0.72 }, primary = { 0.16, 0.30, 0.38 } },
+    { key = "minimal", name = "Minimal", note = "Quiet greys, no ornament",
+      bg = { 0.05, 0.05, 0.05 }, panel = { 0.09, 0.09, 0.09 }, edge = { 0.42, 0.42, 0.42 }, dim = { 0.22, 0.22, 0.22 },
+      text = { 0.90, 0.90, 0.90 }, muted = { 0.55, 0.55, 0.55 }, primary = { 0.24, 0.24, 0.24 } },
+    { key = "classic", name = "Classic", note = "The stock Blizzard dialog", classic = true,
+      bg = { 0.04, 0.03, 0.02 }, panel = { 0.08, 0.06, 0.04 }, edge = { 1.00, 0.82, 0.00 }, dim = { 0.45, 0.35, 0.10 },
+      text = { 1.00, 0.95, 0.85 }, muted = { 0.65, 0.60, 0.50 }, primary = { 0.50, 0.06, 0.03 } },
+}
+
+-- The active style, with the user's accent colour (if any) replacing its edge and dim tones.
+local function style()
+    local d, chosen = db(), STYLES[1]
+    for _, candidate in ipairs(STYLES) do if candidate.key == d.style then chosen = candidate end end
+    if not d.accent then return chosen end
+    local copy = {}
+    for key, value in pairs(chosen) do copy[key] = value end
+    local a = d.accent
+    copy.edge, copy.dim = { a[1], a[2], a[3] }, { a[1] * 0.55, a[2] * 0.55, a[3] * 0.55 }
+    return copy
+end
+
+local function solid(parent, layer)
+    local t = parent:CreateTexture(nil, layer or "ARTWORK"); t:SetTexture(WHITE)
+    return t
+end
+
+local function tint(t, c, a) t:SetVertexColor(c[1], c[2], c[3], a or 1) end
+
+-- One 1px line per side; returned as a list so a style change can recolour them together.
+local function lines(frame)
+    local list = {}
+    for _, side in ipairs({ { "TOPLEFT", "TOPRIGHT", true }, { "BOTTOMLEFT", "BOTTOMRIGHT", true },
+        { "TOPLEFT", "BOTTOMLEFT" }, { "TOPRIGHT", "BOTTOMRIGHT" } }) do
+        local line = solid(frame, "BORDER")
+        line:SetPoint(side[1]); line:SetPoint(side[2])
+        if side[3] then line:SetHeight(1) else line:SetWidth(1) end
+        list[#list + 1] = line
+    end
+    return list
+end
+
+local function tintAll(list, c, a) for _, t in ipairs(list) do tint(t, c, a) end end
+
+local function kitText(parent, size, layer)
+    local fs = parent:CreateFontString(nil, layer or "OVERLAY", "GameFontHighlightSmall")
+    fs:SetFont(FONT, size); fs:SetShadowOffset(1, -1); fs:SetShadowColor(0, 0, 0, 0.8)
+    return fs
+end
+
+-- Everything drawn from the style registers here; paintAll() recolours it after a style or accent change.
+local painted = {}
+local function paintAll()
+    local st = style()
+    for _, widget in ipairs(painted) do widget:Paint(st) end
+end
+local function paintText(fs, role)
+    painted[#painted + 1] = { Paint = function(_, st) local c = st[role]; fs:SetTextColor(c[1], c[2], c[3]) end }
+    local c = style()[role]; fs:SetTextColor(c[1], c[2], c[3])
+    return fs
+end
+
+-- Header wash: the accent fading down from the top edge, as on the Social window.
+local function wash(t, st, alpha)
+    t:SetGradientAlpha("VERTICAL", st.edge[1], st.edge[2], st.edge[3], 0, st.edge[1], st.edge[2], st.edge[3], alpha)
+end
+
 local function skin(frame, r, g, b)
     frame:SetBackdrop(border)
     frame:SetBackdropColor(r or 0, g or 0, b or 0, 0.9)
@@ -49,11 +135,33 @@ local function text(parent, font, value, point, x, y)
     return label
 end
 
+-- Flat style button. LockHighlight marks it selected (tabs, the Bank toggle, guild modes).
 local function button(parent, name, label, width, point, x, y, callback)
-    local b = CreateFrame("Button", name, parent, "UIPanelButtonTemplate")
-    b:SetSize(width, 26); b:SetPoint(point, x, y); b:SetText(label)
-    b.label = { SetText = function(_, value) b:SetText(value) end }
-    b:SetScript("OnClick", callback)
+    local b = CreateFrame("Button", name, parent)
+    b:SetSize(width, 26); b:SetPoint(point, x, y)
+    b.bg = solid(b, "BACKGROUND"); b.bg:SetAllPoints()
+    b.glow = solid(b, "ARTWORK"); b.glow:SetAllPoints()
+    b.edges = lines(b)
+    b.text = kitText(b, 11); b.text:SetPoint("LEFT", 4, 1); b.text:SetPoint("RIGHT", -4, 1); b.text:SetText(label)
+    b.label = { SetText = function(_, value) b.text:SetText(value) end }
+    b.SetText = function(self, value) self.text:SetText(value) end
+    b.LockHighlight = function(self) self.selected = true; self:Paint() end
+    b.UnlockHighlight = function(self) self.selected = false; self:Paint() end
+    b.Paint = function(self, st)
+        st = st or style()
+        local on = self.selected
+        tint(self.bg, on and st.primary or st.bg, 0.95)
+        tint(self.glow, st.edge, self.hover and 0.12 or 0)
+        tintAll(self.edges, on and st.edge or st.dim)
+        local c = on and st.edge or st.text
+        self.text:SetTextColor(c[1], c[2], c[3])
+    end
+    b:SetScript("OnEnter", function(self) self.hover = true; self:Paint() end)
+    b:SetScript("OnLeave", function(self) self.hover = false; self:Paint() end)
+    b:SetScript("OnDisable", function(self) self.text:SetAlpha(0.4) end)
+    b:SetScript("OnEnable", function(self) self.text:SetAlpha(1) end)
+    b:SetScript("OnClick", function(...) PlaySound("igMainMenuOptionCheckBoxOn"); callback(...) end)
+    b:Paint(); painted[#painted + 1] = b
     return b
 end
 
@@ -97,8 +205,20 @@ local function silenceStockGuildBank()
     if GuildBankPopupFrame and GuildBankPopupFrame:IsShown() then GuildBankPopupFrame:Hide() end
 end
 
+-- A failing window must not stop the others (or the repaint) from picking up a setting; each error is reported once.
+local reportedErrors = {}
 local function applyAll()
-    for scope = 0, 2 do if Windows[scope] then Windows[scope]:Apply() end end
+    for scope = 0, 2 do
+        local window = Windows[scope]
+        if window then
+            local ok, err = pcall(window.Apply, window)
+            if not ok and not reportedErrors[err] then
+                reportedErrors[err] = true
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff6060Esteria Inventory:|r " .. tostring(err))
+            end
+        end
+    end
+    paintAll()
 end
 
 local function newWindow(scope)
@@ -143,13 +263,20 @@ function Inv:Request(action, row, count, offset, text, scope)
     end
     scope = scope or self.view
     -- Free placement needs every item at once; the client pages and positions them.
-    if action == ACTION.browse and self:ManualActive() then offset, count = 0, MAX_PAGE end
+    if action == ACTION.browse and self:ManualActive() then offset, count = 0, MAX_PAGE
+    elseif action == ACTION.browse and self:Scrolling() then
+        -- Scrolling fetches up to 255 rows around the view and scrolls through them locally (see Page).
+        local cols, page = self.cols or 1, self.page or DEFAULT_PAGE
+        local want = offset or self.viewOffset or 0
+        local margin = math.floor(math.max(0, MAX_PAGE - page) / 2 / cols) * cols
+        offset, count = math.max(0, want - margin), MAX_PAGE
+    end
     local snap = self.snaps[scope]
     local vendor = action == ACTION.sell and UnitGUID("npc") or nil
     -- Browse carries the wanted tile count; the server answers with at most that many rows.
     local id = EsteriaInventory_Request(action, snap.revision or 0, row and row.guid or 0,
         count or (action == ACTION.browse and self.page or 0), offset or snap.offset or 0,
-        self.category, self.sort, text or self.search, vendor, scope)
+        self.category, self.sort, text or self.search, vendor, scope, true)
     if id then
         self.pending = { id = id, action = action, started = GetTime() }
         self.frame.status:SetText(action == ACTION.browse and "Searching..." or "Updating inventory...")
@@ -166,14 +293,51 @@ function Inv:ManualActive()
 end
 
 function Inv:Offset()
-    return self:ManualActive() and (self.manualOffset or 0) or (self.snapshot.offset or 0)
+    if self:ManualActive() then return self.manualOffset or 0 end
+    if self:Scrolling() then return self.viewOffset or 0 end
+    return self.snapshot.offset or 0
 end
 
 function Inv:Total()
     return self:ManualActive() and (self.arrangedTotal or 0) or (self.snapshot.total or 0)
 end
 
-function Inv:Page(offset)
+-- Scroll mode moves one tile row at a time; page mode moves a whole page. The guild bank always pages.
+function Inv:Scrolling() return self.scope ~= 2 and db().scrollMode end
+function Inv:Step() return self:Scrolling() and (self.cols or 1) or (self.page or DEFAULT_PAGE) end
+
+function Inv:MaxOffset()
+    local page, total = self.page or DEFAULT_PAGE, self:Total()
+    if self:Scrolling() then
+        local cols = self.cols or 1
+        return math.max(0, math.ceil(total / cols) * cols - page)
+    end
+    return math.floor(math.max(0, total - 1) / page) * page
+end
+
+function Inv:Scroll(delta)
+    local current = self.targetOffset or self:Offset()
+    local offset = math.max(0, math.min(current + delta, self:MaxOffset()))
+    if offset ~= current then self:Page(offset, true) end
+end
+
+-- True when the fetched block holds every row the view at `offset` needs.
+function Inv:Covers(offset)
+    local snap, page = self.snapshot, self.page or DEFAULT_PAGE
+    local first, rows = snap.offset or 0, #(snap.rows or {})
+    local last = math.min(offset + page, snap.total or 0)
+    return offset >= first and last <= first + rows
+end
+
+-- scrolled: a scroll move, which may reuse the fetched block. Tab, search and view changes always ask the server.
+function Inv:Page(offset, scrolled)
+    if self:Scrolling() and not self:ManualActive() then
+        -- Scrolling moves through the fetched block at once; the server is asked only past its edge.
+        self.viewOffset = offset
+        self:Render()
+        if not (scrolled and self:Covers(offset)) then self:Request(ACTION.browse, nil, nil, offset) end
+        return
+    end
     self.targetOffset, self.manualOffset = offset, offset
     if self:ManualActive() then self:Render() end
     self:Request(ACTION.browse, nil, nil, offset)
@@ -299,8 +463,13 @@ function Inv:SetView(view)
     if self.scope ~= 0 or self.view == view then return end
     self.view = view
     self.snapshot = self.snaps[view]
-    self.targetOffset = nil
+    self.targetOffset, self.dragFrom = nil, nil
+    -- A view switch redraws every tile: cached tiles would otherwise keep state from the other view.
+    self:DropIcon()
+    for _, b in ipairs(self.buttons) do b.sig = nil; SetItemButtonDesaturated(b, false) end
+    if not self:HasCategory(self.category) then self.category = 0 end
     self:Layout()
+    self:LayoutTabs()
     self:Render()
     if view == 1 and not self.snaps[1].active then self:Request(ACTION.activate) else self:Page(0) end
 end
@@ -523,14 +692,27 @@ function Inv:Render()
     frame.bar:SetValue(math.min(ratio, 1))
     frame.percent:SetText(string.format("%.1f%% full", ratio * 100))
     local manual = self:ManualActive()
+    local scrolling = not manual and self:Scrolling()
     local offset = snapshot.offset or 0
     if manual then
         self:Arrange()
-        offset = math.min(self.manualOffset or 0, math.floor(math.max(0, self.arrangedTotal - 1) / page) * page)
+        offset = math.min(self.manualOffset or 0, self:MaxOffset())
         self.manualOffset = offset
+    elseif scrolling then
+        offset = math.min(self.viewOffset or 0, self:MaxOffset())
+        self.viewOffset = offset
     end
-    local pages = math.max(1, math.ceil((manual and self.arrangedTotal or snapshot.total or 0) / page))
-    frame.page:SetText((math.floor(offset / page) + 1) .. " / " .. pages)
+    -- Scrolling shows a slice of the fetched block; rows outside it stay blank until the next block arrives.
+    local first = scrolling and offset - (snapshot.offset or 0) or 0
+    local step, total = self:Step(), self:Total()
+    local pages = math.max(1, math.ceil(math.max(total - page, 0) / step) + 1)
+    frame.page:SetText((math.floor(offset / step) + 1) .. " / " .. pages)
+    local bar = frame.scroll
+    if bar and self:Scrolling() then
+        self.syncingScroll = true
+        bar:SetMinMaxValues(0, math.max(0, self:MaxOffset() / step)); bar:SetValue(offset / step)
+        self.syncingScroll = nil
+    end
     frame.expand.label:SetText(guild and "Expand Tab" or (snapshot.upgrade and snapshot.upgrade > 0
         and (bank and "Expand Bank" or "Expand Storage") or "At capacity limit"))
     if guild then if self.canExpand then frame.expand:Show() else frame.expand:Hide() end end
@@ -538,7 +720,7 @@ function Inv:Render()
     for index = 1, page do
         local b = self.buttons[index]
         local row
-        if manual then row = self.arranged[offset + index] else row = snapshot.rows[index] end
+        if manual then row = self.arranged[offset + index] else row = snapshot.rows[first + index] end
         b.row, b.pos = row, manual and offset + index or nil
         if row then row.tag = row.tag or "" end
         local sig = row and row.digital and (row.guid .. ":" .. row.count .. ":" .. row.quality
@@ -614,10 +796,35 @@ function Inv:UpdateMoney()
     frame.currency:SetText(table.concat(parts, "   "))
 end
 
+-- The guild window always shows its full footer; the others can drop the help line and the capacity bar.
+function Inv:FooterParts()
+    local settings, guild = db(), self.scope == 2
+    return guild or settings.showStatus, guild or settings.showBar,
+        guild or settings.showGold or next(settings.currencies) ~= nil
+end
+
 function Inv:FooterHeight()
-    local settings = db()
-    if self.scope == 2 then return 118 end
-    return 96 + ((settings.showGold or next(settings.currencies)) and 22 or 0)
+    local status, bar, money = self:FooterParts()
+    return 12 + (status and 34 or 0) + 30 + (bar and 20 or 0) + (money and 22 or 0)
+end
+
+-- Footer rows stack upwards from the bottom edge: help line, buttons, capacity bar, then gold and currencies.
+function Inv:LayoutFooter()
+    local f = self.frame
+    if not f.footerRow then return end
+    local status, bar = self:FooterParts()
+    local base = status and 46 or 12
+    for _, item in ipairs(f.footerRow) do
+        item[1]:ClearAllPoints(); item[1]:SetPoint(item[2], item[3], base + item[4])
+    end
+    local barY = base + 30
+    f.bar:ClearAllPoints(); f.bar:SetPoint("BOTTOMLEFT", 26, barY); f.bar:SetPoint("BOTTOMRIGHT", -100, barY)
+    f.percent:ClearAllPoints(); f.percent:SetPoint("BOTTOMRIGHT", -26, barY)
+    if bar then f.bar:Show(); f.percent:Show() else f.bar:Hide(); f.percent:Hide() end
+    local moneyY = bar and barY + 20 or barY
+    f.gold:ClearAllPoints(); f.gold:SetPoint("BOTTOMRIGHT", -26, moneyY)
+    f.currency:ClearAllPoints(); f.currency:SetPoint("BOTTOMLEFT", 26, moneyY)
+    if status then f.status:Show() else f.status:Hide() end
 end
 
 -- Draws the Blizzard bag bar (DragonUI) as one button: our icon on the backpack, bag slots and fold arrow gone.
@@ -662,6 +869,24 @@ function Inv:InstallHooks()
             _G[name] = self.wrappers[name]
         end
     end
+    -- The backpack tooltip reports Esteria storage, not the 16-slot backpack. Bar add-ons may replace OnEnter later,
+    -- so the wrapper is re-applied whenever it is no longer the current script.
+    local backpack = _G.MainMenuBarBackpackButton
+    if backpack and (not backpack.esteriaEnter or backpack:GetScript("OnEnter") ~= backpack.esteriaEnter) then
+        local previous = backpack:GetScript("OnEnter")
+        backpack.esteriaEnter = function(owner, ...)
+            if previous then previous(owner, ...) end
+            local snap = Windows[0] and Windows[0].snaps[0]
+            if not (enabled() and snap and snap.capacity) then return end
+            local key = GetBindingKey("OPENALLBAGS") or GetBindingKey("TOGGLEBACKPACK")
+            GameTooltip:SetOwner(owner, "ANCHOR_LEFT")
+            GameTooltip:SetText("Esteria Inventory" .. (key and (" |cffffd100(" .. key .. ")|r") or ""), 1, 1, 1)
+            GameTooltip:AddLine((snap.used or 0) .. " / " .. snap.capacity .. " slots used", 1, 0.82, 0)
+            GameTooltip:AddLine(math.max(0, snap.capacity - (snap.used or 0)) .. " free", 0.8, 0.8, 0.8)
+            GameTooltip:Show()
+        end
+        backpack:SetScript("OnEnter", backpack.esteriaEnter)
+    end
     if self.hooked then return end
     self.hooked = true
     -- The existing large-bag addon retains its implementation for /inventory legacy.
@@ -687,6 +912,16 @@ function Inv:InstallHooks()
     end
 end
 
+-- Tile background for the chosen look. Square slot art does not stretch to list rows, so rows use the flat look.
+function Inv:StyleTile(b)
+    local settings, st = db(), style()
+    local look = settings.tileLook
+    if look == "framed" and settings.viewMode == "list" then look = "flat" end
+    if look == "framed" then b.slotArt:Show() else b.slotArt:Hide() end
+    if look == "flat" then b.flat:Show(); tint(b.flat, st.panel, 0.9) else b.flat:Hide() end
+    b.name:SetFont(FONT, settings.textSize)
+end
+
 -- One pooled item tile; created on demand when a larger window or tile limit needs more of them.
 function Inv:MakeTile(index)
     local I, frame = self, self.frame
@@ -698,14 +933,16 @@ function Inv:MakeTile(index)
     b:ClearAllPoints(); b:SetAllPoints(proxy); b:SetBackdrop(tileBorder); b:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     local slotArt = b:CreateTexture(nil, "BACKGROUND")
     slotArt:SetTexture(ART .. "SlotBackdrop"); slotArt:SetAllPoints(b)
+    b.slotArt, b.flat = slotArt, solid(b, "BACKGROUND")
+    b.flat:SetPoint("TOPLEFT", 1, -1); b.flat:SetPoint("BOTTOMRIGHT", -1, 1)
     b:RegisterForDrag("LeftButton"); b:SetNormalTexture(""); b:SetPushedTexture("")
     b:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
     -- The bag template refreshes its tooltip from bag/slot IDs, which blanks digital rows after ~0.2s.
     b.UpdateTooltip = nil
     local icon = _G[name .. "IconTexture"]
     icon:ClearAllPoints(); icon:SetPoint("CENTER", b, "CENTER", 0, 0)
-    local count = _G[name .. "Count"]
-    count:ClearAllPoints(); count:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", 4, -3)
+    -- Not "count": the stock SetItemButtonCount stores the stack size in button.count.
+    b.countText = _G[name .. "Count"]
     b.name = text(b, "GameFontHighlightSmall", "", "BOTTOM", 0, 4)
     b.name:SetHeight(26); b.name:SetJustifyH("CENTER"); b.name:Hide()
     b.favorite = text(b, "GameFontNormal", "", "TOPLEFT", 4, -3)
@@ -747,6 +984,7 @@ function Inv:MakeTile(index)
     end)
     -- Bag templates can inherit hidden="true"; the custom container owns their visibility.
     b:Show(); self.buttons[index] = b
+    self:StyleTile(b)
 end
 
 function Inv:GridTop() return self.scope == 2 and 165 or 137 end
@@ -759,30 +997,58 @@ function Inv:Layout()
     f:SetSize(W, H)
     local top = self:GridTop()
     local availW, availH = W - 52, H - top - self:FooterHeight()
-    local tile = BASE_TILE * settings.tileScale
-    local cols = math.max(1, math.floor((availW + gap) / (tile + gap)))
-    local cell = (availW - (cols - 1) * gap) / cols
-    local rows = math.max(1, math.floor((availH + gap) / (cell + gap)))
+    local list = settings.viewMode == "list"
+    local cellW, cellH, cols
+    if list then
+        -- List rows: one item per line, in as many columns of at least 240px as the window holds.
+        cellH = math.floor(30 * settings.tileScale + 0.5)
+        cols = math.max(1, math.floor((availW + gap) / (240 + gap)))
+        cellW = (availW - (cols - 1) * gap) / cols
+    else
+        local tile = BASE_TILE * settings.tileScale
+        cols = math.max(1, math.floor((availW + gap) / (tile + gap)))
+        cellW = (availW - (cols - 1) * gap) / cols
+        cellH = cellW
+    end
+    local rows = math.max(1, math.floor((availH + gap) / (cellH + gap)))
     local page = math.max(1, math.min(cols * rows, settings.maxTiles, self.cap or MAX_PAGE, MAX_PAGE))
     cols = math.min(cols, page)
-    local left = 26 + (availW - (cols * cell + (cols - 1) * gap)) / 2
+    self.cols = cols
+    local left = 26 + (availW - (cols * cellW + (cols - 1) * gap)) / 2
     for index = #self.buttons + 1, page do self:MakeTile(index) end
-    local names = settings.showNames and cell >= 64
-    local icon = math.max(12, math.min(cell * (names and 0.5 or 0.65), 56))
+    local names = list or (settings.showNames and cellW >= 64)
+    local icon = list and (cellH - 6) or math.max(12, math.min(cellW * (names and 0.5 or 0.65), 56))
     for index, b in ipairs(self.buttons) do
         local proxy = b:GetParent()
         if index <= page then
-            proxy:SetSize(cell, cell); proxy:ClearAllPoints()
-            proxy:SetPoint("TOPLEFT", left + ((index - 1) % cols) * (cell + gap),
-                -top - math.floor((index - 1) / cols) * (cell + gap))
+            proxy:SetSize(cellW, cellH); proxy:ClearAllPoints()
+            proxy:SetPoint("TOPLEFT", left + ((index - 1) % cols) * (cellW + gap),
+                -top - math.floor((index - 1) / cols) * (cellH + gap))
             local art = _G[b:GetName() .. "IconTexture"]
-            art:SetSize(icon, icon); art:ClearAllPoints(); art:SetPoint("CENTER", b, "CENTER", 0, names and 8 or 0)
-            b.name:SetWidth(cell - 6)
+            art:SetSize(icon, icon); art:ClearAllPoints()
+            b.name:ClearAllPoints(); b.countText:ClearAllPoints()
+            if list then
+                art:SetPoint("LEFT", b, "LEFT", 3, 0)
+                b.name:SetPoint("LEFT", art, "RIGHT", 8, 0); b.name:SetPoint("RIGHT", b, "RIGHT", -44, 0)
+                b.name:SetHeight(cellH); b.name:SetJustifyH("LEFT")
+                b.countText:SetPoint("RIGHT", b, "RIGHT", -8, 0)
+            else
+                art:SetPoint("CENTER", b, "CENTER", 0, names and 8 or 0)
+                b.name:SetPoint("BOTTOM", 0, 4); b.name:SetWidth(cellW - 6); b.name:SetHeight(26)
+                b.name:SetJustifyH("CENTER")
+                b.countText:SetPoint("BOTTOMRIGHT", art, "BOTTOMRIGHT", 4, -3)
+            end
             if names then b.name:Show() else b.name:Hide() end
             proxy:Show()
         else proxy:Hide() end
     end
+    self:LayoutFooter()
     f.status:SetWidth(W - 52)
+    if f.scroll then
+        f.scroll:ClearAllPoints()
+        f.scroll:SetPoint("TOPRIGHT", -9, -top); f.scroll:SetPoint("BOTTOMRIGHT", -9, self:FooterHeight())
+        if self:Scrolling() then f.scroll:Show() else f.scroll:Hide() end
+    end
     if self.page and self.page ~= page and (self.active or self.view == 1) then self.pageAt = GetTime() + 0.15 end
     self.page = page
 end
@@ -822,21 +1088,37 @@ function Inv:LayoutGuildTabs()
     end
 end
 
+function Inv:HasCategory(category)
+    if category == EARS_CATEGORY then return self.snapshot.specialTabs and self.snapshot.hasEars end
+    if category == KEYRING_CATEGORY then return self.snapshot.specialTabs and self.snapshot.hasKeys end
+    return true
+end
+
 function Inv:LayoutTabs()
     if self.scope == 2 then self:LayoutGuildTabs(); return end
     local settings = db()
     local hidden, left = settings.hiddenCategories, 26
-    for category = 0, 5 do
+    local bankTab = self.scope == 0 and self.frame.bankTab
+    local totalWidth = bankTab and settings.showBankTab and 74 or 0
+    for category = 0, #categories - 1 do
+        if category == 0 or (not hidden[category] and self:HasCategory(category)) then
+            totalWidth = totalWidth + tabWidths[category + 1] + 5
+        end
+    end
+    local scale = math.min(1, (self.w - 52) / math.max(1, totalWidth))
+    for category = 0, #categories - 1 do
         local tab = self.frame.tabs[category]
-        if category == 0 or not hidden[category] then
+        if category == 0 or (not hidden[category] and self:HasCategory(category)) then
+            local width = tabWidths[category + 1] * scale
+            tab:SetWidth(width)
             tab:ClearAllPoints(); tab:SetPoint("TOPLEFT", left, -99); tab:Show()
-            left = left + tabWidths[category + 1] + 5
+            left = left + width + 5 * scale
         else tab:Hide() end
     end
-    local bankTab = self.scope == 0 and self.frame.bankTab
     if bankTab then
         if settings.showBankTab then
-            bankTab:ClearAllPoints(); bankTab:SetPoint("TOPLEFT", left + 10, -99); bankTab:Show()
+            bankTab:SetWidth(64 * scale)
+            bankTab:ClearAllPoints(); bankTab:SetPoint("TOPLEFT", left + 10 * scale, -99); bankTab:Show()
         else
             bankTab:Hide()
             if self.view == 1 then self:SetView(0) end
@@ -856,11 +1138,11 @@ function Inv:Apply()
     end
     local frame = self.frame
     if not frame then return end
-    frame:SetBackdropColor(1, 1, 1, settings.alpha)
+    if style().classic then frame:SetBackdropColor(1, 1, 1, settings.alpha) end
     if settings.lockSize then frame.grip:Hide() else frame.grip:Show() end
     self:Layout(); self:LayoutTabs()
     if self.scope == 0 then self:SkinBagButtons() end
-    for _, b in ipairs(self.buttons) do b.sig = nil end
+    for _, b in ipairs(self.buttons) do b.sig = nil; self:StyleTile(b) end
     if frame:IsShown() then
         frame:SetScale(math.min(settings.scale, (UIParent:GetHeight() - 35) / self.h,
             (UIParent:GetWidth() - 35) / self.w))
@@ -903,7 +1185,11 @@ function Inv:Create()
     frame:Hide(); frame:SetSize(I.w, I.h); frame:SetPoint("CENTER")
     frame:SetFrameStrata("HIGH"); frame:SetToplevel(true); frame:SetMovable(true)
     frame:EnableMouse(true); frame:SetClampedToScreen(true); frame:RegisterForDrag("LeftButton")
-    frame:SetBackdrop(dialog)
+    local skinBg, skinEdges, skinWash, skinRule = solid(frame, "BACKGROUND"), lines(frame), solid(frame, "BORDER"),
+        solid(frame, "BORDER")
+    skinBg:SetAllPoints()
+    skinWash:SetPoint("TOPLEFT", 1, -1); skinWash:SetPoint("TOPRIGHT", -1, -1); skinWash:SetHeight(42)
+    skinRule:SetPoint("TOPLEFT", 1, -42); skinRule:SetPoint("TOPRIGHT", -1, -42); skinRule:SetHeight(1)
     frame:SetScript("OnDragStart", function(f) if not db().lockPosition then f:StartMoving() end end)
     frame:SetScript("OnDragStop", function(f)
         f:StopMovingOrSizing()
@@ -926,10 +1212,19 @@ function Inv:Create()
     frame:SetScript("OnReceiveDrag", function() I:DropCursor() end)
     frame:EnableMouseWheel(true)
     frame:SetScript("OnMouseWheel", function(_, delta)
-        local page = I.page or DEFAULT_PAGE
-        local offset = math.max(0, (I.targetOffset or I:Offset()) - delta * page)
-        if offset < math.max(page, I:Total()) then I:Page(offset) end
+        local rows = I:Scrolling() and db().viewMode == "list" and 3 or 1
+        I:Scroll(-delta * I:Step() * rows)
     end)
+    local scroll = CreateFrame("Slider", nil, frame)
+    scroll:SetWidth(10); scroll:SetOrientation("VERTICAL"); scroll:SetValueStep(1); scroll:Hide()
+    local track = solid(scroll, "BACKGROUND"); track:SetAllPoints()
+    scroll:SetThumbTexture(WHITE)
+    local thumb = scroll:GetThumbTexture(); thumb:SetSize(10, 28)
+    scroll:SetScript("OnValueChanged", function(_, value)
+        if I.syncingScroll then return end
+        I:Scroll(math.floor(value + 0.5) * I:Step() - (I.targetOffset or I:Offset()))
+    end)
+    frame.scroll = scroll
     local header = frame:CreateTexture(nil, "ARTWORK")
     header:SetTexture("Interface\\DialogFrame\\UI-DialogBox-Header")
     header:SetSize(300, 64); header:SetPoint("TOP", 0, 12)
@@ -937,6 +1232,11 @@ function Inv:Create()
     frame.capacity = text(frame, "GameFontHighlightSmall", "Connecting...", "TOPRIGHT", -44, -22)
     local close = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -6, -6)
+    local options = button(frame, nil, "Options", 66, "TOPLEFT", 24, -18, function()
+        local panel = Windows[0].options
+        if panel then if panel:IsShown() then panel:Hide() else panel:Show(); panel:Raise() end end
+    end)
+    options:SetHeight(20)
     local search = CreateFrame("EditBox", self.prefix .. "Search", frame, "InputBoxTemplate")
     search:SetPoint("TOPLEFT", 26, -52); search:SetPoint("TOPRIGHT", -26, -52); search:SetHeight(24)
     search:SetAutoFocus(false); search:SetMaxLetters(80)
@@ -945,6 +1245,10 @@ function Inv:Create()
     magnifier:SetTexture("Interface\\Common\\UI-Searchbox-Icon")
     magnifier:SetSize(14, 14); magnifier:SetPoint("LEFT", 4, -1)
     local placeholder = text(search, "GameFontDisable", "Search inventory...", "LEFT", 22, 0)
+    local searchBg, searchEdges = solid(search, "BACKGROUND"), lines(search)
+    searchBg:SetPoint("TOPLEFT", -6, 0); searchBg:SetPoint("BOTTOMRIGHT", 0, 0)
+    searchEdges[1]:SetPoint("TOPLEFT", -6, 0); searchEdges[2]:SetPoint("BOTTOMLEFT", -6, 0)
+    searchEdges[3]:SetPoint("TOPLEFT", -6, 0); searchEdges[3]:SetPoint("BOTTOMLEFT", -6, 0)
     search:SetScript("OnTextChanged", function(box)
         local value = box:GetText()
         if value == "" then placeholder:Show() else placeholder:Hide() end
@@ -953,11 +1257,11 @@ function Inv:Create()
     search:SetScript("OnEscapePressed", function(box) box:ClearFocus(); frame:Hide() end)
     search:SetScript("OnEnterPressed", function(box) box:ClearFocus(); I.searchAt = GetTime() end)
     frame.tabs = {}
-    for category = 0, 5 do
+    for category = 0, #categories - 1 do
         frame.tabs[category] = button(frame, nil, categories[category + 1], tabWidths[category + 1],
             "TOPLEFT", 26, -99, function()
                 I.category = category
-                if I.scope == 0 then settings.lastCategory = category end
+                if I.scope == 0 and category < EARS_CATEGORY then settings.lastCategory = category end
                 I:Render(); I:Page(0)
             end)
     end
@@ -968,9 +1272,9 @@ function Inv:Create()
     end
     local bar = CreateFrame("StatusBar", nil, frame)
     bar:SetHeight(12); bar:SetPoint("BOTTOMLEFT", 26, 76); bar:SetPoint("BOTTOMRIGHT", -100, 76)
-    skin(bar, 0.1, 0.1, 0.1)
-    bar:SetStatusBarTexture("Interface\\TargetingFrame\\UI-StatusBar")
-    bar:SetStatusBarColor(1, 0.82, 0); bar:SetMinMaxValues(0, 1); bar:SetValue(0)
+    local barBg, barEdges = solid(bar, "BACKGROUND"), lines(bar)
+    barBg:SetAllPoints()
+    bar:SetStatusBarTexture(WHITE); bar:SetMinMaxValues(0, 1); bar:SetValue(0)
     frame.bar = bar
     frame.percent = text(frame, "GameFontNormalSmall", "0.0% full", "BOTTOMRIGHT", -26, 76)
     frame.sort = button(frame, nil, "Sort: Name", 95, "BOTTOMLEFT", 26, 46, function()
@@ -990,18 +1294,13 @@ function Inv:Create()
         "BOTTOMLEFT", 126, 46, function()
             if guildWindow then StaticPopup_Show("GUILDBANK_DEPOSIT") else I:Request(ACTION.depositAll) end
         end)
-    button(frame, nil, guildWindow and "Withdraw" or "Stack", guildWindow and 74 or 52, "BOTTOMLEFT",
+    local stack = button(frame, nil, guildWindow and "Withdraw" or "Stack", guildWindow and 74 or 52, "BOTTOMLEFT",
         guildWindow and 230 or 224, 46, function()
             if guildWindow then StaticPopup_Show("GUILDBANK_WITHDRAW") else I:Request(ACTION.merge) end
         end)
-    button(frame, nil, "<", 25, "BOTTOMLEFT", 303, 46, function()
-        I:Page(math.max(0, (I.targetOffset or I:Offset()) - I.page))
-    end)
+    local prev = button(frame, nil, "<", 25, "BOTTOMLEFT", 303, 46, function() I:Scroll(-I.page) end)
     frame.page = text(frame, "GameFontDisableSmall", "1 / 1", "BOTTOMLEFT", 334, 54)
-    button(frame, nil, ">", 25, "BOTTOMLEFT", 400, 46, function()
-        local offset = (I.targetOffset or I:Offset()) + I.page
-        if offset < I:Total() then I:Page(offset) end
-    end)
+    local nextPage = button(frame, nil, ">", 25, "BOTTOMLEFT", 400, 46, function() I:Scroll(I.page) end)
     frame.expand = button(frame, nil, "Expand Storage", 130, "BOTTOMRIGHT", -26, 46, function()
         if I.scope == 2 then I:GuildExpandPrompt(); return end
         if I.pending or not I.snapshot.upgrade or I.snapshot.upgrade == 0 then return end
@@ -1014,6 +1313,44 @@ function Inv:Create()
     frame.status = text(frame, "GameFontDisableSmall", "Connecting to digital inventory...", "BOTTOMLEFT", 26, 12)
     frame.status:SetWidth(I.w - 52); frame.status:SetHeight(32); frame.status:SetJustifyH("LEFT")
     frame.status:SetJustifyV("TOP")
+    -- Buttons on the footer row, with their anchor, x and height above the row's base line (see LayoutFooter).
+    frame.footerRow = { { frame.sort, "BOTTOMLEFT", 26, 0 }, { frame.depositAll, "BOTTOMLEFT", 126, 0 },
+        { stack, "BOTTOMLEFT", guildWindow and 230 or 224, 0 }, { prev, "BOTTOMLEFT", 303, 0 },
+        { frame.page, "BOTTOMLEFT", 334, 8 }, { nextPage, "BOTTOMLEFT", 400, 0 },
+        { frame.expand, "BOTTOMRIGHT", -26, 0 } }
+    -- Repaints the frame chrome for the active style; Classic keeps the stock dialog art.
+    frame.Paint = function(_, st)
+        local alpha, classic = db().alpha, st.classic
+        if classic then
+            frame:SetBackdrop(dialog); frame:SetBackdropColor(1, 1, 1, alpha)
+            header:Show(); skinBg:Hide(); skinWash:Hide(); skinRule:Hide()
+            for _, line in ipairs(skinEdges) do line:Hide() end
+            frame.title:ClearAllPoints(); frame.title:SetPoint("TOP", 0, -2); frame.title:SetFont(FONT, 13)
+        else
+            frame:SetBackdrop(nil)
+            header:Hide(); skinBg:Show(); skinWash:Show(); skinRule:Show()
+            for _, line in ipairs(skinEdges) do line:Show() end
+            tint(skinBg, st.bg, 0.97 * alpha); tintAll(skinEdges, st.edge); wash(skinWash, st, 0.22 * alpha)
+            tint(skinRule, st.dim, 0.6)
+            frame.title:ClearAllPoints(); frame.title:SetPoint("TOP", 0, -14); frame.title:SetFont(FONT, 15)
+        end
+        local template = { "Left", "Middle", "Right" }
+        for _, part in ipairs(template) do
+            local region = _G[search:GetName() .. part]
+            if region then if classic then region:Show() else region:Hide() end end
+        end
+        if classic then searchBg:Hide() else searchBg:Show() end
+        for _, line in ipairs(searchEdges) do if classic then line:Hide() else line:Show() end end
+        tint(searchBg, st.panel, 0.95); tintAll(searchEdges, st.dim)
+        tint(barBg, st.panel, 0.95); tintAll(barEdges, st.dim)
+        bar:SetStatusBarColor(st.edge[1], st.edge[2], st.edge[3])
+        tint(track, st.panel, 0.9); tint(thumb, st.edge, 0.9)
+        local function color(fs, c) fs:SetTextColor(c[1], c[2], c[3]) end
+        color(frame.title, st.edge); color(frame.capacity, st.muted); color(frame.page, st.muted)
+        color(frame.percent, st.edge); color(frame.status, st.muted); color(frame.gold, st.text)
+        color(frame.currency, st.text); color(placeholder, st.muted)
+    end
+    painted[#painted + 1] = frame
     -- Covers the grid while the remote bank is locked and not standing at a banker.
     local lock = CreateFrame("Frame", nil, frame)
     lock:SetPoint("TOPLEFT", 20, -130); lock:SetPoint("BOTTOMRIGHT", -20, 118)
@@ -1061,7 +1398,7 @@ function Inv:Create()
             else
                 I.w = math.max(MIN_W, math.min((x - left) / scale, (UIParent:GetWidth() - left) / scale))
                 I.h = math.max(MIN_H, math.min((top - y) / scale, top / scale))
-                I:Layout()
+                I:Layout(); I:LayoutTabs()
             end
         end)
     end)
@@ -1074,6 +1411,7 @@ function Inv:Create()
         EsteriaInventoryDB[positionKey] = { point, relativePoint, x, y }
         if Windows[0].refreshOptions then Windows[0].refreshOptions() end
     end)
+    frame:Paint(style())
     I:Apply()
     tinsert(UISpecialFrames, self.prefix .. "Frame")
 end
@@ -1168,88 +1506,313 @@ local function createPopups()
     }
 end
 
--- Interface Options panel (also /inventory config).
+-- The options window: its own Esteria-styled frame (not Interface Options), opened from the Options button or
+-- /inventory options. A rail of sections on the left, the section's settings on the right; every change applies live.
 local function buildOptions()
     local carried = Windows[0]
-    local panel = CreateFrame("Frame", "EsteriaInventoryOptions", UIParent)
-    panel.name = "Esteria Inventory"
-    local controls = {}
-    local function label(control, value)
-        local fontString = control:GetName() and _G[control:GetName() .. "Text"]
-        if fontString then fontString:SetText(value) end
+    local W, H, RAIL = 760, 560, 172
+    local f = CreateFrame("Frame", "EsteriaInventoryOptionsFrame", UIParent)
+    f:SetSize(W, H); f:SetPoint("CENTER"); f:SetFrameStrata("DIALOG"); f:SetToplevel(true)
+    f:EnableMouse(true); f:SetMovable(true); f:SetClampedToScreen(true); f:RegisterForDrag("LeftButton")
+    f:SetScript("OnDragStart", f.StartMoving); f:SetScript("OnDragStop", f.StopMovingOrSizing)
+    f:Hide(); tinsert(UISpecialFrames, "EsteriaInventoryOptionsFrame")
+    local bg, edges, top, rule = solid(f, "BACKGROUND"), lines(f), solid(f, "BORDER"), solid(f, "BORDER")
+    bg:SetAllPoints()
+    top:SetPoint("TOPLEFT", 1, -1); top:SetPoint("TOPRIGHT", -1, -1); top:SetHeight(46)
+    rule:SetPoint("TOPLEFT", 1, -46); rule:SetPoint("TOPRIGHT", -1, -46); rule:SetHeight(1)
+    local rail = solid(f, "BACKGROUND")
+    rail:SetPoint("TOPLEFT", 1, -47); rail:SetPoint("BOTTOMLEFT", 1, 1); rail:SetWidth(RAIL)
+    local railRule = solid(f, "BORDER")
+    railRule:SetPoint("TOPLEFT", RAIL + 1, -47); railRule:SetPoint("BOTTOMLEFT", RAIL + 1, 1); railRule:SetWidth(1)
+    local title = paintText(kitText(f, 18), "edge")
+    title:SetPoint("TOPLEFT", 20, -14); title:SetText("Esteria Inventory")
+    local subtitle = paintText(kitText(f, 11), "muted"); subtitle:SetPoint("LEFT", title, "RIGHT", 12, -2)
+    subtitle:SetText("Options")
+    local close = CreateFrame("Button", nil, f, "UIPanelCloseButton"); close:SetPoint("TOPRIGHT", 2, 2)
+    f.Paint = function(_, st)
+        tint(bg, st.bg, 0.98); tintAll(edges, st.edge); wash(top, st, 0.28); tint(rule, st.dim, 0.6)
+        tint(rail, st.panel, 0.9); tint(railRule, st.dim, 0.5)
     end
-    local function slider(key, title, low, high, step, x, y, percent)
-        local s = CreateFrame("Slider", "EsteriaInventoryOpt" .. key, panel, "OptionsSliderTemplate")
-        s:SetPoint("TOPLEFT", x, y); s:SetWidth(240)
-        s:SetMinMaxValues(low, high); s:SetValueStep(step)
-        local name = s:GetName()
-        if _G[name .. "Low"] then _G[name .. "Low"]:SetText(percent and (low * 100) .. "%" or low) end
-        if _G[name .. "High"] then _G[name .. "High"]:SetText(percent and (high * 100) .. "%" or high) end
-        local function caption(value) label(s, title .. ": " .. (percent and math.floor(value * 100 + 0.5) .. "%" or value)) end
+    painted[#painted + 1] = f
+
+    local refreshers = {}
+    local function refresh() for _, update in ipairs(refreshers) do update() end end
+    local function changed() applyAll(); refresh() end
+    local function flag(key) return function() return db()[key] end, function(value) db()[key] = value end end
+
+    -- A page is a scrolling column; controls stack downwards from page.y.
+    local pageCount = 0
+    local function newPage()
+        -- The stock scroll template finds its scrollbar by name ($parentScrollBar), so pages must be named.
+        pageCount = pageCount + 1
+        local scroll = CreateFrame("ScrollFrame", "EsteriaInventoryOptionsPage" .. pageCount, f,
+            "UIPanelScrollFrameTemplate")
+        scroll:SetPoint("TOPLEFT", RAIL + 20, -60); scroll:SetPoint("BOTTOMRIGHT", -34, 54)
+        local body = CreateFrame("Frame", nil, scroll)
+        body:SetSize(W - RAIL - 60, 10); scroll:SetScrollChild(body)
+        scroll:Hide()
+        return { scroll = scroll, body = body, y = 0, width = W - RAIL - 60 }
+    end
+    local function grow(page, height)
+        page.y = page.y - height
+        page.body:SetHeight(-page.y + 12)
+    end
+
+    local function heading(page, value, note)
+        if page.y < 0 then grow(page, 14) end
+        local h = paintText(kitText(page.body, 10), "edge"); h:SetPoint("TOPLEFT", 0, page.y); h:SetText(value:upper())
+        local line = solid(page.body, "BORDER"); line:SetHeight(1)
+        line:SetPoint("LEFT", h, "RIGHT", 8, 0); line:SetPoint("RIGHT", page.body, "RIGHT", -4, 0)
+        painted[#painted + 1] = { Paint = function(_, st) tint(line, st.dim, 0.5) end }
+        grow(page, 18)
+        if note then
+            local n = paintText(kitText(page.body, 10), "muted"); n:SetPoint("TOPLEFT", 0, page.y)
+            n:SetWidth(page.width - 8); n:SetJustifyH("LEFT"); n:SetText(note)
+            grow(page, math.max(14, n:GetHeight()) + 6)
+        end
+    end
+
+    -- Checkbox row: square box, label, optional muted note underneath.
+    local function toggle(page, labelText, note, get, set)
+        local row = CreateFrame("Button", nil, page.body)
+        row:SetPoint("TOPLEFT", 0, page.y); row:SetSize(page.width - 8, note and 36 or 24)
+        local box = CreateFrame("Frame", nil, row); box:SetSize(16, 16); box:SetPoint("TOPLEFT", 0, -3)
+        local boxBg, boxEdges, mark = solid(box, "BACKGROUND"), lines(box), solid(box, "ARTWORK")
+        boxBg:SetAllPoints(); mark:SetPoint("TOPLEFT", 4, -4); mark:SetPoint("BOTTOMRIGHT", -4, 4)
+        local labelFs = kitText(row, 12); labelFs:SetPoint("TOPLEFT", 26, -4); labelFs:SetText(labelText)
+        local noteFs
+        if note then
+            noteFs = kitText(row, 10); noteFs:SetPoint("TOPLEFT", 26, -19); noteFs:SetText(note)
+            noteFs:SetWidth(page.width - 40); noteFs:SetJustifyH("LEFT")
+        end
+        row.Paint = function(self, st)
+            st = st or style()
+            tint(boxBg, st.panel, 0.95); tintAll(boxEdges, self.hover and st.edge or st.dim)
+            tint(mark, st.edge, get() and 1 or 0)
+            labelFs:SetTextColor(st.text[1], st.text[2], st.text[3])
+            if noteFs then noteFs:SetTextColor(st.muted[1], st.muted[2], st.muted[3]) end
+        end
+        row:SetScript("OnClick", function(self)
+            PlaySound("igMainMenuOptionCheckBoxOn"); set(not get()); changed()
+        end)
+        row:SetScript("OnEnter", function(self) self.hover = true; self:Paint() end)
+        row:SetScript("OnLeave", function(self) self.hover = false; self:Paint() end)
+        painted[#painted + 1] = row; refreshers[#refreshers + 1] = function() row:Paint() end
+        grow(page, note and 40 or 26)
+        return row
+    end
+
+    -- Labelled slider with its value on the right.
+    local function slider(page, labelText, key, low, high, step, percent)
+        local labelFs = paintText(kitText(page.body, 12), "text"); labelFs:SetPoint("TOPLEFT", 0, page.y)
+        labelFs:SetText(labelText)
+        local valueFs = paintText(kitText(page.body, 12), "edge")
+        valueFs:SetPoint("TOPRIGHT", page.body, "TOPRIGHT", -8, page.y)
+        local s = CreateFrame("Slider", nil, page.body)
+        s:SetPoint("TOPLEFT", 0, page.y - 20); s:SetPoint("TOPRIGHT", page.body, "TOPRIGHT", -8, page.y - 20)
+        s:SetHeight(14); s:SetOrientation("HORIZONTAL"); s:SetMinMaxValues(low, high); s:SetValueStep(step)
+        s:EnableMouseWheel(true)
+        local track = solid(s, "BACKGROUND"); track:SetPoint("LEFT"); track:SetPoint("RIGHT"); track:SetHeight(4)
+        local fill = solid(s, "BORDER"); fill:SetPoint("LEFT"); fill:SetHeight(4)
+        s:SetThumbTexture(WHITE)
+        local thumb = s:GetThumbTexture(); thumb:SetSize(8, 14)
+        local function show(value)
+            valueFs:SetText(percent and (math.floor(value * 100 + 0.5) .. "%") or tostring(value))
+            local width = s:GetWidth() or 0
+            fill:SetWidth(math.max(1, width * (value - low) / (high - low)))
+        end
         s:SetScript("OnValueChanged", function(_, value)
             value = math.floor(value / step + 0.5) * step
-            caption(value)
-            if panel.loading then return end
+            show(value)
+            if f.loading or db()[key] == value then return end
             db()[key] = value
             applyAll()
         end)
-        controls[#controls + 1] = function() s:SetValue(db()[key]); caption(db()[key]) end
+        s:SetScript("OnMouseWheel", function(self, delta) self:SetValue(self:GetValue() + delta * step) end)
+        s:SetScript("OnSizeChanged", function() show(db()[key]) end)
+        painted[#painted + 1] = { Paint = function(_, st)
+            tint(track, st.panel, 1); tint(fill, st.dim, 1); tint(thumb, st.edge, 1)
+        end }
+        refreshers[#refreshers + 1] = function() s:SetValue(db()[key]); show(db()[key]) end
+        grow(page, 44)
     end
-    local function check(title, x, y, get, set)
-        local c = CreateFrame("CheckButton", "EsteriaInventoryChk" .. #controls, panel, "InterfaceOptionsCheckButtonTemplate")
-        c:SetPoint("TOPLEFT", x, y)
-        label(c, title)
-        c:SetScript("OnClick", function(self)
-            if panel.loading then return end
-            set(self:GetChecked() and true or false)
-            applyAll()
+
+    -- A row of mutually exclusive buttons.
+    local function choice(page, labelText, note, options, get, set)
+        local labelFs = paintText(kitText(page.body, 12), "text"); labelFs:SetPoint("TOPLEFT", 0, page.y)
+        labelFs:SetText(labelText)
+        grow(page, 18)
+        if note then
+            local n = paintText(kitText(page.body, 10), "muted"); n:SetPoint("TOPLEFT", 0, page.y)
+            n:SetWidth(page.width - 8); n:SetJustifyH("LEFT"); n:SetText(note)
+            grow(page, 16)
+        end
+        local buttons, x = {}, 0
+        for _, option in ipairs(options) do
+            local width = option[3] or 110
+            local b = button(page.body, nil, option[2], width, "TOPLEFT", x, page.y, function()
+                set(option[1]); changed()
+            end)
+            b:SetHeight(24)
+            buttons[#buttons + 1] = { b, option[1] }
+            x = x + width + 6
+        end
+        refreshers[#refreshers + 1] = function()
+            for _, entry in ipairs(buttons) do
+                if entry[2] == get() then entry[1]:LockHighlight() else entry[1]:UnlockHighlight() end
+            end
+        end
+        grow(page, 34)
+    end
+
+    -- Style cards: each previews its own palette; the active one gets a bright double edge.
+    local function styleCards(page)
+        local cardW, cardH, perRow = math.floor((page.width - 8 - 2 * 10) / 3), 74, 3
+        for index, preset in ipairs(STYLES) do
+            local col, row = (index - 1) % perRow, math.floor((index - 1) / perRow)
+            local card = CreateFrame("Button", nil, page.body)
+            card:SetSize(cardW, cardH); card:SetPoint("TOPLEFT", col * (cardW + 10), page.y - row * (cardH + 10))
+            local cardBg, cardEdges, inner = solid(card, "BACKGROUND"), lines(card), CreateFrame("Frame", nil, card)
+            cardBg:SetAllPoints(); tint(cardBg, preset.bg, 1)
+            inner:SetPoint("TOPLEFT", 1, -1); inner:SetPoint("BOTTOMRIGHT", -1, 1)
+            local innerEdges = lines(inner)
+            local band = solid(card, "BORDER"); band:SetPoint("TOPLEFT", 1, -1); band:SetPoint("TOPRIGHT", -1, -1)
+            band:SetHeight(22); wash(band, preset, 0.35)
+            local name = kitText(card, 13); name:SetPoint("TOPLEFT", 10, -6); name:SetText(preset.name)
+            name:SetTextColor(preset.edge[1], preset.edge[2], preset.edge[3])
+            local note = kitText(card, 10); note:SetPoint("TOPLEFT", 10, -26); note:SetText(preset.note)
+            note:SetTextColor(preset.muted[1], preset.muted[2], preset.muted[3])
+            for i, swatchColor in ipairs({ preset.panel, preset.dim, preset.edge, preset.text, preset.primary }) do
+                local swatch = solid(card, "ARTWORK"); swatch:SetSize(18, 10)
+                swatch:SetPoint("BOTTOMLEFT", 10 + (i - 1) * 22, 10); tint(swatch, swatchColor, 1)
+            end
+            card.Paint = function(self, st)
+                local active = db().style == preset.key
+                tintAll(cardEdges, active and st.edge or preset.dim, 1)
+                tintAll(innerEdges, st.edge, active and 1 or (self.hover and 0.4 or 0))
+            end
+            card:SetScript("OnClick", function()
+                PlaySound("igMainMenuOptionCheckBoxOn"); db().style = preset.key; changed()
+            end)
+            card:SetScript("OnEnter", function(self) self.hover = true; self:Paint(style()) end)
+            card:SetScript("OnLeave", function(self) self.hover = false; self:Paint(style()) end)
+            painted[#painted + 1] = card
+        end
+        grow(page, math.ceil(#STYLES / perRow) * (cardH + 10) + 4)
+    end
+
+    -- Accent colour: a swatch that opens the stock colour picker, and a reset back to the style's own colour.
+    local function accentPicker(page)
+        local labelFs = paintText(kitText(page.body, 12), "text"); labelFs:SetPoint("TOPLEFT", 0, page.y - 5)
+        labelFs:SetText("Accent colour")
+        local swatch = CreateFrame("Button", nil, page.body); swatch:SetSize(40, 22)
+        swatch:SetPoint("TOPLEFT", 150, page.y)
+        local swatchFill, swatchEdges = solid(swatch, "ARTWORK"), lines(swatch)
+        swatchFill:SetPoint("TOPLEFT", 2, -2); swatchFill:SetPoint("BOTTOMRIGHT", -2, 2)
+        local function setAccent(r, g, b) db().accent = r and { r, g, b } or false; applyAll() end
+        swatch:SetScript("OnClick", function()
+            local c = style().edge
+            ColorPickerFrame.hasOpacity, ColorPickerFrame.opacityFunc = false, nil
+            ColorPickerFrame.previousValues = db().accent and { c[1], c[2], c[3] } or false
+            ColorPickerFrame.func = function() setAccent(ColorPickerFrame:GetColorRGB()) end
+            ColorPickerFrame.cancelFunc = function(previous)
+                if previous then setAccent(previous[1], previous[2], previous[3]) else setAccent() end
+            end
+            ColorPickerFrame:SetColorRGB(c[1], c[2], c[3])
+            ColorPickerFrame:SetFrameStrata("FULLSCREEN_DIALOG")
+            ColorPickerFrame:Hide(); ColorPickerFrame:Show()
         end)
-        controls[#controls + 1] = function() c:SetChecked(get()) end
+        local reset = button(page.body, nil, "Use style colour", 130, "TOPLEFT", 200, page.y,
+            function() setAccent() end)
+        reset:SetHeight(22)
+        painted[#painted + 1] = { Paint = function(_, st)
+            tint(swatchFill, st.edge, 1); tintAll(swatchEdges, st.dim)
+        end }
+        grow(page, 34)
     end
-    local title = panel:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    title:SetPoint("TOPLEFT", 16, -16); title:SetText("Esteria Inventory")
-    slider("tileScale", "Tile scale", 0.6, 2, 0.05, 20, -60, true)
-    slider("gap", "Tile spacing", 0, 16, 1, 20, -110)
-    slider("maxTiles", "Max tiles per page", 1, 255, 1, 20, -160)
-    slider("scale", "Window scale", 0.5, 1.5, 0.05, 20, -210, true)
-    slider("alpha", "Window opacity", 0.3, 1, 0.05, 20, -260, true)
-    local function flag(key) return function() return db()[key] end, function(value) db()[key] = value end end
-    local y = -50
-    for _, option in ipairs({ { "lockPosition", "Lock window position" }, { "lockSize", "Lock window size and scale" },
-        { "replaceBags", "Bag keys open this window" }, { "showNames", "Item names on large tiles" },
-        { "qualityBorders", "Quality-coloured tile borders" }, { "sounds", "Open/close sounds" },
-        { "hints", "Extra tooltip hints" }, { "remember", "Remember last category and sort" }, { "showGold", "Show gold" },
-        { "contextMenu", "Right-click item menu (Equip, Disenchant, Destroy...)" },
-        { "bagButton", "Single bag button (hide DragonUI bag bar)" },
-        { "showBankTab", "Bank tab in the bag window" },
-        { "autoSort", "Automatic sorting (off: place items freely)" },
-        { "guildBank", "Esteria guild bank window (reload to apply)" } }) do
-        check(option[2], 300, y, flag(option[1]))
-        y = y - 26
-    end
-    for category = 1, 5 do
-        check("Show tab: " .. categories[category + 1], 20, -300 - (category - 1) * 24,
-            function() return not db().hiddenCategories[category] end,
-            function(value) db().hiddenCategories[category] = (not value) or nil end)
-    end
-    for s = 1, #sorts do
-        check("Allow sort: " .. sorts[s], 300, -410 - (s - 1) * 24,
-            function() return not db().hiddenSorts[s] end,
-            function(value) db().hiddenSorts[s] = (not value) or nil end)
-    end
-    local reset = CreateFrame("Button", "EsteriaInventoryResetButton", panel, "UIPanelButtonTemplate")
-    reset:SetSize(180, 26); reset:SetPoint("TOPLEFT", 20, -430); reset:SetText("Reset all to defaults")
-    reset:SetScript("OnClick", resetAll)
-    -- Currency picker: one checkbox per currency the character knows about (headers are expanded briefly).
-    local picker = CreateFrame("Frame", "EsteriaInventoryCurrencies", UIParent)
-    picker.name, picker.parent = "Currencies", panel.name
-    local scroll = CreateFrame("ScrollFrame", "EsteriaInventoryCurrenciesScroll", picker, "UIPanelScrollFrameTemplate")
-    scroll:SetPoint("TOPLEFT", 16, -50); scroll:SetPoint("BOTTOMRIGHT", -36, 16)
-    local content = CreateFrame("Frame", nil, scroll)
-    content:SetSize(560, 400); scroll:SetScrollChild(content)
-    local pickerTitle = picker:CreateFontString(nil, "ARTWORK", "GameFontNormalLarge")
-    pickerTitle:SetPoint("TOPLEFT", 16, -16); pickerTitle:SetText("Show currencies in the inventory window")
-    local boxes = {}
+
+    local SECTIONS = {
+        { "Appearance", function(page)
+            heading(page, "Style", "Pick a look for the inventory, bank and guild bank windows. Changes show at once.")
+            styleCards(page)
+            accentPicker(page)
+            heading(page, "Window")
+            slider(page, "Window opacity", "alpha", 0.3, 1, 0.05, true)
+            slider(page, "Window scale", "scale", 0.5, 1.5, 0.05, true)
+            heading(page, "Items")
+            choice(page, "Tile look", nil, { { "framed", "Framed" }, { "flat", "Flat" }, { "clean", "Clean" } },
+                flag("tileLook"))
+            toggle(page, "Quality-coloured borders", "Outline uncommon and better items in their quality colour.",
+                flag("qualityBorders"))
+            slider(page, "Item name text size", "textSize", 8, 14, 1)
+        end },
+        { "Layout", function(page)
+            heading(page, "View")
+            choice(page, "Show items as", "A grid of icons, or a list of rows with each item's name.",
+                { { "grid", "Icon grid" }, { "list", "List" } }, flag("viewMode"))
+            toggle(page, "Item names on large grid tiles", "Shown once tiles are big enough to fit a name.",
+                flag("showNames"))
+            heading(page, "Size")
+            slider(page, "Tile scale", "tileScale", 0.6, 2, 0.05, true)
+            slider(page, "Tile spacing", "gap", 0, 16, 1)
+            slider(page, "Most items per page", "maxTiles", 1, 255, 1)
+            heading(page, "Footer")
+            toggle(page, "Capacity bar", "The used / total bar above the buttons.", flag("showBar"))
+            toggle(page, "Help line", "The hint text along the bottom edge.", flag("showStatus"))
+            toggle(page, "Gold", "Your gold in the footer.", flag("showGold"))
+        end },
+        { "Browsing", function(page)
+            heading(page, "Moving through items")
+            choice(page, "Paging",
+                "Pages flip a screenful at a time; continuous scrolling moves one row per wheel step.",
+                { { false, "Pages" }, { true, "Continuous scroll", 140 } }, flag("scrollMode"))
+            heading(page, "Order")
+            toggle(page, "Automatic sorting", "Off: drag items wherever you like and they stay put.", flag("autoSort"))
+            toggle(page, "Remember last category and sort", nil, flag("remember"))
+            heading(page, "Sort button cycles through")
+            for index = 1, #sorts do
+                toggle(page, sorts[index], nil,
+                    function() return not db().hiddenSorts[index] end,
+                    function(value) db().hiddenSorts[index] = (not value) or nil end)
+            end
+        end },
+        { "Window", function(page)
+            heading(page, "Opening")
+            toggle(page, "Bag keys open this window", "B and the backpack button open Esteria Inventory.",
+                flag("replaceBags"))
+            toggle(page, "Single bag button", "Hide the DragonUI bag bar and keep one backpack button.",
+                flag("bagButton"))
+            toggle(page, "Open and close sounds", nil, flag("sounds"))
+            heading(page, "Position")
+            toggle(page, "Lock window position", nil, flag("lockPosition"))
+            toggle(page, "Lock window size and scale", "Hides the corner grip.", flag("lockSize"))
+            heading(page, "Banks")
+            toggle(page, "Bank tab in the inventory window", nil, flag("showBankTab"))
+            toggle(page, "Esteria guild bank window", "Replaces the stock guild bank. Takes effect after /reload.",
+                flag("guildBank"))
+        end },
+        { "Items", function(page)
+            heading(page, "Clicking items")
+            toggle(page, "Right-click item menu", "Right-click opens Use, Equip, Disenchant, Destroy and more.",
+                flag("contextMenu"))
+            toggle(page, "Extra tooltip hints", "Adds the click shortcuts to item tooltips.", flag("hints"))
+        end },
+        { "Tabs", function(page)
+            heading(page, "Category tabs", "Ears and Keyring only appear while you carry those items.")
+            for category = 1, #categories - 1 do
+                toggle(page, categories[category + 1], nil,
+                    function() return not db().hiddenCategories[category] end,
+                    function(value) db().hiddenCategories[category] = (not value) or nil end)
+            end
+        end },
+        { "Currencies", function(page)
+            heading(page, "Footer currencies", "Ticked currencies show next to your gold.")
+            page.listTop = page.y
+        end },
+    }
+
+    -- Currency rows depend on the character, so they are rebuilt each time the page is opened.
+    local currencyRows = {}
     local function listCurrencies()
         local names, collapsed = {}, {}
         if not GetCurrencyListSize then return names end
@@ -1266,39 +1829,81 @@ local function buildOptions()
         carried.scanning = false
         return names
     end
-    picker:SetScript("OnShow", function()
-        local names = listCurrencies()
-        for index, name in ipairs(names) do
-            local box = boxes[index]
-            if not box then
-                box = CreateFrame("CheckButton", "EsteriaInventoryCurrencyBox" .. index, content,
-                    "InterfaceOptionsCheckButtonTemplate")
-                box:SetPoint("TOPLEFT", 0, -(index - 1) * 24)
-                box:SetScript("OnClick", function(self)
-                    db().currencies[self.currency] = self:GetChecked() and true or nil
-                    applyAll()
-                end)
-                boxes[index] = box
+    local function fillCurrencies(page)
+        page.y = page.listTop
+        for _, row in pairs(currencyRows) do row:Hide() end
+        for _, name in ipairs(listCurrencies()) do
+            local row = currencyRows[name]
+            if row then
+                row:ClearAllPoints(); row:SetPoint("TOPLEFT", 0, page.y); row:Show(); grow(page, 26)
+            else
+                currencyRows[name] = toggle(page, name, nil,
+                    function() return db().currencies[name] and true or false end,
+                    function(value) db().currencies[name] = value or nil end)
             end
-            box.currency = name
-            label(box, name)
-            box:SetChecked(db().currencies[name] and true or false)
-            box:Show()
         end
-        for index = #names + 1, #boxes do boxes[index]:Hide() end
-        content:SetHeight(math.max(40, #names * 24))
-    end)
-    if InterfaceOptions_AddCategory then InterfaceOptions_AddCategory(picker) end
-    carried.refreshOptions = function()
-        panel.loading = true
-        for _, refresh in ipairs(controls) do refresh() end
-        panel.loading = false
+        carried.refreshOptions()
     end
-    panel:SetScript("OnShow", carried.refreshOptions)
-    panel.refresh = carried.refreshOptions
-    panel.okay, panel.cancel, panel.default = function() end, function() end, resetAll
-    if InterfaceOptions_AddCategory then InterfaceOptions_AddCategory(panel) end
-    carried.options = panel
+
+    local pages, railButtons, current = {}, {}, nil
+    local function showSection(index)
+        current = index
+        for i, page in ipairs(pages) do if i == index then page.scroll:Show() else page.scroll:Hide() end end
+        for i, b in ipairs(railButtons) do b.selected = i == index; b:Paint() end
+        if SECTIONS[index][1] == "Currencies" then fillCurrencies(pages[index]) end
+    end
+    for index, section in ipairs(SECTIONS) do
+        local page = newPage()
+        section[2](page)
+        pages[index] = page
+        local b = CreateFrame("Button", nil, f)
+        b:SetSize(RAIL - 12, 30); b:SetPoint("TOPLEFT", 7, -56 - (index - 1) * 32)
+        local wash2, accent = solid(b, "BACKGROUND"), solid(b, "ARTWORK")
+        wash2:SetAllPoints(); accent:SetPoint("TOPLEFT"); accent:SetPoint("BOTTOMLEFT"); accent:SetWidth(3)
+        local labelFs = kitText(b, 12); labelFs:SetPoint("LEFT", 14, 0); labelFs:SetText(section[1])
+        b.Paint = function(self, st)
+            st = st or style()
+            tint(wash2, st.edge, self.selected and 0.12 or (self.hover and 0.06 or 0))
+            tint(accent, st.edge, self.selected and 1 or 0)
+            local c = self.selected and st.edge or st.text
+            labelFs:SetTextColor(c[1], c[2], c[3])
+        end
+        b:SetScript("OnClick", function() PlaySound("igMainMenuOptionCheckBoxOn"); showSection(index) end)
+        b:SetScript("OnEnter", function(self) self.hover = true; self:Paint() end)
+        b:SetScript("OnLeave", function(self) self.hover = false; self:Paint() end)
+        painted[#painted + 1] = b; railButtons[index] = b
+    end
+
+    -- Footer: a two-click reset and Done.
+    local resetButton = button(f, nil, "Reset all to defaults", 170, "BOTTOMLEFT", RAIL + 20, 14, function(self)
+        if self.armed and GetTime() - self.armed < 3 then
+            self.armed = nil; self:SetText("Reset all to defaults"); resetAll()
+        else
+            self.armed = GetTime(); self:SetText("Click again to reset")
+        end
+    end)
+    resetButton:SetScript("OnUpdate", function(self)
+        if self.armed and GetTime() - self.armed >= 3 then self.armed = nil; self:SetText("Reset all to defaults") end
+    end)
+    local done = button(f, nil, "Done", 100, "BOTTOMRIGHT", -20, 14, function() f:Hide() end)
+    done.selected = true; done:Paint()
+    local hint = paintText(kitText(f, 10), "muted"); hint:SetPoint("BOTTOMLEFT", 14, 20)
+    hint:SetText("/inventory options")
+
+    carried.refreshOptions = function()
+        f.loading = true
+        refresh()
+        f.loading = false
+        paintAll()
+    end
+    f:SetScript("OnShow", function()
+        PlaySound("igCharacterInfoOpen")
+        carried.refreshOptions()
+        showSection(current or 1)
+    end)
+    f:SetScript("OnHide", function() PlaySound("igCharacterInfoClose") end)
+    f:Paint(style())
+    carried.options = f
 end
 
 local guildClassOrder
@@ -1539,6 +2144,7 @@ end
 
 -- Delivers one server snapshot (scope 0 carried, 1 bank) to the window(s) that show that storage.
 function Inv:Deliver(snapshot, scope)
+    local learnedSpecialTabs = scope == 0 and snapshot.specialTabs and not self.snaps[0].specialTabs
     self.snaps[scope] = snapshot
     local asked = self.pending and snapshot.request == self.pending.id and self.pending.action == ACTION.browse
     if self.pending and snapshot.request == self.pending.id then self.pending = nil end
@@ -1546,6 +2152,13 @@ function Inv:Deliver(snapshot, scope)
     if self.view == scope then
         self.snapshot = snapshot
         self.targetOffset = nil
+        if not self:HasCategory(self.category) then
+            self.category = 0
+            self.queued = { offset = 0 }
+        elseif learnedSpecialTabs then
+            self.queued = self.queued or { offset = 0 }
+        end
+        self:LayoutTabs()
         -- A server without variable pages always answers with 20 rows; stop asking for more.
         local rows = #snapshot.rows
         if asked and rows == DEFAULT_PAGE and self.page > DEFAULT_PAGE and snapshot.offset + rows < snapshot.total then
@@ -1616,7 +2229,11 @@ events:SetScript("OnEvent", function(_, event, arg1, arg2, arg3, arg4)
     elseif event == "PLAYER_LEAVING_WORLD" then
         for scope = 0, 2 do
             local w = Windows[scope]
-            if w then w.active, w.pending, w.cap = false, nil, nil; w.snaps[0].active, w.snaps[1].active = false, false end
+            if w then
+                w.active, w.pending, w.cap, w.queued = false, nil, nil, nil
+                w.snaps[0].active, w.snaps[1].active = false, false
+                w.snaps[0].specialTabs, w.snaps[1].specialTabs = false, false
+            end
         end
         State.unlocked, State.atBanker, State.atGuildBank = false, false, false
         I.serverReady, I.nextDiscovery, I.discoveryDeadline, I.activateAt = false, nil, nil, nil
@@ -1725,7 +2342,7 @@ events:SetScript("OnUpdate", function()
         elseif w.pageAt and now >= w.pageAt then
             -- Window or tile settings changed the page size; refetch from the first visible item.
             w.pageAt = nil
-            if (w.active or scope >= 1) and w.frame:IsShown() then w:Page(w.snapshot.offset or 0) end
+            if (w.active or scope >= 1) and w.frame:IsShown() then w:Page(w:Offset()) end
         elseif w.refreshAt and now >= w.refreshAt and not w.pending then
             w.refreshAt = nil
             if w.frame:IsShown() then w:Refresh() end
@@ -1743,14 +2360,44 @@ SlashCmdList.ESTERIAINVENTORY = function(message)
         DEFAULT_CHAT_FRAME:AddMessage("Esteria Inventory bag replacement: "
             .. (EsteriaInventoryDB.replaceBags and "enabled" or "disabled"))
     elseif message == "config" or message == "options" then
-        if InterfaceOptionsFrame_OpenToCategory and I.options then
-            -- Called twice: the first call can open the wrong category on a fresh Interface Options frame.
-            InterfaceOptionsFrame_OpenToCategory(I.options); InterfaceOptionsFrame_OpenToCategory(I.options)
-        end
+        if I.options then I.options:Show(); I.options:Raise() end
     elseif message == "bank" then
         I:Show(); I:SetView(1)
     elseif message == "reset" then
         resetAll()
+    elseif message == "debug" then
+        -- Reports what sits on screen: a held item, the stuck drag icon, and any tile whose icon left its tile.
+        local say = function(text) DEFAULT_CHAT_FRAME:AddMessage("|cffffd100Esteria debug:|r " .. text) end
+        local kind, id = GetCursorInfo()
+        say("cursor " .. tostring(kind) .. " " .. tostring(id) .. ", drag icon " .. (holder and holder:IsShown()
+            and "SHOWN" or "hidden") .. ", view " .. I.view .. ", page " .. tostring(I.page) .. ", cols "
+            .. tostring(I.cols) .. ", tiles " .. #I.buttons)
+        local found = 0
+        for index, b in ipairs(I.buttons) do
+            local art = _G[b:GetName() .. "IconTexture"]
+            local bx, by = b:GetCenter()
+            local ax, ay = art:GetCenter()
+            local point, relative = art:GetPoint()
+            if b:IsVisible() and art:IsVisible() and bx and ax
+                and (math.abs(ax - bx) > 3 or math.abs(ay - by) > 12 or relative ~= b) then
+                found = found + 1
+                say("tile " .. index .. " icon off by " .. math.floor(ax - bx) .. "," .. math.floor(ay - by)
+                    .. " anchor " .. tostring(point) .. " to " .. tostring(relative and relative:GetName())
+                    .. " size " .. math.floor(art:GetWidth()) .. ", row " .. tostring(b.row and b.row.name))
+            end
+        end
+        say(found .. " misplaced icons")
+        local settings = db()
+        say("viewMode " .. tostring(settings.viewMode) .. ", style " .. tostring(settings.style) .. ", scroll "
+            .. tostring(settings.scrollMode))
+        -- Hover the stray icon while running this: names the frame drawing it and its parents.
+        local focus, chain = GetMouseFocus(), {}
+        while focus and #chain < 6 do
+            chain[#chain + 1] = tostring(focus:GetName() or ("<" .. tostring(focus:GetObjectType()) .. ">"))
+            focus = focus:GetParent()
+        end
+        say("under mouse: " .. (#chain > 0 and table.concat(chain, " < ") or "nothing"))
+        for err in pairs(reportedErrors) do say("error: " .. tostring(err)) end
     elseif tonumber(message) then
         EsteriaInventoryDB.scale = math.max(0.4, math.min(1.5, tonumber(message)))
         I.frame:Hide(); I:Show()

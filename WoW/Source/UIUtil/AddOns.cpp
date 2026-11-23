@@ -18,7 +18,7 @@
 #include "WoW/Source/UIUtil/BannedAddOns.h"
 #include "WoW/Source/Ui/AddOns.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 #include "WoW/Source/Ui/Types.h"
 #include "WoW/Source/Ui/UIBindings.h"
 

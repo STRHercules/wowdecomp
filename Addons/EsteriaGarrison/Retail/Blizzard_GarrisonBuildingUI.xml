@@ -878,6 +878,7 @@
 								</Anchors>
 								<Scripts>
 									<OnEnter function="GarrisonBuildingFrameComplete_OnEnter"/>
+									<OnMouseUp function="GarrisonBuildingFrameComplete_OnClick"/>
 									<OnLeave function="GameTooltip_Hide"/>
 								</Scripts>
 							</Frame>

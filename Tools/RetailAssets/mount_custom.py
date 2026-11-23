@@ -1,6 +1,6 @@
 """Write EsteriaMounts/custom.csv: which installed mounts the Customize window offers, and how.
 
-Usage: mount_custom.py <reader> <definitions> <tables-dir> <output.csv> <Data/Retail/Packs>
+Usage: mount_custom.py <reader> <definitions> <tables-dir> <output.csv> <packs folder: G:/EsteriaToolData/RetailPacks>
   tables-dir: the pinned build's DB2s, as for mount_skins.py (the client's appearance resolver reads the same build).
 Rows (WoW/Common/ComponentCore/MountCustomize.cpp):
   display;m;chrModel                       a ChrModel mount: options, choices and drawing come from the retail tables

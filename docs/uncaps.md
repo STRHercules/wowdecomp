@@ -1,6 +1,8 @@
 # Implementation Plan: Uncapping the Quest Log, Classes, and Bag Sizes
 
-Status: client foundation implemented; server/UI integration and live acceptance pending
+Status: 1000-quest client + server implemented (2026-11-20: EsteriaWoW `MAX_QUEST_LOG_SIZE` 1000, shifted player
+fields, uint16 abandon slot; `build/retail-satchel` configured with 1000 slots; quest UI in `Addons/EsteriaQuestLog`);
+live acceptance pending
 Target: WoW 3.3.5a client (build 12340) as reconstructed in this repo, x64 primary / Win32 for layout checks
 Companion to: `README.md` (build instructions, `WOWDECOMP_DISABLE_SIGNATURE_CHECKS`)
 

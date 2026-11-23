@@ -31,6 +31,13 @@ CLIENT_TABLES = {"SpellVisual": (32, ()), "SpellVisualKit": (38, ()), "SpellVisu
                  "SpellVisualKitModelAttach": (10, ())}
 
 
+def packs_dir(retail):
+    """Pack folders (staged imports): moved out of the client on 2026-11-17 to <drive>/EsteriaToolData/RetailPacks;
+    a client that still has Data/Retail/Packs keeps using it."""
+    moved = Path(retail).resolve().parents[2] / "EsteriaToolData" / "RetailPacks"
+    return moved if moved.is_dir() else Path(retail) / "Packs"
+
+
 def digest(data):
     return hashlib.sha256(data).hexdigest()
 
@@ -128,7 +135,7 @@ def client_ids(client, server_root, exclude_pack=None):
                     ids[table].update(row[0] for row in wdbc(payload, fields)[0])
                     providers.append({"file": str(loose), "table": table, "sha256": digest(payload)})
     for table, (fields, _) in TABLES.items():
-        for path in sorted((data / "Retail/Packs").glob(f"*/tables/{table.lower()}.dbc")):
+        for path in sorted(packs_dir(data / "Retail").glob(f"*/tables/{table.lower()}.dbc")):
             if path.parent.parent.name == exclude_pack:
                 continue
             payload = path.read_bytes()
@@ -365,7 +372,7 @@ def install(args):
     if previous and previous != {"source_key": manifest["source_key"], "definition_sha256": manifest["definition_sha256"]}:
         raise ValueError("Pack identity changed; explicit revision support is required")
     for installed_slug in state["packs"]:
-        other = load_pack(root / "Packs" / installed_slug)
+        other = load_pack(packs_dir(root) / installed_slug)
         if other["source"]["build"] != manifest["source"]["build"] or other["source"]["product"] != manifest["source"]["product"]:
             raise ValueError("This runtime registry supports one pinned source build")
         if other["source_key"] == manifest["source_key"] and installed_slug != slug:
@@ -381,7 +388,7 @@ def install(args):
         if "file" in provider and "Retail" not in Path(provider["file"]).parts:
             if digest(Path(provider["file"]).read_bytes()) != provider["sha256"]:
                 raise ValueError("Client baseline changed since staging")
-    pack_path = root / "Packs" / slug
+    pack_path = packs_dir(root) / slug
     if pack_path.exists() and load_pack(pack_path)["definition_sha256"] != manifest["definition_sha256"]:
         raise ValueError("Pack directory already contains different content")
     current_client_ids, current_providers = client_ids(args.client, args.server_root, exclude_pack=slug)
@@ -425,7 +432,7 @@ def install(args):
         if not destination.exists():
             shutil.copy2(original, destination)
     state["packs"][slug] = {"source_key": manifest["source_key"], "definition_sha256": manifest["definition_sha256"]}
-    packs = [root / "Packs" / name for name in sorted(state["packs"])]
+    packs = [packs_dir(root) / name for name in sorted(state["packs"])]
     revision = digest(json.dumps(state, sort_keys=True).encode())[:16]
     registry = root / "Registries" / revision
     registry.mkdir(parents=True, exist_ok=True)

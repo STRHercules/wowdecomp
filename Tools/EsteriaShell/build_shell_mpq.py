@@ -276,7 +276,7 @@ def main():
     back, front = swap_sky()
     entries["Interface" + B + "Esteria" + B + "SwapSkyBack.tga"] = tga(back)
     entries["Interface" + B + "Esteria" + B + "SwapSkyFront.tga"] = tga(front)
-    for addon in ("EverlookBroadcasting", "Manastorm_Transmog", "EsteriaSwap", "EsteriaPerks"):
+    for addon in ("EverlookBroadcasting", "Manastorm_Transmog", "EsteriaSwap", "EsteriaPerks", "EsteriaWanted"):
         entries.update(tree(REPO / "Addons" / addon, "Interface" + B + "AddOns" + B + addon + B))
     # The Codex draws with the character creator's style kit: one file, shipped in both places.
     entries["Interface" + B + "AddOns" + B + "EsteriaPerks" + B + "esteria_style.lua"] = (

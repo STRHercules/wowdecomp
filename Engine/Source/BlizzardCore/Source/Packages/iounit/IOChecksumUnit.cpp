@@ -5,7 +5,7 @@
 #include "Engine/Source/BlizzardCore/Source/Packages/Mopaq/MPQGlobals.h"
 #include "Engine/Source/BlizzardCore/Source/System/File/File.h"
 #include "Engine/Source/BlizzardCore/Source/System/Lock/Lock.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 // VERIFY: 759a2ec7 manual
 // OFFSET: 0x00426820

@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Esteria Professions
+## Notes: Every profession in one window: overview, recipes, reagents and crafting. Replaces the stock and DragonUI profession windows.
+## OptionalDeps: DragonUI
+## SavedVariables: EsteriaProfessionsDB
+esteria_style.lua
+EsteriaProfessions.lua

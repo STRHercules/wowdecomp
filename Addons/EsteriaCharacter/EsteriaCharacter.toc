@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Esteria Character
+## Notes: Character sheet in the Esteria look: gear and model, stats, titles, gear sets, reputation, skills, currency. Replaces the stock and DragonUI character windows.
+## OptionalDeps: DragonUI, ClasslessWildcard
+## SavedVariables: EsteriaCharacterDB
+esteria_style.lua
+EsteriaCharacter.lua

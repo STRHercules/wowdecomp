@@ -1,0 +1,8 @@
+## Interface: 30300
+## Title: Esteria Casino
+## Notes: Casino window: blackjack, slots, Goblin Dice, chess, checkers, Hold'em and the lottery. Needs mod-esteria-casino.
+esteria_style.lua
+EsteriaCasino.lua
+CasinoBoards.lua
+CasinoPoker.lua
+CasinoLottery.lua

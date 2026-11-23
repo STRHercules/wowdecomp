@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Esteria Spellbook
+## Notes: Spellbook in the Esteria look: books rail, searchable spell grid, spell details. Replaces the stock and DragonUI spellbooks.
+## OptionalDeps: DragonUI
+## SavedVariables: EsteriaSpellbookDB
+esteria_style.lua
+EsteriaSpellbook.lua

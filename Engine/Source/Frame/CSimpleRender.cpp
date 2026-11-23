@@ -41,6 +41,7 @@
 #include "Engine/Source/Services/SysMessage.h"
 #include "Engine/Source/Tempest/CImVector.h"
 #include "Engine/Source/Tempest/CRect.h"
+#include "Engine/Source/Frame/RetailXML.h"
 
 // STATIC: 0x009EA254
 static const uint8_t s_letterHasFinalConsonant[26] = { 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -1799,9 +1800,20 @@ void CSimpleFontString::SetIndented(int32_t indented) {
 // VERIFY: 83e312ff manual
 // OFFSET: 0x004873E0
 void CSimpleFontString::LoadXML(XMLNode* node, CStatus* status) {
-    const char* inherits = node->GetAttributeByName("inherits");
+    const char* inheritList = node->GetAttributeByName("inherits");
 
-    if (inherits && *inherits) {
+    // Not in the original: retail lists several ("UserScaledFontGameNormalSmall, UserScaledFontStringTemplate"), a
+    // font object and templates; each is applied in order. A single name behaves exactly as before.
+    char inherits[1024];
+    const char* cursor = inheritList;
+
+    while (cursor && *cursor) {
+        SStrTokenize(&cursor, inherits, sizeof(inherits), " ,", nullptr);
+
+        if (!inherits[0]) {
+            break;
+        }
+
         CSimpleFont* font = CSimpleFont::GetFont(inherits, 0);
 
         if (font) {
@@ -1891,6 +1903,13 @@ void CSimpleFontString::LoadXML(XMLNode* node, CStatus* status) {
 
             if (heightNode) {
                 LoadXML_Value(heightNode, fontHeight, status);
+            }
+
+            // Not in the original: retail's height="12" attribute.
+            const char* heightAttr = node->GetAttributeByName("height");
+
+            if (!heightNode && heightAttr && *heightAttr) {
+                fontHeight = NDCToDDCWidth(SStrToFloat(heightAttr) / (CoordinateGetAspectCompensation() * 1024.0f));
             }
 
             if (fontHeight <= 0.00000011920929f) {
@@ -2210,6 +2229,7 @@ CSimpleTexture::~CSimpleTexture() {
         HandleClose(reinterpret_cast<HOBJECT>(this->m_texture));
     }
 
+    RetailXML_ForgetTexture(this); // Not in the original
     CSimpleTexture::s_count--;
 }
 
@@ -2398,6 +2418,10 @@ int32_t CSimpleTexture::SetTexture(const char* fileName, int32_t wrapU, int32_t 
 
         this->m_shader = CSimpleTexture::GetImageModePixelShader(mode);
     } else if (fileName && *fileName) {
+        // Not in the original: a retail UI texture path this client lacks loads from the Retail source.
+        char retailPath[64];
+        fileName = RetailXML_TextureFallback(fileName, retailPath, sizeof(retailPath));
+
         CStatus status;
         texture = TextureCreate(fileName, CGxTexFlags(filter, wrapU, wrapV, 0, 0, 0, 1), &status, 0x17);
 
@@ -2773,6 +2797,8 @@ void CSimpleTexture::LoadXML(XMLNode* node, CStatus* status) {
     }
 
     const char* file = node->GetAttributeByName("file");
+    char retailPath[64];
+    file = RetailXML_TexturePath(file, retailPath, sizeof(retailPath)); // Not in the original: file="<FileDataID>"
 
     if (file && *file) {
         if (this->SetTexture(file, wrapU, wrapV, CSimpleTexture::s_textureFilterMode, ImageMode_Normal)) {
@@ -2815,5 +2841,17 @@ void CSimpleTexture::LoadXML(XMLNode* node, CStatus* status) {
 
     if (nonBlocking && *nonBlocking) {
         this->m_textureFlags ^= ((StringToBOOL(nonBlocking) != 0) ^ this->m_textureFlags) & 0x1;
+    }
+
+    // Not in the original: retail atlas="name" useAtlasSize="true".
+    const char* atlas = node->GetAttributeByName("atlas");
+
+    if (atlas && *atlas) {
+        const char* useAtlasSize = node->GetAttributeByName("useAtlasSize");
+
+        if (!RetailXML_SetAtlas(this, atlas, useAtlasSize && StringToBOOL(useAtlasSize))) {
+            const char* name = this->GetName();
+            status->Add(STATUS_WARNING, "Texture %s: Unknown atlas %s", name ? name : "<unnamed>", atlas);
+        }
     }
 }

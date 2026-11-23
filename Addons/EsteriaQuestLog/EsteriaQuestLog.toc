@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Esteria Quest Log
+## Notes: Searchable, filterable quest log for up to 1000 active quests. Replaces the stock quest log.
+## SavedVariables: EsteriaQuestLogDB
+esteria_style.lua
+EsteriaQuestLog.lua

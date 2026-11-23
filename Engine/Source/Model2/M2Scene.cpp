@@ -322,7 +322,13 @@ uint32_t CM2Scene::SphereTestModels(const C3Vector& start, const C3Vector& dir, 
             radiusSq = m3Sphere.r * m3Sphere.r;
         } else {
             M2Data* data = model->m_shared->m_data;
-            const M2Bounds* bounds = model->m_hitTestMode == 3 ? &data->m_collisionBounds : &data->m_sequences[model->m_bones->m_sequence.m_sequenceIndex].m_bounds;
+            uint32_t const sequence = model->m_bones->m_sequence.m_sequenceIndex;
+            // A model seen before its first sequence resolves carries index 0xFFFF; it is not pickable yet.
+            if (model->m_hitTestMode != 3 && sequence >= data->m_sequences.m_count) {
+                continue;
+            }
+
+            const M2Bounds* bounds = model->m_hitTestMode == 3 ? &data->m_collisionBounds : &data->m_sequences[sequence].m_bounds;
 
             if (fabsf(bounds->m_radius) < 0.00000023841858f) {
                 continue;

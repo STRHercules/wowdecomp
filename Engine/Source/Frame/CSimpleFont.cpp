@@ -225,6 +225,13 @@ void CSimpleFont::LoadXML(XMLNode* node, CStatus* status) {
                 LoadXML_Value(heightNode, fontHeight, status);
             }
 
+            // Not in the original: retail's height="12" attribute, in the same UI units as <AbsValue val="12"/>.
+            const char* heightAttr = node->GetAttributeByName("height");
+
+            if (!heightNode && heightAttr && *heightAttr) {
+                fontHeight = NDCToDDCWidth(SStrToFloat(heightAttr) / (CoordinateGetAspectCompensation() * 1024.0f));
+            }
+
             if (!(fontHeight > 0.0f)) {
                 const char* name = this->GetName();
                 status->Add(STATUS_WARNING, "Font %s: Missing font height in %s element", name ? name : "<unnamed>", node->m_name.m_str);

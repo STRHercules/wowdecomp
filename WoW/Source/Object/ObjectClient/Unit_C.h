@@ -596,6 +596,9 @@ class CGUnit_C : public CGObject_C, public CGUnit {
     void GetFootprintInfo(int32_t* textureId, float* size) const;
     int32_t IsControlledByViewer() const;
     bool CanAttack(const CGUnit_C* unit) const;
+    bool IsEsteriaWanted() const;
+    bool IsEsteriaExposedThief() const;
+    bool CanUseEsteriaPlayerPickpocket() const;
     int32_t CanEquipItemsInThisForm() const;
     uint32_t GetVoiceSex() const;
     bool IsShapeShifted() const;

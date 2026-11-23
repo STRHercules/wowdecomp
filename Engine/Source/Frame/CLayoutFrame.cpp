@@ -1371,6 +1371,12 @@ void CLayoutFrame::LoadXML(XMLNode* node, CStatus* status) {
         FRAMEPOINT point;
         FRAMEPOINT relativePoint;
 
+        const char* relativeKey = anchor->GetAttributeByName("relativeKey");
+
+        if (relativeKey && *relativeKey) {
+            continue; // Not in the original: retail key anchors are set by RetailXML_LoadRelativeAnchors
+        }
+
         const char* pointAttr = anchor->GetAttributeByName("point");
 
         if (!pointAttr || !StringToFramePoint(pointAttr, point)) {

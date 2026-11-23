@@ -101,7 +101,7 @@ const Retail::MountSkin* EsteriaMountSkin(uint32_t display); // CharacterCompone
 #include "Engine/Source/Frame/CLayoutFrame.h"
 #include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Tempest/CAaSphere.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 #include "WoW/Source/DB/DBClient/GameObjectStats_C.h"
 #include "WoW/Source/DB/Rec/CreatureDisplayInfoExtraRec.h"
 #include "WoW/Source/DB/Rec/CreatureFamilyRec.h"
@@ -160,6 +160,188 @@ const Retail::MountSkin* EsteriaMountSkin(uint32_t display); // CharacterCompone
 #include "WoW/Source/WorldClient/FrameTime.h"
 #include "WoW/Source/WorldClient/Map.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
+
+void RecordEsteriaWantedSightings(uint64_t viewer, uint32_t map, std::unordered_set<uint64_t> const& players);
+void ClearEsteriaWantedSightings();
+
+namespace {
+constexpr uint32_t BountyCombatOpcode = 0x6AE;
+constexpr uint32_t WantedVisibleOpcode = 0x6AF;
+constexpr uint32_t ThiefVisibleOpcode = 0x6B0;
+constexpr uint32_t PlayerPickpocketReadyOpcode = 0x6B2;
+constexpr uint16_t MaxWorldPvpSnapshotEntries = 256;
+constexpr uint8_t BountyMayAttack = 1;
+constexpr uint8_t BountyMayBeAttacked = 2;
+constexpr uint32_t WorldPvpSnapshotLifetimeMs = 1500;
+
+std::unordered_map<uint64_t, uint8_t> s_bountyRelations;
+uint64_t s_bountyViewer = 0;
+uint32_t s_bountyMap = 0;
+uint32_t s_bountyReceivedAt = 0;
+
+struct VisibleWorldPvpStatus {
+    std::unordered_set<uint64_t> players;
+    uint64_t viewer = 0;
+    uint32_t map = 0;
+    uint32_t receivedAt = 0;
+};
+
+VisibleWorldPvpStatus s_visibleWanted;
+VisibleWorldPvpStatus s_visibleThieves;
+uint64_t s_pickpocketViewer = 0;
+uint32_t s_pickpocketMap = 0;
+uint32_t s_pickpocketReceivedAt = 0;
+
+constexpr uint8_t ReverseBountyDirection(uint8_t permission) {
+    return ((permission & BountyMayAttack) << 1) | ((permission & BountyMayBeAttacked) >> 1);
+}
+
+static_assert(ReverseBountyDirection(BountyMayAttack) == BountyMayBeAttacked);
+static_assert(ReverseBountyDirection(BountyMayAttack | BountyMayBeAttacked) == (BountyMayAttack | BountyMayBeAttacked));
+
+bool ReadWorldPvpSnapshotHeader(CDataStore* msg, uint32_t entrySize,
+    uint64_t& viewer, uint32_t& map, uint16_t& count) {
+    constexpr uint32_t HeaderSize = 14;
+    if (!msg || msg->m_read > msg->m_size) {
+        return false;
+    }
+
+    uint32_t const remaining = msg->m_size - msg->m_read;
+    if (remaining < HeaderSize || remaining > HeaderSize + MaxWorldPvpSnapshotEntries * entrySize ||
+        !msg->FetchRead(msg->m_read, remaining)) {
+        return false;
+    }
+
+    msg->Get(viewer);
+    msg->Get(map);
+    msg->Get(count);
+    return viewer && count <= MaxWorldPvpSnapshotEntries && msg->m_size - msg->m_read == count * entrySize &&
+        viewer == ClntObjMgrGetActivePlayer().m_guid && map == ClntObjMgrGetMapID();
+}
+
+bool IsWorldPvpSnapshotCurrent(uint64_t viewer, uint32_t map, uint32_t receivedAt) {
+    return viewer && viewer == ClntObjMgrGetActivePlayer().m_guid && map == ClntObjMgrGetMapID() &&
+        uint32_t(OsGetAsyncTimeMs() - receivedAt) < WorldPvpSnapshotLifetimeMs;
+}
+
+int32_t ReceivePlayerPickpocketReady(void*, NETMESSAGE, uint32_t, CDataStore* msg) {
+    constexpr uint32_t PayloadSize = 12;
+    if (!msg || msg->m_read > msg->m_size || msg->m_size - msg->m_read != PayloadSize ||
+        !msg->FetchRead(msg->m_read, PayloadSize)) {
+        return 1;
+    }
+
+    uint64_t viewer;
+    uint32_t map;
+    msg->Get(viewer);
+    msg->Get(map);
+    if (viewer && viewer == ClntObjMgrGetActivePlayer().m_guid && map == ClntObjMgrGetMapID()) {
+        s_pickpocketViewer = viewer;
+        s_pickpocketMap = map;
+        s_pickpocketReceivedAt = OsGetAsyncTimeMs();
+    }
+    return 1;
+}
+
+int32_t ReceiveBountyCombat(void*, NETMESSAGE, uint32_t, CDataStore* msg) {
+    uint64_t viewer;
+    uint32_t map;
+    uint16_t count;
+    if (!ReadWorldPvpSnapshotHeader(msg, 9, viewer, map, count)) {
+        return 1;
+    }
+
+    std::unordered_map<uint64_t, uint8_t> relations;
+    for (uint16_t index = 0; index < count; ++index) {
+        uint64_t opponent;
+        uint8_t permission;
+        msg->Get(opponent);
+        msg->Get(permission);
+        if (!opponent || opponent == viewer || permission > (BountyMayAttack | BountyMayBeAttacked) ||
+            !relations.emplace(opponent, permission).second) {
+            return 1;
+        }
+    }
+
+    s_bountyRelations.swap(relations);
+    s_bountyViewer = viewer;
+    s_bountyMap = map;
+    s_bountyReceivedAt = OsGetAsyncTimeMs();
+    return 1;
+}
+
+int32_t ReceiveVisibleWorldPvpStatus(void* param, NETMESSAGE, uint32_t, CDataStore* msg) {
+    uint64_t viewer;
+    uint32_t map;
+    uint16_t count;
+    if (!ReadWorldPvpSnapshotHeader(msg, 8, viewer, map, count)) {
+        return 1;
+    }
+
+    std::unordered_set<uint64_t> players;
+    for (uint16_t index = 0; index < count; ++index) {
+        uint64_t guid;
+        msg->Get(guid);
+        if (!guid || !players.insert(guid).second) {
+            return 1;
+        }
+    }
+
+    auto& visible = *static_cast<VisibleWorldPvpStatus*>(param);
+    visible.players.swap(players);
+    visible.viewer = viewer;
+    visible.map = map;
+    visible.receivedAt = OsGetAsyncTimeMs();
+    if (&visible == &s_visibleWanted) {
+        RecordEsteriaWantedSightings(viewer, map, visible.players);
+    }
+    return 1;
+}
+
+std::optional<uint8_t> WorldPvpCombatPermission(CGUnit_C* firstController, CGUnit_C* secondController) {
+    if (s_bountyRelations.empty() || !firstController || !secondController || firstController == secondController ||
+        !IsWorldPvpSnapshotCurrent(s_bountyViewer, s_bountyMap, s_bountyReceivedAt) ||
+        ((firstController->m_unit->m_unitFieldBytes2[1] | secondController->m_unit->m_unitFieldBytes2[1]) & 0x8)) {
+        return std::nullopt;
+    }
+
+    bool const viewerAttacking = firstController->m_obj->m_guid.m_guid == s_bountyViewer;
+    if (!viewerAttacking && secondController->m_obj->m_guid.m_guid != s_bountyViewer) {
+        return std::nullopt;
+    }
+
+    uint64_t const opponent = (viewerAttacking ? secondController : firstController)->m_obj->m_guid.m_guid;
+    auto const relation = s_bountyRelations.find(opponent);
+    if (relation == s_bountyRelations.end()) {
+        return std::nullopt;
+    }
+
+    uint8_t const permission = relation->second;
+    return viewerAttacking ? permission : ReverseBountyDirection(permission);
+}
+
+bool HasVisibleWorldPvpStatus(CGUnit_C const& unit, VisibleWorldPvpStatus const& visible) {
+    return (unit.m_obj->m_type & TYPEMASK_PLAYER) && !visible.players.empty() &&
+        IsWorldPvpSnapshotCurrent(visible.viewer, visible.map, visible.receivedAt) &&
+        visible.players.find(unit.m_obj->m_guid.m_guid) != visible.players.end();
+}
+}
+
+bool CGUnit_C::IsEsteriaWanted() const {
+    return HasVisibleWorldPvpStatus(*this, s_visibleWanted);
+}
+
+bool CGUnit_C::IsEsteriaExposedThief() const {
+    return HasVisibleWorldPvpStatus(*this, s_visibleThieves);
+}
+
+bool CGUnit_C::CanUseEsteriaPlayerPickpocket() const {
+    return this->m_obj->m_guid.m_guid == s_pickpocketViewer &&
+        IsWorldPvpSnapshotCurrent(s_pickpocketViewer, s_pickpocketMap, s_pickpocketReceivedAt);
+}
 
 // STATIC: 0x00ADAC04
 static INVENTORY_SLOTS s_virtualItemInvSlots[2] = { INVSLOT_MAINHAND, INVSLOT_OFFHAND };
@@ -3109,6 +3291,10 @@ UNIT_REACTION CGUnit_C::UnitReaction(const CGUnit_C* unit) const {
                 return UNIT_REACTION_FRIENDLY;
             }
 
+            if (auto const permission = WorldPvpCombatPermission(controller, otherController)) {
+                return *permission ? UNIT_REACTION_HOSTILE : UNIT_REACTION_FRIENDLY;
+            }
+
             if (controller->IsActivePlayer()) {
                 WOWGUID guid = otherController->m_obj->m_guid;
 
@@ -3307,6 +3493,19 @@ bool CGUnit_C::CanAttack(const CGUnit_C* unit) const {
     }
 
     if ((data->m_unitFieldFlags & 0x8) && (unit->m_unit->m_unitFieldFlags & 0x8)) {
+        if (!s_bountyRelations.empty()) {
+            CGUnit_C* controller = self->GetControllingPlayer();
+            CGUnit_C* otherController = other->GetControllingPlayer();
+            if (auto const permission = WorldPvpCombatPermission(controller, otherController)) {
+                CGPlayerLocalData const* player = static_cast<CGPlayer_C*>(controller)->m_player;
+                CGPlayerLocalData const* otherPlayer = static_cast<CGPlayer_C*>(otherController)->m_player;
+                if (!player->m_playerDuelTeam || !otherPlayer->m_playerDuelTeam ||
+                    player->m_playerDuelArbiter != otherPlayer->m_playerDuelArbiter) {
+                    return (*permission & BountyMayAttack) != 0;
+                }
+            }
+        }
+
         bool result = false;
 
         if (!this->IsFriendly(unit)) {
@@ -6223,6 +6422,15 @@ void CGUnit_C::UnregisterMirrorHandlers() {
 // VERIFY: 5d824e82 auto
 // OFFSET: 0x00742220
 void CGUnit_C::Initialize() {
+    s_bountyRelations.clear();
+    s_visibleWanted.players.clear();
+    ClearEsteriaWantedSightings();
+    s_visibleThieves.players.clear();
+    s_pickpocketViewer = 0;
+    sExtensionMgr->RegisterMessageHandler(BountyCombatOpcode, ReceiveBountyCombat, nullptr);
+    sExtensionMgr->RegisterMessageHandler(WantedVisibleOpcode, ReceiveVisibleWorldPvpStatus, &s_visibleWanted);
+    sExtensionMgr->RegisterMessageHandler(ThiefVisibleOpcode, ReceiveVisibleWorldPvpStatus, &s_visibleThieves);
+    sExtensionMgr->RegisterMessageHandler(PlayerPickpocketReadyOpcode, ReceivePlayerPickpocketReady, nullptr);
     ClientServices::SetMessageHandler(MSG_MOVE_START_FORWARD, CGUnit_C::HandleMovementPacket, nullptr);
     ClientServices::SetMessageHandler(MSG_MOVE_START_BACKWARD, CGUnit_C::HandleMovementPacket, nullptr);
     ClientServices::SetMessageHandler(MSG_MOVE_STOP, CGUnit_C::HandleMovementPacket, nullptr);
@@ -6391,6 +6599,15 @@ void CGUnit_C::Initialize() {
 // VERIFY: 1c54f4da manual
 // OFFSET: 0x00742BB0
 void CGUnit_C::Shutdown() {
+    sExtensionMgr->UnregisterMessageHandler(PlayerPickpocketReadyOpcode);
+    sExtensionMgr->UnregisterMessageHandler(ThiefVisibleOpcode);
+    sExtensionMgr->UnregisterMessageHandler(WantedVisibleOpcode);
+    sExtensionMgr->UnregisterMessageHandler(BountyCombatOpcode);
+    s_visibleWanted.players.clear();
+    ClearEsteriaWantedSightings();
+    s_visibleThieves.players.clear();
+    s_pickpocketViewer = 0;
+    s_bountyRelations.clear();
     CGUnit_C::s_initialized = 0;
     CMissile::RemoveMissiles();
     ClientServices::ClearMessageHandler(MSG_MOVE_START_FORWARD);

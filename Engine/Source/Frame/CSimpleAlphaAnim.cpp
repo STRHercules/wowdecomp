@@ -109,6 +109,16 @@ void CSimpleAlphaAnim::LoadXML(XMLNode* node, CStatus* status) {
         value = 0.0f;
     }
 
+    // Not in the original: retail fromAlpha/toAlpha. Alpha animations add to the region's alpha here, so this is
+    // exact when the region rests at fromAlpha, which is how retail sets them up.
+    const char* fromAlpha = node->GetAttributeByName("fromAlpha");
+    const char* toAlpha = node->GetAttributeByName("toAlpha");
+
+    if ((fromAlpha && *fromAlpha) || (toAlpha && *toAlpha)) {
+        value = (toAlpha && *toAlpha ? SStrToFloat(toAlpha) : 1.0f) - (fromAlpha && *fromAlpha ? SStrToFloat(fromAlpha) : 1.0f);
+        value = value < -1.0f ? -1.0f : (value < 1.0f ? value : 1.0f);
+    }
+
     this->m_change = static_cast<int16_t>(value * 255.0f);
 
     for (XMLNode* child = node->m_child; child; child = child->m_next) {

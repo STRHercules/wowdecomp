@@ -17,7 +17,7 @@
 
 
 #define LUA_VERSION	"Lua 5.1"
-#define LUA_RELEASE	"Lua 5.1.1"
+#define LUA_RELEASE	"Lua 5.1.5"
 #define LUA_VERSION_NUM	501
 #define LUA_COPYRIGHT	"Copyright (C) 1994-2006 Lua.org, PUC-Rio"
 #define LUA_AUTHORS 	"R. Ierusalimschy, L. H. de Figueiredo & W. Celes"
@@ -313,6 +313,9 @@ LUA_API void lua_setallocf (lua_State *L, lua_Alloc f, void *ud);
 #define lua_Chunkreader		lua_Reader
 #define lua_Chunkwriter		lua_Writer
 
+
+/* hack */
+LUA_API void lua_setlevel	(lua_State *from, lua_State *to);
 
 
 /*

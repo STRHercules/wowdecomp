@@ -14,4 +14,5 @@ target_link_libraries(Frame
         DivxDecoder
         freetype
         Extension
+        zlib
 )

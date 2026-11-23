@@ -1,0 +1,5 @@
+## Interface: 30300
+## Title: Esteria Arcade
+## SavedVariables: EsteriaArcadeDB
+## Notes: Arcade cabinet screen. The game runs in the client's Arcade extension; this window shows it and takes the keys.
+EsteriaArcade.lua

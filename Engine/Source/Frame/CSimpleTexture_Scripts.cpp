@@ -10,8 +10,10 @@
 #include "Engine/Source/Tempest/C2Vector.h"
 #include "Engine/Source/Tempest/CImVector.h"
 #include "Engine/Source/Tempest/CRect.h"
+#include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/Frame/RetailXML.h"
 
 // STATIC: 0x00AC1110
 int32_t CSimpleTexture::s_metatable = LUA_NOREF;
@@ -279,6 +281,21 @@ static int32_t Script_GetTexture(lua_State* L) {
 // OFFSET: 0x0048C6F0
 static int32_t Script_SetTexture(lua_State* L) {
     CSimpleTexture* texture = static_cast<CSimpleTexture*>(FrameScript_GetObjectThis(L, CSimpleTexture::GetObjectType()));
+    RetailXML_ForgetTexture(texture); // Not in the original: a plain texture replaces any atlas
+
+    // Not in the original: retail SetTexture(fileDataID[, wrapH, wrapV]); the stock color form takes 3 or 4 numbers.
+    if (lua_type(L, 2) == LUA_TNUMBER && lua_gettop(L) < 4 && lua_tonumber(L, 2) >= 1.0) {
+        char path[64];
+        SStrPrintf(path, sizeof(path), "retail/%u.blp", static_cast<uint32_t>(lua_tonumber(L, 2)));
+
+        if (!texture->SetTexture(path, lua_toboolean(L, 3), lua_toboolean(L, 4), CSimpleTexture::s_textureFilterMode, ImageMode_Normal)) {
+            lua_pushnil(L);
+            return 1;
+        }
+
+        lua_pushnumber(L, 1.0);
+        return 1;
+    }
 
     if (lua_isnumber(L, 2)) {
         CImVector color;
@@ -547,6 +564,12 @@ static FrameScript_Method s_ScriptMethods[] = {
     { "GetHorizTile", &Script_GetHorizTile },
     { "SetVertTile", &Script_SetVertTile },
     { "GetVertTile", &Script_GetVertTile },
+    // Not in the original
+    { "SetAtlas", &RetailXML_Script_SetAtlas },
+    { "GetAtlas", &RetailXML_Script_GetAtlas },
+    // The same, under names addons do not override (ClassicAPI replaces SetAtlas); the retail UI calls these.
+    { "RetailSetAtlas", &RetailXML_Script_SetAtlas },
+    { "RetailGetAtlas", &RetailXML_Script_GetAtlas },
 };
 
 // VERIFY: 6d342f5b auto

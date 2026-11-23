@@ -1,6 +1,6 @@
 """Write EsteriaMounts/skins.csv rows (skins, geosets, rider poses) for installed native retail mounts.
 
-Usage: mount_skins.py <reader> <definitions> <tables-dir> <output.csv> <Data/Retail/Packs> [display-geosets.json]
+Usage: mount_skins.py <reader> <definitions> <tables-dir> <output.csv> <packs folder: G:/EsteriaToolData/RetailPacks> [display-geosets.json]
                       [imported-riders.json]
 tables-dir holds <Name>.db2 for every table in TABLES. For mounts imported from another build's export (their displays
 and spells are not in tables-dir): display-geosets.json maps "<build>:<display>" to [[GeosetIndex, GeosetValue], ...],

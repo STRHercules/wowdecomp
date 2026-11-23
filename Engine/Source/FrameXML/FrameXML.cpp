@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <string>
 #include <new>
 #include <typeinfo>
 #include "Engine/Source/FrameXML/FrameXML.h"
@@ -26,6 +27,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Storm/Source/MD5.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/Frame/RetailXML.h"
 #include "WoW/Source/Extension/ExtensionMgr.h"
 
 // STATIC: 0x00AF5718
@@ -284,6 +286,23 @@ CSimpleFrame* FrameXML_CreateFrame(XMLNode* node, CSimpleFrame* parent, CStatus*
 
     FrameFactoryNode* factory = s_factories.Ptr(node->m_name.m_str);
 
+    // Not in the original: <EventFrame> etc. are retail intrinsics; build the base type, then load the intrinsic
+    // elements outermost first before this one. Intrinsics can build on other intrinsics.
+    const char* intrinsics[8];
+    int32_t intrinsicCount = 0;
+
+    for (const char* type = node->m_name.m_str; !factory && intrinsicCount < 8;) {
+        const char* base = RetailXML_IntrinsicBase(type);
+
+        if (!base) {
+            break;
+        }
+
+        intrinsics[intrinsicCount++] = type;
+        factory = s_factories.Ptr(base);
+        type = base;
+    }
+
     if (!factory) {
         // Not in the original: the element type is in no factory table.
         sExtensionMgr->OnUnknownFrameType(node->m_name.m_str, node);
@@ -358,9 +377,36 @@ CSimpleFrame* FrameXML_CreateFrame(XMLNode* node, CSimpleFrame* parent, CStatus*
         s_factories.Delete(factory);
     }
 
+    // Not in the original: retail relativeKey anchors may name siblings declared later; they are retried before
+    // each OnLoad and reported once the outermost frame is done.
+    static int32_t s_createDepth = 0;
+    ++s_createDepth;
+
+    // An intrinsic acts as the element's first templates (outermost first), so its attributes, scripts and child
+    // frames all load the way inherited ones do. The prefix is added once; template nodes are reused.
+    if (intrinsicCount) {
+        std::string prefix;
+        for (int32_t i = intrinsicCount - 1; i >= 0; --i) {
+            prefix += intrinsics[i];
+            prefix += ", ";
+        }
+
+        const char* inherits = node->GetAttributeByName("inherits");
+        std::string current = inherits ? inherits : "";
+
+        if (current.compare(0, prefix.size(), prefix) != 0) {
+            node->SetAttribute("inherits", (prefix + current).c_str());
+        }
+    }
+
     frame->PreLoadXML(node, status);
     frame->LoadXML(node, status);
+    RetailXML_ResolvePendingAnchors(false, status);
     frame->PostLoadXML(node, status);
+
+    if (--s_createDepth == 0) {
+        RetailXML_ResolvePendingAnchors(true, status);
+    }
 
     // Not in the original: the frame is built from its element.
     sExtensionMgr->OnFrameCreated(frame, node);
@@ -479,11 +525,20 @@ int32_t FrameXML_ProcessFile(const char* filename, const char* wrapper, MD5_CTX*
 
     if (child) {
         XMLNode* next;
+        XMLNode* resume = nullptr; // Not in the original: where to continue after a retail <ScopedModifier>
 
         do {
             next = child->m_next;
 
-            if (!SStrCmpI(child->m_name.m_str, "Include", STORM_MAX_STR)) {
+            if (!SStrCmpI(child->m_name.m_str, "ScopedModifier", STORM_MAX_STR)) {
+                // Not in the original: retail wraps top-level frames in <ScopedModifier forbidden="true">; it only
+                // scopes taint/forbidden flags, so its children load as if they were top level.
+                // shortcut: one level of nesting, enough for every retail file seen so far.
+                if (child->m_child) {
+                    resume = next;
+                    next = child->m_child;
+                }
+            } else if (!SStrCmpI(child->m_name.m_str, "Include", STORM_MAX_STR)) {
                 const char* file = child->GetAttributeByName("file");
 
                 if (file) {
@@ -544,8 +599,38 @@ int32_t FrameXML_ProcessFile(const char* filename, const char* wrapper, MD5_CTX*
                 } else {
                     fileStatus.Add(STATUS_WARNING, "Unnamed font node at top level");
                 }
+            } else if (!SStrCmpI(child->m_name.m_str, "FontFamily", STORM_MAX_STR)) {
+                // Not in the original: retail font families; the client is enUS, so the roman member is the font.
+                const char* fontName = child->GetAttributeByName("name");
+
+                for (XMLNode* member = child->m_child; member && fontName && *fontName; member = member->m_next) {
+                    const char* alphabet = member->GetAttributeByName("alphabet");
+                    XMLNode* font = member->GetChildByName("Font");
+
+                    if (font && alphabet && !SStrCmpI(alphabet, "roman", STORM_MAX_STR)) {
+                        CSimpleFont::GetFont(fontName, 1)->LoadXML(font, status);
+                        break;
+                    }
+                }
             } else {
                 const char* isVirtual = child->GetAttributeByName("virtual");
+                const char* intrinsic = child->GetAttributeByName("intrinsic");
+
+                if (intrinsic && !SStrCmpI(intrinsic, "true", STORM_MAX_STR)) {
+                    // Not in the original: a retail intrinsic is a template that also names a new element type.
+                    const char* intrinsicName = child->GetAttributeByName("name");
+                    RetailXML_RegisterIntrinsic(intrinsicName, child->m_name.m_str);
+                    isVirtual = "true";
+
+                    // An intrinsic's OnLoad sets the type up (EventButton's callback registry); it runs before the
+                    // OnLoad of any frame built on it unless the intrinsic says otherwise.
+                    XMLNode* scripts = child->GetChildByName("Scripts");
+                    XMLNode* onLoad = scripts ? scripts->GetChildByName("OnLoad") : nullptr;
+
+                    if (onLoad && !onLoad->GetAttributeByName("intrinsicOrder")) {
+                        onLoad->SetAttribute("intrinsicOrder", "precall");
+                    }
+                }
 
                 if (isVirtual && !SStrCmpI(isVirtual, "true", STORM_MAX_STR)) {
                     const char* virtualName = child->GetAttributeByName("name");
@@ -559,6 +644,11 @@ int32_t FrameXML_ProcessFile(const char* filename, const char* wrapper, MD5_CTX*
                     FrameXML_CreateFrame(child, nullptr, &fileStatus);
                     CLayoutFrame::ResizePending();
                 }
+            }
+
+            if (!next) {
+                next = resume;
+                resume = nullptr;
             }
 
             child = next;

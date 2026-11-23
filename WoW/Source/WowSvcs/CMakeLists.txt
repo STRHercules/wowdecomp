@@ -12,4 +12,5 @@ target_include_directories(WowSvcs
 target_link_libraries(WowSvcs
     PRIVATE
         Extension
+        zlib
 )

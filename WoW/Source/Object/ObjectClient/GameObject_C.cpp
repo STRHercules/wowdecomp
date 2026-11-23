@@ -4073,7 +4073,11 @@ void CGGameObject_C::RefreshInteractIcon() {
 bool CGGameObject_C_TypeBase::CanUseNow(GAME_ERROR_TYPE* error, float* distance, const char** errorText) const {
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
 
-    if (!player || player->IsDeadOrGhost()) {
+    constexpr uint32_t WildernessPouchEntry = 701950;
+    constexpr uint32_t PlayerFlagGhost = 0x10;
+    bool const canRecoverPouch = player && this->m_owner->m_obj->m_entryID == WildernessPouchEntry &&
+        (player->m_player->m_playerFlags & PlayerFlagGhost);
+    if (!player || (player->IsDeadOrGhost() && !canRecoverPouch)) {
         if (error) {
             *error = static_cast<GAME_ERROR_TYPE>(ERR_PLAYER_DEAD);
         }

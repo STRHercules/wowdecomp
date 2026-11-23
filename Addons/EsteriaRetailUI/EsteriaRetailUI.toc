@@ -1,0 +1,25 @@
+## Interface: 30300
+## Title: Esteria Retail UI
+## Notes: Blizzard's retail Social and Guild & Communities windows on 3.3.5a. Built by Tools/RetailUI/build_addon.py.
+## Version: 0.1.0
+## OptionalDeps: EsteriaChat
+Compat\Guard.lua
+Compat\Base.lua
+Compat\Enum.lua
+Compat\Namespaces.lua
+Compat\Colors.lua
+Compat\GlobalStrings.lua
+Compat\ExtraStrings.lua
+Compat\Widgets.lua
+Compat\Events.lua
+Compat\Templates.xml
+Compat\Providers\Core.lua
+Compat\Providers\Engine.lua
+Compat\Providers\Systems.lua
+Compat\Providers\BattleNet.lua
+Compat\Providers\FriendList.lua
+Compat\Providers\Clubs.lua
+Compat\Providers\Chat.lua
+#@retail
+Compat\Report.lua
+Compat\Glue.lua

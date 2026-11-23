@@ -1,30 +1,18 @@
-add_library(zlib STATIC
-    zlib/adler32.c
-    zlib/compress.c
-    zlib/crc32.c
-    zlib/deflate.c
-    zlib/gzio.c
-    zlib/infback.c
-    zlib/inffast.c
-    zlib/inflate.c
-    zlib/inftrees.c
-    zlib/trees.c
-    zlib/uncompr.c
-    zlib/zutil.c
-)
-
-target_include_directories(zlib
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/zlib
-)
+# zlib-ng 2.3.3 in zlib-compatible mode (replaces zlib 1.2.2): same API, SIMD inflate/deflate picked at runtime.
+# It provides the `zlib` target as an alias.
+set(BUILD_SHARED_LIBS OFF)
+set(ZLIB_COMPAT ON)
+set(BUILD_TESTING OFF)
+set(WITH_GTEST OFF)
+add_subdirectory(zlib-ng EXCLUDE_FROM_ALL)
 
 add_library(blast STATIC
-    zlib/contrib/blast/blast.c
+    blast/blast.c
 )
 
 target_include_directories(blast
     PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/zlib/contrib/blast
+        ${CMAKE_CURRENT_SOURCE_DIR}/blast
 )
 
 add_library(bzip2 STATIC

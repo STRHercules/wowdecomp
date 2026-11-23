@@ -1,0 +1,7 @@
+## Interface: 30300
+## Title: Esteria Social
+## Notes: Friends, Who, Guild and Esteria Communities in one window. Replaces the stock and retail social windows.
+## OptionalDeps: EsteriaChat, EsteriaRetailUI
+## SavedVariables: EsteriaSocialDB
+esteria_style.lua
+EsteriaSocial.lua

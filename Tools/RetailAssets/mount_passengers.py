@@ -15,7 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 sys.path.insert(0, str(Path(__file__).parents[1] / "MountStudio"))
-from native_import import MOUNT_TABLES, make_wdbc, wdbc  # noqa: E402
+from native_import import MOUNT_TABLES, make_wdbc, packs_dir, wdbc  # noqa: E402
 
 BUILD = "88d5e8ef05ec5a8446cdec93d142d7c6"
 TEMPLATE_PACK = "grizzly-hills-packmaster"  # its CreatureModelData row is the template for the props
@@ -47,7 +47,7 @@ def main():
     if registry.exists():
         shutil.rmtree(registry)
     shutil.copytree(source, registry)
-    template_rows, _ = wdbc((retail / "Packs" / TEMPLATE_PACK / "tables" / "creaturemodeldata.dbc").read_bytes(), 28)
+    template_rows, _ = wdbc((packs_dir(retail) / TEMPLATE_PACK / "tables" / "creaturemodeldata.dbc").read_bytes(), 28)
     server = out / "server"
     server.mkdir(parents=True, exist_ok=True)
     new = {"CreatureModelData": ([], {}), "CreatureDisplayInfo": ([], {})}

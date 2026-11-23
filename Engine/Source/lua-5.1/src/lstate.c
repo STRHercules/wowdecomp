@@ -97,7 +97,7 @@ static void preinit_state (lua_State *L, global_State *g) {
   resethookcount(L);
   L->openupval = NULL;
   L->size_ci = 0;
-  L->nCcalls = 0;
+  L->nCcalls = L->baseCcalls = 0;
   L->status = 0;
   L->base_ci = L->ci = NULL;
   L->savedpc = NULL;
@@ -226,7 +226,7 @@ LUA_API void lua_close (lua_State *L) {
   do {  /* repeat until no more errors */
     L->ci = L->base_ci;
     L->base = L->top = L->ci->base;
-    L->nCcalls = 0;
+    L->nCcalls = L->baseCcalls = 0;
   } while (luaD_rawrunprotected(L, callallgcTM, NULL) != 0);
   lua_assert(G(L)->tmudata == NULL);
   luai_userstateclose(L);

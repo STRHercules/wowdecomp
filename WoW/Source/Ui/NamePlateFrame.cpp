@@ -1,6 +1,7 @@
 #include "NamePlateFrame.h"
 #include <new>
 #include <array>
+#include <cstring>
 #include "WoW/Common/ClassMask.h"
 #include <typeinfo>
 #include "Engine/Source/Frame/CSimpleRender.h"
@@ -89,10 +90,30 @@ CGNamePlateFrame* CGNamePlateFrame::GetNamePlateFocus() {
     return CGUnit_C::s_namePlateFocus;
 }
 
+static constexpr char WantedNameplatePrefix[] = "[Wanted] ";
+static constexpr char ThiefNameplatePrefix[] = "[Thief] ";
+static constexpr char WantedThiefNameplatePrefix[] = "[Wanted] [Thief] ";
+
+static const char* GetCrimeNameplatePrefix(const CGUnit_C& unit) {
+    if (unit.IsEsteriaWanted()) {
+        return unit.IsEsteriaExposedThief() ? WantedThiefNameplatePrefix : WantedNameplatePrefix;
+    }
+    return unit.IsEsteriaExposedThief() ? ThiefNameplatePrefix : nullptr;
+}
+
 // VERIFY: 7dfd3d5d auto
 // OFFSET: 0x0098E580
 void CGNamePlateFrame::UpdateNameDisplay(const CGUnit_C* unit) {
-    this->m_unitNameText->SetText(const_cast<CGUnit_C*>(unit)->GetUnitName(nullptr, 1), 1);
+    const char* name = const_cast<CGUnit_C*>(unit)->GetUnitName(nullptr, 1);
+    const char* marker = GetCrimeNameplatePrefix(*unit);
+    if (!marker) {
+        this->m_unitNameText->SetText(name, 1);
+        return;
+    }
+
+    char markedName[256];
+    SStrPrintf(markedName, sizeof(markedName), "%s%s", marker, name ? name : "");
+    this->m_unitNameText->SetText(markedName, 1);
 }
 
 // VERIFY: 52c6376e manual
@@ -271,6 +292,22 @@ void CGNamePlateFrame::OnLayerUpdate(float elapsedSec) {
     }
 
     CGUnit_C* unit = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(this->m_guid, TYPEMASK_UNIT, __FILE__, __LINE__));
+
+    if (unit && (unit->m_obj->m_type & TYPEMASK_PLAYER)) {
+        const char* shownName = this->m_unitNameText->m_text;
+        const char* shownMarker = nullptr;
+        if (shownName) {
+            for (const char* prefix : {WantedThiefNameplatePrefix, WantedNameplatePrefix, ThiefNameplatePrefix}) {
+                if (std::strncmp(shownName, prefix, std::strlen(prefix)) == 0) {
+                    shownMarker = prefix;
+                    break;
+                }
+            }
+        }
+        if (shownMarker != GetCrimeNameplatePrefix(*unit)) {
+            this->UpdateNameDisplay(unit);
+        }
+    }
 
     if (unit && (!CGGameUI::m_lockedTarget || CGGameUI::m_lockedTarget == unit->m_obj->m_guid)) {
         this->SetFrameAlpha(0xFF);
@@ -531,7 +568,7 @@ void CGNamePlateFrame::Initialize(CGUnit_C* unit) {
     this->m_namePlateGlow->SetAllPoints(this, 1);
 
     this->m_damageFeedbackTime = 0;
-    this->m_unitNameText->SetText(unit->GetUnitName(nullptr, 1), 1);
+    this->UpdateNameDisplay(unit);
     this->UpdateColorDisplay(unit);
     this->UpdateLevelDisplay(unit);
     this->UpdateEliteIcon(unit);

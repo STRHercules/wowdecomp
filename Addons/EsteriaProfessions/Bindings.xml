@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="ESTERIAPROFESSIONS_TOGGLE" header="ESTERIAPROFESSIONS">
+		EsteriaProfessions_Toggle()
+	</Binding>
+</Bindings>

@@ -93,8 +93,8 @@ end
 -- ---------------------------------------------------------------------------------------------------------------
 local function shown(region, on) if on then region:Show() else region:Hide() end end
 
-local function flatButton(parent, width, height, text, primary)
-    local b = CreateFrame("Button", nil, parent)
+local function flatButton(parent, width, height, text, primary, template)
+    local b = CreateFrame("Button", nil, parent, template)
     b:SetSize(width, height)
     b.bg = ES.Solid(b, "BACKGROUND", primary and { 0.36, 0.25, 0.06 } or ES.INK, primary and 0.95 or 0.9)
     b.bg:SetAllPoints()
@@ -126,6 +126,9 @@ local function iconFrame(parent, size)
     holder.lines = ES.Border(holder, ES.GOLD_DIM)
     return holder
 end
+
+-- Shared with EsteriaSpellEmotes.lua
+EE.flatButton, EE.iconFrame = flatButton, iconFrame
 
 -- A PlayerModel of you looping one emote. The model frame drops back to Stand when an emote sequence ends (it never
 -- reports OnAnimFinished for them), so the preview drives the clock itself: SetSequenceTime every frame, wrapped at
@@ -164,7 +167,7 @@ end
 local refresh
 
 local FILTERS = {
-    { key = "all",     group = "COLLECTION", label = "All emotes",    test = function() return true end },
+    { key = "all",     group = "COLLECTION", label = "All dances",    test = function() return true end },
     { key = "known",   group = "COLLECTION", label = "Collected",     test = function(e) return EE.known[e.id] end },
     { key = "fav",     group = "COLLECTION", label = "Favorites",     test = function(e) return db and db.favorites[e.id] end },
     { key = "new",     group = "COLLECTION", label = "New",           test = function(e) return EE.known[e.id] and db and not db.seen[e.id] end },
@@ -181,7 +184,7 @@ local function toggleWheel(id)
     if slot then EE.SetSlot(slot, 0)
     elseif EE.known[id] then
         local empty = EE.FirstEmpty()
-        if empty then EE.SetSlot(empty, id) else UIErrorsFrame:AddMessage("Your emote wheel is full.", 1, 0.1, 0.1) end
+        if empty then EE.SetSlot(empty, id) else UIErrorsFrame:AddMessage("Your dance wheel is full.", 1, 0.1, 0.1) end
     end
 end
 
@@ -381,7 +384,7 @@ local function buildWheelEditor(parent)
     rule:SetPoint("TOPLEFT"); rule:SetPoint("TOPRIGHT"); rule:SetHeight(1)
     local head = ES.Text(editor, 10, ES.GOLD_DIM)
     head:SetPoint("TOPLEFT", 16, -10)
-    head:SetText("EMOTE WHEEL")
+    head:SetText("DANCE WHEEL")
     editor.pageText = ES.Text(editor, 11, ES.TEXT)
     editor.pageText:SetPoint("TOPRIGHT", -44, -10)
     local prev = flatButton(editor, 22, 18, "<")
@@ -425,7 +428,7 @@ local function buildWheelEditor(parent)
                 GameTooltip:AddLine("Drag to move, right-click to clear.", 0.6, 1, 0.6)
             else
                 GameTooltip:SetText("Empty slot", 0.7, 0.7, 0.7)
-                GameTooltip:AddLine("Drag an emote here.", 0.6, 1, 0.6)
+                GameTooltip:AddLine("Drag a dance here.", 0.6, 1, 0.6)
             end
             GameTooltip:Show()
         end)
@@ -434,7 +437,7 @@ local function buildWheelEditor(parent)
     end
     local hint = ES.Text(editor, 10, ES.MUTED)
     hint:SetPoint("BOTTOM", 0, 10)
-    hint:SetText("Hold the wheel key in game (CTRL-G unless rebound)")
+    hint:SetText("Hold the dance wheel key in game (CTRL-G unless rebound)")
     return editor
 end
 
@@ -509,10 +512,10 @@ local function paintStage()
     local known = emote and EE.known[emote.id]
     shown(stage.model, known)
     if known and stage.model.emote ~= emote.id then stage.model:Dance(emote.id) end
-    stage.name:SetText(emote and emote.name or "No emotes yet")
+    stage.name:SetText(emote and emote.name or "No dances yet")
     local slot = emote and EE.SlotOf(emote.id)
     if not emote then
-        stage.state:SetText("Collect emotes to fill your wheel.")
+        stage.state:SetText("Collect dances to fill your wheel.")
     elseif not known then
         stage.state:SetText("|cffe86c5cNot collected yet|r")
     elseif slot then
@@ -583,7 +586,7 @@ local function build()
 
     local title = ES.Text(frame, 22, ES.GOLD)
     title:SetPoint("TOPLEFT", 20, -12)
-    title:SetText("Emotes")
+    title:SetText("Dances")
     local subtitle = ES.Text(frame, 11, ES.MUTED)
     subtitle:SetPoint("TOPLEFT", title, "BOTTOMLEFT", 1, -4)
     subtitle:SetText("Your dance collection. Everyone nearby sees you dance; moving stops it.")
@@ -608,7 +611,7 @@ local function build()
     search:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local placeholder = ES.Text(search, 11, ES.MUTED)
     placeholder:SetPoint("LEFT", 2, 0)
-    placeholder:SetText("Search emotes")
+    placeholder:SetText("Search dances")
     search:SetScript("OnTextChanged", function(self) shown(placeholder, self:GetText() == ""); page = 1; refresh() end)
     frame.count = ES.Text(frame, 11, ES.MUTED)
     frame.count:SetPoint("BOTTOMRIGHT", grid, "TOPRIGHT", 0, 16)
@@ -645,10 +648,10 @@ local function build()
 end
 
 function EsteriaEmotes_Toggle()
-    if EsteriaCosmetics_Toggle then EsteriaCosmetics_Toggle("Emotes"); return end
+    if EsteriaCosmetics_Toggle then EsteriaCosmetics_Toggle("Dances"); return end
     if not frame then build() end
     if #EE.list == 0 then
-        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[Emotes]|r No emotes are installed.")
+        DEFAULT_CHAT_FRAME:AddMessage("|cff00ccff[Emotes]|r No dances are installed.")
         return
     end
     shown(frame, not frame:IsShown())
@@ -667,8 +670,8 @@ function EsteriaEmotes_Embed(parent)
 end
 
 BINDING_HEADER_ESTERIAEMOTES = "Esteria Emotes"
-BINDING_NAME_ESTERIAEMOTES_WHEEL = "Emote wheel (hold)"
-BINDING_NAME_ESTERIAEMOTES_TOGGLE = "Emote collection"
+BINDING_NAME_ESTERIAEMOTES_WHEEL = "Dance wheel (hold)"
+BINDING_NAME_ESTERIAEMOTES_TOGGLE = "Dance collection"
 
 SLASH_ESTERIAEMOTES1, SLASH_ESTERIAEMOTES2 = "/emotes", "/emotecollection"
 SlashCmdList.ESTERIAEMOTES = EsteriaEmotes_Toggle

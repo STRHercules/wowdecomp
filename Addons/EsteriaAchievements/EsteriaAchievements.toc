@@ -1,0 +1,6 @@
+## Interface: 30300
+## Title: Esteria Achievements
+## Notes: Achievements, statistics and a summary in the Esteria look. Replaces the stock achievement window.
+## SavedVariables: EsteriaAchievementsDB
+esteria_style.lua
+EsteriaAchievements.lua

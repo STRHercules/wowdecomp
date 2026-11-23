@@ -1,6 +1,6 @@
 """Write EsteriaMounts/kits.csv: retail state visual kits on installed mount displays, as far as the client shows them.
 
-Usage: mount_kits.py <Data/Retail/Packs> <csv-root> <default-build> <output.csv> <models.txt>
+Usage: mount_kits.py <packs folder: G:/EsteriaToolData/RetailPacks> <csv-root> <default-build> <output.csv> <models.txt>
   <csv-root>/<build>/<Table>.csv are wago.tools exports of CreatureDisplayInfo, SpellVisualKitEffect,
   SpellVisualKitModelAttach, SpellVisualEffectName and GradientEffect. Packs imported from another build's export
   (their recipe has fourth_texture) use their metadata_build; the rest use <default-build> (display IDs carry over).

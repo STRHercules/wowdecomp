@@ -58,9 +58,9 @@ def update_client(client: Path, changed: dict[str, dict], spell_names: dict[int,
         shutil.copy2(root / name, backup / name)
     state = json.loads((root / "installed.json").read_text())
     for slug, manifest in changed.items():
-        shutil.rmtree(root / "Packs" / slug)
-        shutil.copytree(STAGE / "packs" / slug, root / "Packs" / slug)
-        n.load_pack(root / "Packs" / slug)
+        shutil.rmtree(n.packs_dir(root) / slug)
+        shutil.copytree(STAGE / "packs" / slug, n.packs_dir(root) / slug)
+        n.load_pack(n.packs_dir(root) / slug)
         state["packs"][slug] = {"source_key": manifest["source_key"], "definition_sha256": manifest["definition_sha256"]}
     config = dict(line.strip().split("=", 1) for line in (root / "RetailCasc.ini").read_text().splitlines() if "=" in line)
     revision = n.digest((config["tables"] + "rename" + json.dumps(sorted(spell_names.items()))).encode())[:16]

@@ -16,12 +16,19 @@ function UnitName() return "Tester" end
 function SendAddonMessage(prefix,body) table.insert(sent,{prefix,body}) end
 function GetNumSpellTabs() return 1 end
 function GetSpellTabInfo() return "Cosmetics", "icon",0,1 end
-function GetSpellLink() return "|Hspell:970340|h[Wings]|h" end
+testBook={{970340,"Wings",""},{5001,"KEKW","Emote"},{5002,"HAH","Emote"}}
+function GetSpellLink(i) i=i or 1; return testBook[i] and "|Hspell:"..testBook[i][1].."|h["..testBook[i][2].."]|h" end
+function GetSpellName(i) if testBook[i] then return testBook[i][2],testBook[i][3] end end
+function GetSpellTexture(i) return "icon"..i end
+bindings={}; function GetBindingKey(action) for k,v in pairs(bindings) do if v==action then return k end end end
+function SetBinding(key,action) bindings[key]=action end; function SaveBindings() end; function GetCurrentBindingSet() return 1 end
+function MouseIsOver(f) return f==hoverTarget end
+cursorX,cursorY=0,0
 function GetSpellInfo() return "Cosmetic Wings" end
 function UnitBuff() return nil end
 function PlaySound() end
-function GetCursorPosition() return 0,0 end
-function GetBindingAction() return "taken" end
+function GetCursorPosition() return cursorX,cursorY end
+function GetBindingAction(key) return key=="CTRL-H" and "" or "taken" end
 function strsplit(sep,s)
  local p=s:find(sep,1,true); if not p then return s end
  return s:sub(1,p-1),s:sub(p+1)
@@ -67,6 +74,7 @@ function methods:ClearModel() self.modelPath=nil end
 function methods:SetModel(value) self.modelPath=value end
 function methods:GetModel() return rawget(self,"modelPath") end
 function methods:GetFrameLevel() return 1 end
+function methods:GetCenter() return 0,0 end
 function methods:GetPoint() return "CENTER",UIParent,"CENTER",0,0 end
 UIParent=new("Frame","UIParent")
 GameTooltip=new("Tooltip","GameTooltip")
@@ -99,6 +107,8 @@ end
 ''')
     lua.execute((HERE.parent / 'EsteriaEmotes/esteria_style.lua').read_text(encoding='utf-8'))
     lua.execute((HERE.parent / 'EsteriaEmotes/EsteriaEmotes.lua').read_text(encoding='utf-8'))
+    lua.execute((HERE.parent / 'EsteriaEmotes/EsteriaEmotesWheel.lua').read_text(encoding='utf-8'))
+    lua.execute((HERE.parent / 'EsteriaEmotes/EsteriaSpellEmotes.lua').read_text(encoding='utf-8'))
     lua.execute((HERE/'Companions.lua').read_text())
     lua.execute((HERE / 'EsteriaCosmetics.lua').read_text(encoding='utf-8'))
     lua.execute(r'''
@@ -162,6 +172,55 @@ EsteriaEmotes_Toggle()
 assert(EsteriaEmotesFrame:IsShown())
 EsteriaEmotesFrame.cosmeticsClose.scripts.OnClick()
 assert(not EsteriaCosmeticsFrame:IsShown())
+-- Spell emotes: the Collections "Emotes" tab, its wheel editor and the secure hold-key wheel.
+assert(bindings["CTRL-H"]=="CLICK EsteriaSpellEmoteWheelButton:LeftButton")
+assert(_G["BINDING_NAME_CLICK EsteriaSpellEmoteWheelButton:LeftButton"])
+EsteriaCosmetics_Toggle("Emotes")
+assert(EsteriaSpellEmotesFrame:IsShown() and not EsteriaEmotesFrame:IsShown())
+assert(EsteriaSpellEmotesFrame:GetParent():GetParent()==EsteriaCosmeticsFrame)
+local found
+for _,f in ipairs(regions) do if type(f.text)=="string" and f.text:find("^2 emotes .* 0 on your wheel$") then found=true end end
+assert(found)
+local function under(f,root) while f do if f==root then return true end; f=rawget(f,"parent") end end
+local slots={}
+for _,f in ipairs(regions) do
+ if under(f,EsteriaSpellEmotesFrame) and f.kind=="Button" and f.width==36 and f.height==36 then slots[#slots+1]=f end
+end
+assert(#slots==8,#slots)
+local function tile(name) for _,f in ipairs(regions) do if rawget(f,"emote") and f.emote.name==name and under(f,EsteriaSpellEmotesFrame) then return f end end end
+tile("HAH").scripts.OnClick(tile("HAH"),"RightButton")
+assert(EsteriaEmotesDB.spellWheel[1]==5002)
+-- Select KEKW, then click page 1 slot 3: it lands there.
+tile("KEKW").scripts.OnClick(tile("KEKW"),"LeftButton")
+slots[3].scripts.OnClick(slots[3],"LeftButton")
+assert(EsteriaEmotesDB.spellWheel[3]==5001)
+assert(hasText("|cff8cd97fOn wheel, page 1 slot 3|r"))
+-- Drag slot 3 onto slot 1: they swap.
+slots[3].scripts.OnDragStart(slots[3]); hoverTarget=slots[1]; slots[3].scripts.OnDragStop(slots[3]); hoverTarget=nil
+assert(EsteriaEmotesDB.spellWheel[1]==5001 and EsteriaEmotesDB.spellWheel[3]==5002)
+slots[3].scripts.OnClick(slots[3],"RightButton")
+assert(EsteriaEmotesDB.spellWheel[3]==nil)
+-- Key down opens the wheel; key up over slot 1 points the secure button at KEKW; PostClick clears it.
+local b=EsteriaSpellEmoteWheelButton
+b.scripts.PreClick(b,"LeftButton",true)
+assert(EsteriaSpellEmotesWheelFrame:IsShown() and b.attributes.type==nil)
+cursorX,cursorY=0,120
+EsteriaSpellEmotesWheelFrame.scripts.OnUpdate(EsteriaSpellEmotesWheelFrame)
+b.scripts.PreClick(b,"LeftButton",false)
+assert(not EsteriaSpellEmotesWheelFrame:IsShown())
+assert(b.attributes.type=="spell" and b.attributes.spell=="KEKW")
+b.scripts.PostClick(b)
+assert(b.attributes.type==nil)
+-- Released over nothing: no cast.
+b.scripts.PreClick(b,"LeftButton",true); cursorX,cursorY=0,0
+EsteriaSpellEmotesWheelFrame.scripts.OnUpdate(EsteriaSpellEmotesWheelFrame)
+b.scripts.PreClick(b,"LeftButton",false)
+assert(b.attributes.type==nil)
+-- In combat nothing protected is touched (the mock asserts on SetAttribute).
+combat=true; b.scripts.PreClick(b,"LeftButton",true); b.scripts.PreClick(b,"LeftButton",false); combat=false
+-- The Dances tab still hosts the dance window.
+EsteriaCosmetics_Toggle("Dances")
+assert(EsteriaEmotesFrame:IsShown() and not EsteriaSpellEmotesFrame:IsShown())
 '''.replace('\\t', '\t'))
     prices = (HERE.parent / 'Manastorm_Transmog/Manastorm_Transmog.lua').read_text(encoding='utf-8')
     prices = 'local function PendingCost()' + prices.split('local function PendingCost()', 1)[1].split("-- The screen's real pixel size", 1)[0]

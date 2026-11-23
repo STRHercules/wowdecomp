@@ -35,6 +35,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/Frame/RetailXML.h"
 #include "WoW/Source/Glue/CSimpleModelFFX.h"
 
 // VERIFY: 98c4dac9 auto
@@ -322,6 +323,8 @@ void RegisterSimpleFrameScriptMethods() {
     CSimpleStatusBar::CreateScriptMetaTable();
     CSimpleColorSelect::CreateScriptMetaTable();
     CSimpleMovieFrame::CreateScriptMetaTable();
+
+    RetailXML_RegisterScriptFunctions(); // Not in the original
 }
 
 // VERIFY: 10a8f5da manual

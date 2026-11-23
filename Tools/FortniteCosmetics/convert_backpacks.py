@@ -261,9 +261,10 @@ def write_model(mesh, texture_paths):
     sections,batches = [],[]
     for i,mat in enumerate(mesh['materials']):
         start = mat['first_index']
-        if start > 65535 or mat['faces']*3 > 65535:
+        if start >= 1<<32 or mat['faces']*3 > 65535 or len(vertices) > 65535:
             raise ValueError('Skin section exceeds classic index window')
-        sections.append(struct.pack('<I8H7f',1502,0,len(vertices),start,mat['faces']*3,1,0,1,0,
+        # Level (high 16 bits of the id) widens indexStart; Esteria's client reads it (M2WideIndexStart).
+        sections.append(struct.pack('<I8H7f',1502|(start>>16<<16),0,len(vertices),start&0xFFFF,mat['faces']*3,1,0,1,0,
                                     *((low[k]+high[k])/2 for k in range(3)),
                                     *((low[k]+high[k])/2 for k in range(3)),radius))
         batches.append(struct.pack('<BB11H',0,0,0,i,i,65535,i,0,1,i,i,i,i))

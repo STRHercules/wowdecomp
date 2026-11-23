@@ -2464,6 +2464,9 @@ void EsteriaCreateStartZoneFooter(CDataStore* packet) {
 }
 
 void EsteriaForgetCharacter(CCharacterComponent* character) {
+    if (g_sectionContext == character) {
+        g_sectionContext = nullptr;
+    }
     selectorOutfits.erase(character);
     pendingSelectorBind.erase(character);
     g_extraFields.erase(character);

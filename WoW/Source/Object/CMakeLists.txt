@@ -13,6 +13,7 @@ target_link_libraries(Object
     PRIVATE
         Extension
         ASECM3Host
+        zlib
 )
 
 # Unit_C's retail blocks (rider poses, Mount Studio replacements, Ethereal hands) need the define RetailAssets carries.

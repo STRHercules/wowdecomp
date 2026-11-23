@@ -28,6 +28,8 @@ GARRISON_BUILDING_LEVEL_ONE = "Level 1"
 GARRISON_PLAN_REQUIRED = "Plan required"
 GARRISON_UPGRADE_NEED_PLAN = "You need a plan to upgrade this building."
 GARRISON_UPGRADE_ERROR = "This building cannot be upgraded yet."
+ERR_GARRISON_NOT_ENOUGH_CURRENCY = "You don't have enough Garrison Resources."
+ERR_GARRISON_NOT_ENOUGH_GOLD = "You don't have enough gold."
 GARRISON_LOCKED_PLOT_TOOLTIP = "Complete the quest to gain access to this building."
 GARRISON_BUILDING_LOCKED = "Building Locked"
 GARRISON_BUILDING_PLANS_REQUIRED = "Plans required"
@@ -77,9 +79,15 @@ end
 local texture = CreateFrame("Frame"):CreateTexture()
 local textureMethods = getmetatable(texture).__index
 texture:Hide()
-function textureMethods:SetAtlas(name, useAtlasSize)
+-- The garrison's own atlas entries first; every other atlas goes to the client's native SetAtlas (the full retail
+-- table), so this override does not blank atlases for the rest of the UI.
+local nativeSetAtlas = textureMethods.SetAtlas
+function textureMethods:SetAtlas(name, useAtlasSize, ...)
 	local entry = EsteriaArchitectAtlas and EsteriaArchitectAtlas[name]
-	if not entry then return end
+	if not entry then
+		if nativeSetAtlas then return nativeSetAtlas(self, name, useAtlasSize, ...) end
+		return
+	end
 	self:SetTexture(entry[1])
 	local tw, th = entry[4] or entry[2], entry[5] or entry[3]
 	if tw and th and tw > 0 and th > 0 then

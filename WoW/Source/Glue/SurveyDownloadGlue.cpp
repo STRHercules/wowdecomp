@@ -12,7 +12,7 @@
 #include "WoW/Source/WowServices/LoginResponse.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/FileDownload.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 // STATIC: 0x009F6418
 static const uint8_t s_surveyExponent[4] = {

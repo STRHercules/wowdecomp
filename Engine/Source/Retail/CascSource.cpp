@@ -141,6 +141,15 @@ struct CascSource::Impl {
         if (auto reader = packedAssetReader.load()) return reader(name, bytes, error, size);
         return packed.Read(name, bytes, error, size);
     }
+    // Where a packed patch MPQ keeps this file (Tools/RetailAssets/pack_cache.py, pack_hots.py); empty if not packable.
+    std::string PackedName(const Reference& ref, const std::string& internal) const {
+        if (build.empty()) return {};
+        if (ref.id) return "EsteriaRetail\\" + product + "-" + build + "\\" + std::to_string(locale) + "\\" + std::to_string(ref.id) + ".bin";
+        if (kind != SourceKind::HotS || !files || internal.empty()) return {};
+        auto name = "EsteriaHotS\\" + product + "-" + build + "\\" + internal;
+        std::replace(name.begin(), name.end(), '/', '\\');
+        return name;
+    }
     std::string Prefix() const { return SourcePrefix(kind); }
     uint32_t locale = CASC_LOCALE_ENUS;
     bool online = true, configured = false, files = false;
@@ -216,10 +225,8 @@ struct CascSource::Impl {
     }
 
     bool Fetch(const Reference& ref, const std::string& internal, std::vector<uint8_t>& bytes, std::string& error, bool lenient = false) {
-        if (configured && ref.id && !build.empty() && !lenient)
+        if (const auto name = PackedName(ref, internal); configured && !name.empty() && !lenient)
         {
-            const auto name = "EsteriaRetail\\" + product + "-" + build + "\\" + std::to_string(locale)
-                + "\\" + std::to_string(ref.id) + ".bin";
             const int packed = ReadPacked(name.c_str(), bytes, error, nullptr);
             if (packed < 0)
                 return false;
@@ -581,10 +588,8 @@ bool CascSource::Exists(const char* name, std::string& error) {
     std::string internal;
     File file;
     if (!m_impl->Resolve(Normalize(name ? name : ""), ref, internal, error)) return false;
-    if (ref.id && !m_impl->build.empty())
+    if (const auto path = m_impl->PackedName(ref, internal); !path.empty())
     {
-        const auto path = "EsteriaRetail\\" + m_impl->product + "-" + m_impl->build + "\\"
-            + std::to_string(m_impl->locale) + "\\" + std::to_string(ref.id) + ".bin";
         std::vector<uint8_t> original;
         uint32_t size = 0;
         const int found = m_impl->ReadPacked(path.c_str(), original, error, &size);
@@ -839,10 +844,8 @@ bool CascSource::CachedOriginalSize(const char* name, uint32_t& size) {
     Reference ref;
     std::string internal, error;
     if (!m_impl->Resolve(key, ref, internal, error)) return false;
-    if (ref.id && !m_impl->build.empty())
+    if (const auto packed = m_impl->PackedName(ref, internal); !packed.empty())
     {
-        const auto packed = "EsteriaRetail\\" + m_impl->product + "-" + m_impl->build + "\\"
-            + std::to_string(m_impl->locale) + "\\" + std::to_string(ref.id) + ".bin";
         std::vector<uint8_t> original;
         const int found = m_impl->ReadPacked(packed.c_str(), original, error, &size);
         if (found)

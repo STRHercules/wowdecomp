@@ -1749,7 +1749,10 @@ int32_t CM2Shared::FinishLoadingLowPrioritySequence(uint32_t sequenceIndex, CAsy
         return 0;
     }
 
-    for (uint16_t* alias = &sequence->m_aliasNext; *alias != sequenceIndex; alias = &this->m_data->m_sequences[*alias].m_aliasNext) {
+    // bounded like LoadLowPrioritySequence: a broken alias ring must not loop forever
+    const uint32_t sequenceCount = this->m_data->m_sequences.m_count;
+    uint32_t steps = 0;
+    for (uint16_t* alias = &sequence->m_aliasNext; *alias != sequenceIndex && *alias < sequenceCount && steps < sequenceCount; alias = &this->m_data->m_sequences[*alias].m_aliasNext, steps++) {
         if (!this->FinishLoadingLowPrioritySequence(*alias, static_cast<uint8_t*>(object->m_buffer), object->m_size)) {
             return 0;
         }
@@ -2181,6 +2184,9 @@ void CM2Shared::LowPrioritySequenceFailedCallback(void* param) {
 // OFFSET: 0x0083DA10
 CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
     M2Sequence* sequence = &this->m_data->m_sequences[sequenceIndex];
+    if (!LowPrioritySequenceChainValid(sequenceIndex)) {
+        return nullptr;
+    }
     CM2SequenceLoad* load = this->m_sequenceLoads.NewNode(2, 0, 0);
 
     if (!load) {
@@ -2191,8 +2197,10 @@ CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
     load->m_shared = this;
 
     M2Sequence* source = sequence;
+    const uint32_t sequenceCount = this->m_data->m_sequences.m_count;
 
-    while (source->m_flags & 0x40) {
+    // Converted retail models can carry alias chains that never end; walk at most one pass over the table (the original looped forever).
+    for (uint32_t steps = 0; (source->m_flags & 0x40) && source->m_aliasNext < sequenceCount && steps < sequenceCount; steps++) {
         source = &this->m_data->m_sequences[source->m_aliasNext];
     }
 
@@ -2238,7 +2246,8 @@ CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
 
     sequence->m_flags |= 0x10;
 
-    for (uint16_t i = sequence->m_aliasNext; i != sequenceIndex; i = this->m_data->m_sequences[i].m_aliasNext) {
+    uint32_t steps = 0;
+    for (uint16_t i = sequence->m_aliasNext; i != sequenceIndex && i < sequenceCount && steps < sequenceCount; i = this->m_data->m_sequences[i].m_aliasNext, steps++) {
         this->m_data->m_sequences[i].m_flags |= 0x10;
     }
 
@@ -2254,6 +2263,38 @@ CM2SequenceLoad* CM2Shared::LoadLowPrioritySequence(uint16_t sequenceIndex) {
     AsyncFileReadObject(load->m_asyncObject, 0);
 
     return load;
+}
+
+// Esteria: converted retail models can carry alias links that never close. The original loops then spun forever (a freeze), and
+// stopping them early streamed the wrong .anim into the sequence (a crash in FindKey). Such a sequence is refused instead, and
+// named once in Logs\M2Alias.log so the model can be repaired.
+bool CM2Shared::LowPrioritySequenceChainValid(uint16_t sequenceIndex) {
+    const uint32_t count = this->m_data->m_sequences.m_count;
+    bool valid = sequenceIndex < count;
+    uint32_t index = sequenceIndex, steps = 0;
+    while (valid && (this->m_data->m_sequences[index].m_flags & 0x40)) {   // alias: must lead to a real sequence
+        index = this->m_data->m_sequences[index].m_aliasNext;
+        valid = index < count && ++steps <= count;
+    }
+    if (valid) {                                                            // variation ring: must come back to the start
+        index = sequenceIndex; steps = 0;
+        do {
+            index = this->m_data->m_sequences[index].m_aliasNext;
+            valid = index < count && ++steps <= count;
+        } while (valid && index != sequenceIndex);
+    }
+    if (!valid) {
+        static uint32_t logged = 0;
+        if (logged++ < 64) {
+            if (FILE* file = std::fopen("Logs/M2Alias.log", "ab")) {
+                const M2Sequence& seq = this->m_data->m_sequences[sequenceIndex < count ? sequenceIndex : 0];
+                std::fprintf(file, "broken alias chain: %s sequence index=%u id=%u variation=%u aliasNext=%u flags=0x%x count=%u\n",
+                    this->m_fileName, sequenceIndex, seq.m_id, seq.m_variationIndex, seq.m_aliasNext, seq.m_flags, count);
+                std::fclose(file);
+            }
+        }
+    }
+    return valid;
 }
 
 // VERIFY: 554f14ce auto

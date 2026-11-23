@@ -102,7 +102,7 @@ def install_client(client: Path, stage: Path, archive_name: str, label: str):
     ours = sorted(packs.iterdir())
     for pack in ours:
         manifest = n.load_pack(pack)
-        destination = root / "Packs" / pack.name
+        destination = n.packs_dir(root) / pack.name
         if destination.exists():
             if n.load_pack(destination)["definition_sha256"] != manifest["definition_sha256"]:
                 raise ValueError(f"{destination} holds different content")

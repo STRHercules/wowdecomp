@@ -140,6 +140,23 @@ void CSimpleScaleAnim::LoadXML(XMLNode* node, CStatus* status) {
         }
     }
 
+    // Not in the original: retail fromScaleX/toScaleX (and Y). Scale animations multiply here, so to/from is exact
+    // when the region rests at the from scale.
+    const char* fromX = node->GetAttributeByName("fromScaleX");
+    const char* toX = node->GetAttributeByName("toScaleX");
+    const char* fromY = node->GetAttributeByName("fromScaleY");
+    const char* toY = node->GetAttributeByName("toScaleY");
+
+    if ((fromX && *fromX) || (toX && *toX) || (fromY && *fromY) || (toY && *toY)) {
+        auto ratio = [](const char* from, const char* to) {
+            float f = from && *from ? SStrToFloat(from) : 1.0f;
+            float t = to && *to ? SStrToFloat(to) : 1.0f;
+            return f < 0.001f ? (t < 0.001f ? 0.001f : t) : (t / f < 0.001f ? 0.001f : t / f);
+        };
+        scale.x = ratio(fromX, toX);
+        scale.y = ratio(fromY, toY);
+    }
+
     this->SetScale(scale);
 
     for (XMLNode* child = node->m_child; child; child = child->m_next) {

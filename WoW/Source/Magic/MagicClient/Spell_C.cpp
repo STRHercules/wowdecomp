@@ -159,6 +159,8 @@ static int32_t s_spellFlatModifiers[96][31];
 // Esteria: spell modifiers per class family (SpellFamilyName 0..39), mask bit (0..95) and operation (0..30). The
 // legacy tables above hold the chassis class's modifiers (SMSG_SET_FLAT/PCT_SPELL_MODIFIER carry no family).
 static const uint32_t ESTERIA_SPELL_MOD_OPCODE = 0x530;
+static constexpr uint32_t ESTERIA_PLAYER_PICKPOCKET_OPCODE = 0x6B1;
+static constexpr int32_t PLAYER_PICK_POCKET_SPELL = 921;
 static const uint32_t ESTERIA_SPELL_MOD_PAYLOAD = 11;
 static const uint32_t ESTERIA_SPELL_MOD_FAMILIES = 40;
 static const uint32_t ESTERIA_SPELL_MOD_BITS = 96;
@@ -8794,6 +8796,17 @@ bool Spell_C_CastSpell(CGUnit_C* caster, int32_t spellId, const CGItem_C* item, 
 
     if (!caster) {
         return false;
+    }
+
+    if (!cast && !item && spellId == PLAYER_PICK_POCKET_SPELL && caster->CanUseEsteriaPlayerPickpocket()) {
+        WOWGUID const victim = target ? target : CGGameUI::m_lockedTarget;
+        if (victim && victim != caster->m_obj->m_guid &&
+            ClntObjMgrObjectPtr(victim, TYPEMASK_PLAYER, __FILE__, __LINE__)) {
+            CDataStore payload;
+            payload.Put(victim.m_guid);
+            payload.Finalize();
+            return sExtensionMgr->SendClientMessage(ESTERIA_PLAYER_PICKPOCKET_OPCODE, payload);
+        }
     }
 
     if (spell.m_attributesExF & 0x40000) {

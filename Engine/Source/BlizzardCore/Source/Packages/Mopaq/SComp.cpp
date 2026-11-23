@@ -6,10 +6,10 @@
 #include "Engine/Source/BlizzardCore/Source/System/Memory/TempBuffer.h"
 #include "Engine/Source/Storm/Source/SComp.h"
 extern "C" {
-#include "ThirdParty/zlib/contrib/blast/blast.h"
+#include "blast.h"
 }
 #include "ThirdParty/bzip2/bzlib.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 extern "C" {
 #include "ThirdParty/lzma/LzmaDecode.h"

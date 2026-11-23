@@ -36,7 +36,7 @@ STOCK_ARCHIVES = ("common.mpq", "common-2.mpq", "expansion.mpq", "lichking.mpq",
 
 def retail_mounts(client: Path):
     """(model stem, texture stems) and names of every installed retail mount pack."""
-    recipes = [json.loads(p.read_text()) for p in (client / "Data/Retail/Packs").glob("*/resolved-source.json")]
+    recipes = [json.loads(p.read_text()) for p in n.packs_dir(client / "Data/Retail").glob("*/resolved-source.json")]
     recipes = [r for r in recipes if "retail_mount_id" in r]
     wanted = {r["model_file_id"] for r in recipes} | {t for r in recipes for t in r["texture_file_ids"]}
     names = {}
@@ -229,7 +229,7 @@ def stage(args):
             raise ValueError(f"Donor {donor} is not a mounted aura")
         donors[donor] = row
     allocations = args.client / "Data/Retail/allocations.sqlite"
-    slugs = {p.name for p in (args.client / "Data/Retail/Packs").iterdir()}
+    slugs = {p.name for p in n.packs_dir(args.client / "Data/Retail").iterdir()}
     server_tables = {table: [] for table in nm.SQL_DBC}
     server_strings = {table: {} for table in nm.SQL_DBC}
     learn = []

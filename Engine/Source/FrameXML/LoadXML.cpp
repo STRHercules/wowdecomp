@@ -12,6 +12,7 @@
 #include "Engine/Source/Frame/CSimpleRender.h"
 #include "Engine/Source/Frame/CSimpleTexture.h"
 #include "Engine/Source/FrameXML/XMLTree.h"
+#include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/Storm/Source/MD5.h"
 #include "Engine/Source/Tempest/C2Vector.h"
@@ -714,6 +715,31 @@ int32_t LoadXML_Color(XMLNode* node, CImVector& color, CStatus* status) {
 
     if (aString && *aString) {
         a = (SStrToFloat(aString) < 1.0f && !(SStrToFloat(aString) > 0.0f)) ? 0.0f : (SStrToFloat(aString) >= 1.0f ? 1.0f : SStrToFloat(aString));
+    }
+
+    // Not in the original: retail <Color color="NORMAL_FONT_COLOR"/> names a global colour table ({ r, g, b[, a] }).
+    const char* colorName = node->GetAttributeByName("color");
+
+    if (colorName && *colorName) {
+        lua_State* L = FrameScript_GetContext();
+        lua_getfield(L, LUA_GLOBALSINDEX, colorName);
+
+        if (lua_type(L, -1) == LUA_TTABLE) {
+            auto field = [&](const char* key, float fallback) {
+                lua_getfield(L, -1, key);
+                float value = lua_isnumber(L, -1) ? static_cast<float>(lua_tonumber(L, -1)) : fallback;
+                lua_pop(L, 1);
+                return value < 0.0f ? 0.0f : (value > 1.0f ? 1.0f : value);
+            };
+            r = field("r", r);
+            g = field("g", g);
+            b = field("b", b);
+            a = field("a", a);
+        } else {
+            status->Add(STATUS_WARNING, "Unknown color %s in element %s", colorName, node->m_name.m_str);
+        }
+
+        lua_pop(L, 1);
     }
 
     color.Set(a, r, g, b);

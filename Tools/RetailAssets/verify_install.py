@@ -4,7 +4,7 @@ import json
 import re
 import subprocess
 
-from native_import import Path, digest, load_pack, save_json, verify_server
+from native_import import Path, digest, load_pack, packs_dir, save_json, verify_server
 
 
 def main():
@@ -15,7 +15,7 @@ def main():
     if not re.fullmatch(r"[a-z][a-z0-9-]{0,63}", args.slug):
         raise ValueError("Invalid pack slug")
     root = args.client / "Data/Retail"
-    pack = root / "Packs" / args.slug
+    pack = packs_dir(root) / args.slug
     manifest = load_pack(pack)
     verify_server(manifest)
     originals = root / "Assets" / f"{manifest['source']['product']}-{manifest['source']['build']}"

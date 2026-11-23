@@ -1144,36 +1144,48 @@ void CM2Model::UnoptimizeVisibleGeometry() {
     this->m_optGeo = nullptr;
 }
 
+// NOT IN BINARY. The original probe loops ran until they met an empty (0xFFFF) slot. A model whose id hash
+// table has no empty slot and lacks the requested id (some imported models ship one) never terminated, freezing
+// the client inside CGUnit_C::PostInit while spawning that unit. Probing now stops after hashCount steps, skips
+// out-of-range indices, and falls back to a linear scan, which always gives the right answer.
+static uint32_t ProbeSequenceIndex(const M2Data* data, uint32_t id) {
+    uint32_t count = data->m_sequences.m_count;
+    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
+
+    if (hashCount) {
+        uint32_t slot = id % hashCount;
+
+        for (uint32_t step = 1; step <= hashCount; step++) {
+            uint32_t index = data->m_sequenceIdxHashById[slot];
+
+            if (index == 0xFFFF) {
+                return 0xFFFF;
+            }
+
+            if (index < count && data->m_sequences[index].m_id == id) {
+                return index;
+            }
+
+            slot = (slot + step * step) % hashCount;
+        }
+    }
+
+    for (uint32_t index = 0; index < count; index++) {
+        if (data->m_sequences[index].m_id == id) {
+            return index;
+        }
+    }
+
+    return 0xFFFF;
+}
+
 // VERIFY: 8a7a94e4 manual
 // OFFSET: 0x00825E00
 int32_t CM2Model::HasSequence(const M2Data* data, uint32_t id) {
-    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-    uint32_t index;
-
-    if (!hashCount) {
-        for (index = 0; index < data->m_sequences.m_count; index++) {
-            if (data->m_sequences[index].m_id == id) {
-                return index < data->m_sequences.m_count;
-            }
-        }
-
-        return data->m_sequences.m_count > 0xFFFF;
-    }
-
-    uint32_t slot = id % hashCount;
-    index = data->m_sequenceIdxHashById[slot];
+    uint32_t index = ProbeSequenceIndex(data, id);
 
     if (index == 0xFFFF) {
         return data->m_sequences.m_count > 0xFFFF;
-    }
-
-    for (uint32_t step = 1; data->m_sequences[index].m_id != id; step++) {
-        slot = (slot + step * step) % data->m_sequenceIdxHashById.m_count;
-        index = data->m_sequenceIdxHashById[slot];
-
-        if (index == 0xFFFF) {
-            return data->m_sequences.m_count > 0xFFFF;
-        }
     }
 
     return index < data->m_sequences.m_count;
@@ -1263,35 +1275,7 @@ int32_t CM2Model::IsSequenceLoaded(uint32_t id) {
 // VERIFY: 89cf9cd8 manual
 // OFFSET: 0x008260C0
 uint16_t CM2Model::FindSequenceIndex(const M2Data* data, uint32_t id, int32_t variation) {
-    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-    uint32_t index = 0xFFFF;
-
-    if (hashCount) {
-        uint32_t slot = id % hashCount;
-        index = data->m_sequenceIdxHashById[slot];
-
-        if (index != 0xFFFF) {
-            for (uint32_t step = 1; data->m_sequences[index].m_id != id; step++) {
-                slot = (slot + step * step) % hashCount;
-                index = data->m_sequenceIdxHashById[slot];
-
-                if (index == 0xFFFF) {
-                    break;
-                }
-            }
-        }
-    } else {
-        for (index = 0; index < data->m_sequences.m_count; index++) {
-            if (data->m_sequences[index].m_id == id) {
-                break;
-            }
-        }
-
-        if (index >= data->m_sequences.m_count) {
-            index = 0xFFFF;
-        }
-    }
-
+    uint32_t index = ProbeSequenceIndex(data, id);
     uint32_t count = data->m_sequences.m_count;
 
     while (index < count && variation) {
@@ -1313,34 +1297,7 @@ uint32_t CM2Model::FindSequenceVariationCount(const M2Data* data, uint32_t id) {
         this->WaitForLoad(nullptr);
     }
 
-    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-    uint32_t index = 0xFFFF;
-
-    if (hashCount) {
-        uint32_t slot = id % hashCount;
-        index = data->m_sequenceIdxHashById[slot];
-
-        if (index != 0xFFFF) {
-            for (uint32_t step = 1; data->m_sequences[index].m_id != id; step++) {
-                slot = (slot + step * step) % hashCount;
-                index = data->m_sequenceIdxHashById[slot];
-
-                if (index == 0xFFFF) {
-                    break;
-                }
-            }
-        }
-    } else {
-        for (index = 0; index < data->m_sequences.m_count; index++) {
-            if (data->m_sequences[index].m_id == id) {
-                break;
-            }
-        }
-
-        if (index >= data->m_sequences.m_count) {
-            index = 0xFFFF;
-        }
-    }
+    uint32_t index = ProbeSequenceIndex(data, id);
 
     if (index >= data->m_sequences.m_count) {
         return 0;
@@ -1936,34 +1893,10 @@ void CM2Model::LoadSequence(uint32_t id) {
 
     uint32_t key = fallback.m_id | (fallback.m_mode << 16);
     M2Data* data = this->m_shared->m_data;
-    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-    uint32_t index = 0xFFFFFFFF;
+    uint32_t index = ProbeSequenceIndex(data, key);
 
-    if (hashCount) {
-        uint32_t slot = key % hashCount;
-        uint32_t entry = data->m_sequenceIdxHashById[slot];
-
-        if (entry != 0xFFFF) {
-            for (uint32_t step = 1; data->m_sequences[entry].m_id != key; step++) {
-                slot = (slot + step * step) % data->m_sequenceIdxHashById.m_count;
-                entry = data->m_sequenceIdxHashById[slot];
-
-                if (entry == 0xFFFF) {
-                    break;
-                }
-            }
-
-            if (entry != 0xFFFF) {
-                index = entry;
-            }
-        }
-    } else {
-        for (uint32_t i = 0; i < data->m_sequences.m_count; i++) {
-            if (data->m_sequences[i].m_id == key) {
-                index = i;
-                break;
-            }
-        }
+    if (index == 0xFFFF) {
+        index = 0xFFFFFFFF;
     }
 
     while (index < data->m_sequences.m_count) {
@@ -2319,34 +2252,7 @@ uint32_t CM2Model::GetEventSequenceTime(uint32_t sequenceId, uint32_t eventId) {
     }
 
     M2Data* data = this->m_shared->m_data;
-    uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-    uint32_t index = 0xFFFF;
-
-    if (hashCount) {
-        uint32_t slot = sequenceId % hashCount;
-        index = data->m_sequenceIdxHashById[slot];
-
-        if (index != 0xFFFF) {
-            for (uint32_t step = 1; data->m_sequences[index].m_id != sequenceId; step++) {
-                slot = (slot + step * step) % hashCount;
-                index = data->m_sequenceIdxHashById[slot];
-
-                if (index == 0xFFFF) {
-                    break;
-                }
-            }
-        }
-    } else {
-        for (index = 0; index < data->m_sequences.m_count; index++) {
-            if (data->m_sequences[index].m_id == sequenceId) {
-                break;
-            }
-        }
-
-        if (index >= data->m_sequences.m_count) {
-            index = 0xFFFF;
-        }
-    }
+    uint32_t index = ProbeSequenceIndex(data, sequenceId);
 
     if (index >= data->m_sequences.m_count) {
         return 0;
@@ -6729,6 +6635,7 @@ void CM2Model::SetBoneSequenceDeferred(uint16_t sequenceIndex, M2Data* data, uin
 
     if (data->m_sequences[sequenceIndex].m_flags & 0x10) {
         uint16_t index = sequenceIndex;
+        uint32_t steps = 0;
 
         while (true) {
             TSList<CM2SequenceLoad>& loads = this->m_shared->m_sequenceLoads;
@@ -6751,7 +6658,8 @@ void CM2Model::SetBoneSequenceDeferred(uint16_t sequenceIndex, M2Data* data, uin
 
             index = data->m_sequences[index].m_aliasNext;
 
-            if (index == sequenceIndex) {
+            // a broken alias ring (converted retail models) never comes back to the start: give up after one pass
+            if (index == sequenceIndex || index >= data->m_sequences.m_count || ++steps > data->m_sequences.m_count) {
                 return;
             }
         }
@@ -7322,33 +7230,7 @@ void CM2Model::SetBoneSequence(uint32_t boneId, uint32_t sequenceId, uint32_t va
 
     if (index == 0xFFFF) {
         pickRandom = 1;
-        uint32_t hashCount = data->m_sequenceIdxHashById.m_count;
-
-        if (hashCount) {
-            uint32_t slot = fallback.m_id % hashCount;
-            index = data->m_sequenceIdxHashById[slot];
-
-            if (index != 0xFFFF) {
-                for (uint32_t step = 1; data->m_sequences[index].m_id != fallback.m_id; step++) {
-                    slot = (slot + step * step) % hashCount;
-                    index = data->m_sequenceIdxHashById[slot];
-
-                    if (index == 0xFFFF) {
-                        break;
-                    }
-                }
-            }
-        } else {
-            for (index = 0; index < data->m_sequences.m_count; index++) {
-                if (data->m_sequences[index].m_id == fallback.m_id) {
-                    break;
-                }
-            }
-
-            if (index >= data->m_sequences.m_count) {
-                index = 0xFFFF;
-            }
-        }
+        index = static_cast<uint16_t>(ProbeSequenceIndex(data, fallback.m_id));
 
         // NOT IN BINARY. A converted model whose lookup cannot reach the sequence (or that lacks it and its fallback)
         // leaves index at 0xFFFF; the stock client then reads m_sequences[0xFFFF] and crashes. Leave the bone as is.

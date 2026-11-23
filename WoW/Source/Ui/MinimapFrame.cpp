@@ -285,6 +285,9 @@ static TSGrowableArray<uint16_t> s_blipIndices;
 
 // STATIC: 0x00BF8098
 static TSGrowableArray<OBJINFO> s_objInfo[23];
+static constexpr uint32_t HostilePlayerBlip = 2;
+static constexpr int32_t WantedBlipMarker = 1;
+static constexpr float WantedBlipScale = 1.4f;
 
 // STATIC: 0x00BF5FC8
 static C2Vector s_poiArrowPositions[3];
@@ -1550,7 +1553,17 @@ int32_t MinimapUpdate(CMapEntity* entity, int32_t mapId, const C3Vector* positio
         int32_t wmoId;
         int32_t wmoHash;
 
-        if (groupRec && (groupRec->m_flags & 0x20)) {
+#if defined(WOWDECOMP_RETAIL_ASSETS)
+        // Not in the original: retail WMOs ship no per-group minimap quads, so indoor mode would blank the minimap
+        // (garrison buildings, mine); keep the terrain tiles instead.
+        const char* mapObjFile = nullptr;
+        World::QueryMapObjFileName(entity, &mapObjFile);
+        const bool retailMapObj = mapObjFile && Retail::SourceForPath(mapObjFile).Handles(mapObjFile);
+#else
+        const bool retailMapObj = false;
+#endif
+
+        if ((groupRec && (groupRec->m_flags & 0x20)) || retailMapObj) {
             inside = 0;
             s_mapObjIndoorArea = 0;
         } else if ((outdoorArea || indoorArea || inside) && World::QueryMapObjIDs(entity, &wmoId, &wmoHash, &groupId)) {
@@ -2261,6 +2274,7 @@ int32_t CGMinimapFrame::ObjectEnumProc(WOWGUID guid, void* param) {
 
     uint8_t tracked = 0;
     uint8_t questGiver = 0;
+    bool wantedBlip = false;
     uint32_t type;
     uint32_t objectType = object->m_obj->m_type;
 
@@ -2305,7 +2319,10 @@ int32_t CGMinimapFrame::ObjectEnumProc(WOWGUID guid, void* param) {
                 return 1;
             }
 
-            if (unit->IsTracked() && player->CanInteract(unit)) {
+            if (unit->IsEsteriaWanted()) {
+                type = HostilePlayerBlip;
+                wantedBlip = true;
+            } else if (unit->IsTracked() && player->CanInteract(unit)) {
                 if (CGMinimapFrame::s_trackingInfo->m_npcFlags & 0x40) {
                     tracked = 1;
                 }
@@ -2370,6 +2387,7 @@ int32_t CGMinimapFrame::ObjectEnumProc(WOWGUID guid, void* param) {
         info->m_otherFloor = wmoId != data->m_wmoId;
         info->m_tracked = tracked;
         info->m_questGiver = questGiver;
+        info->m_icon = wantedBlip ? WantedBlipMarker : 0;
     }
 
     return 1;
@@ -2478,6 +2496,12 @@ static void SetMemberData(WOWGUID guid, MEMBERINFO* member, CGPlayer_C* player, 
         } else {
             member->m_name[0] = 0;
         }
+    }
+
+    if (unit && unit->IsEsteriaWanted() && member->m_name[0]) {
+        char name[sizeof(member->m_name)];
+        SStrCopy(name, member->m_name, sizeof(name));
+        SStrPrintf(member->m_name, sizeof(member->m_name), "[Wanted] %s", name);
     }
 
     float range = s_isIndoors ? s_indoorZoomRadius[s_indoorZoom] : static_cast<float>(s_outdoorZoomTiles[s_outdoorZoom]) * 0.5f * 33.333332f;
@@ -2797,10 +2821,14 @@ void CGMinimapFrame::RenderObjectBlips(const C44Matrix& rotation, bool otherFloo
 
             uint16_t base = static_cast<uint16_t>(s_blipVertices.m_count);
             C3Vector vertices[4];
+            float scale = this->m_layoutScale;
+            if (list == HostilePlayerBlip && info->m_icon == WantedBlipMarker) {
+                scale *= WantedBlipScale;
+            }
 
             for (uint32_t j = 0; j < 4; j++) {
-                vertices[j].x = CGMinimapFrame::s_blipQuads[0][j].x * this->m_layoutScale + point.x;
-                vertices[j].y = CGMinimapFrame::s_blipQuads[0][j].y * this->m_layoutScale + point.y;
+                vertices[j].x = CGMinimapFrame::s_blipQuads[0][j].x * scale + point.x;
+                vertices[j].y = CGMinimapFrame::s_blipQuads[0][j].y * scale + point.y;
                 vertices[j].z = 0.0f;
             }
 
@@ -3363,12 +3391,13 @@ int32_t CGMinimapFrame::OnLayerTrackUpdate(const CMouseEvent& evt) {
     memset(objects, 0, sizeof(objects));
 
     for (uint32_t i = 0; i < 23; i++) {
-        for (uint32_t j = 0; j < s_objInfo[i].Count(); j++) {
+        for (uint32_t j = 0; j < s_objInfo[i].Count() && j < 32; j++) {
             OBJINFO& info = s_objInfo[i][j];
             float x = info.m_position.x + rect.minX;
             float y = info.m_position.y + rect.minY;
+            float blipHalf = i == HostilePlayerBlip && info.m_icon == WantedBlipMarker ? half * WantedBlipScale : half;
 
-            if (x - half > mouseX || x + half < mouseX || half + y < mouseY || y - half > mouseY) {
+            if (x - blipHalf > mouseX || x + blipHalf < mouseX || blipHalf + y < mouseY || y - blipHalf > mouseY) {
                 continue;
             }
 
@@ -3384,7 +3413,7 @@ int32_t CGMinimapFrame::OnLayerTrackUpdate(const CMouseEvent& evt) {
             }
 
             if (name) {
-                objects[i] |= 1 << j;
+                objects[i] |= uint32_t(1) << j;
             }
         }
     }
@@ -3517,8 +3546,8 @@ int32_t CGMinimapFrame::OnLayerTrackUpdate(const CMouseEvent& evt) {
     }
 
     for (uint32_t i = 0; i < 23; i++) {
-        for (uint32_t j = 0; j < s_objInfo[i].Count(); j++) {
-            if (!(s_hoverObjects[i] & (1 << j))) {
+        for (uint32_t j = 0; j < s_objInfo[i].Count() && j < 32; j++) {
+            if (!(s_hoverObjects[i] & (uint32_t(1) << j))) {
                 continue;
             }
 
@@ -3547,6 +3576,9 @@ int32_t CGMinimapFrame::OnLayerTrackUpdate(const CMouseEvent& evt) {
                 SStrPack(text, "|cffb0b0b0", sizeof(text));
             }
 
+            if (i == HostilePlayerBlip && s_objInfo[i][j].m_icon == WantedBlipMarker) {
+                SStrPack(text, "[Wanted] ", sizeof(text));
+            }
             SStrPack(text, name, sizeof(text));
 
             if (s_objInfo[i][j].m_questGiver && colorblind) {

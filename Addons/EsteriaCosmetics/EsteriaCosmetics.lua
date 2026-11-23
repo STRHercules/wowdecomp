@@ -418,7 +418,7 @@ local function detail(row)
 end
 
 refresh = function()
-    if not frame or not frame:IsShown() or tab == "Emotes" or tab == "Incarnations" or tab == "Transmog" or tab == "Crates" then return end
+    if not frame or not frame:IsShown() or tab == "Dances" or tab == "Emotes" or tab == "Incarnations" or tab == "Transmog" or tab == "Crates" then return end
     filtered = {}
     local query = search:GetText():lower()
     local collected, all = 0, list()
@@ -561,9 +561,9 @@ local function build()
     ES.Solid(frame,"BACKGROUND",ES.INK,0.98):SetAllPoints(); headerBand(frame,42); ES.Border(frame,ES.GOLD)
     local divider=ES.Solid(frame,"ARTWORK",ES.GOLD_DIM,0.6); divider:SetPoint("TOPLEFT",1,-41); divider:SetPoint("TOPRIGHT",-1,-41); divider:SetHeight(1)
     local title=ES.Text(frame,18,ES.GOLD); title:SetPoint("TOPLEFT",20,-12); title:SetText("Collections")
-    -- Crates is the EsteriaCrates store, embedded like Emotes.
-    for i,name in ipairs({"Wings","Backpacks","Emotes","Hearthstones","Weapons","Mounts","Pets","Incarnations","Transmog","Crates"}) do
-        local b=tabButton(frame,94,name); b:SetPoint("TOPLEFT",164+(i-1)*98,-6); b:SetScript("OnClick",function() PlaySound("igMainMenuOptionCheckBoxOn"); selectTab(name) end); tabs[name]=b
+    -- Crates is the EsteriaCrates store, embedded like Dances (EsteriaEmotes) and Emotes (its spell emotes).
+    for i,name in ipairs({"Wings","Backpacks","Dances","Emotes","Hearthstones","Weapons","Mounts","Pets","Incarnations","Transmog","Crates"}) do
+        local b=tabButton(frame,86,name); b:SetPoint("TOPLEFT",160+(i-1)*88,-6); b:SetScript("OnClick",function() PlaySound("igMainMenuOptionCheckBoxOn"); selectTab(name) end); tabs[name]=b
     end
     local close=CreateFrame("Button",nil,frame,"UIPanelCloseButton"); close:SetPoint("TOPRIGHT",2,2)
     -- Corner grip: scales the whole window (every tab and embedded window keeps its layout), top-left stays put.
@@ -608,6 +608,7 @@ local function build()
     frame:SetScript("OnShow",function() learnedSpells=spellbook();EsteriaCollections_RefreshCompanions(); send("sync"); selectTab(tab) end)
     frame:SetScript("OnHide",function()
         if EsteriaEmotesFrame then EsteriaEmotesFrame:Hide() end
+        if EsteriaSpellEmotesFrame then EsteriaSpellEmotesFrame:Hide() end
         if EsteriaIncarnationsFrame then EsteriaIncarnationsFrame:Hide() end
         if EsteriaCratesStore then EsteriaCratesStore:Hide() end
         GameTooltip:Hide()
@@ -622,9 +623,12 @@ selectTab=function(name)
     if EsteriaEmotesFrame then EsteriaEmotesFrame:Hide() end
     if EsteriaIncarnationsFrame then EsteriaIncarnationsFrame:Hide() end
     if EsteriaCratesStore then EsteriaCratesStore:Hide() end
-    shown(pane,tab~="Emotes" and tab~="Incarnations" and tab~="Transmog" and tab~="Crates")
-    if tab=="Emotes" then
+    if EsteriaSpellEmotesFrame then EsteriaSpellEmotesFrame:Hide() end
+    shown(pane,tab~="Dances" and tab~="Emotes" and tab~="Incarnations" and tab~="Transmog" and tab~="Crates")
+    if tab=="Dances" then
         if EsteriaEmotes_Embed then EsteriaEmotes_Embed(content) end
+    elseif tab=="Emotes" then
+        if EsteriaSpellEmotes_Embed then EsteriaSpellEmotes_Embed(content) end
     elseif tab=="Incarnations" then
         if EsteriaIncarnations_Embed then EsteriaIncarnations_Embed(content) end
     elseif tab=="Transmog" then

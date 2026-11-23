@@ -1,5 +1,9 @@
 #include "WorldMap.h"
 #include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <unordered_set>
+#include "Engine/Source/Os/TimeManager.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/FrameScript/FrameScript_Object.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
@@ -20,6 +24,7 @@
 #include "WoW/Source/DB/Rec/WorldMapContinentRec.h"
 #include "WoW/Source/DB/Rec/WorldMapOverlayRec.h"
 #include "WoW/Source/DB/Rec/WorldSafeLocsRec.h"
+#include "WoW/Source/Object/ObjectClient/Unit_C.h"
 #include "WoW/Source/ObjectMgrClient/ObjectMgrClient.h"
 #include "WoW/Source/Ui/CGWorldStateInfo.h"
 #include "WoW/Source/Ui/MinimapFrame.h"
@@ -407,6 +412,98 @@ static int32_t Script_GetPlayerMapPosition(lua_State* L) {
     lua_pushnumber(L, x);
     lua_pushnumber(L, y);
     return 2;
+}
+
+namespace {
+constexpr uint32_t WantedSightingLifetimeMs = 30000;
+constexpr uint32_t WantedLiveLifetimeMs = 1500;
+constexpr size_t MaxWantedSightings = 256;
+struct WantedSighting {
+    std::string name;
+    C3Vector position;
+    uint32_t seenAt;
+};
+
+std::unordered_map<uint64_t, WantedSighting> s_wantedSightings;
+uint64_t s_wantedViewer = 0;
+uint32_t s_wantedMap = 0;
+}
+
+void ClearEsteriaWantedSightings() {
+    s_wantedSightings.clear();
+    s_wantedViewer = 0;
+}
+
+void RecordEsteriaWantedSightings(uint64_t viewer, uint32_t map, std::unordered_set<uint64_t> const& players) {
+    if (viewer != s_wantedViewer || map != s_wantedMap) {
+        s_wantedSightings.clear();
+        s_wantedViewer = viewer;
+        s_wantedMap = map;
+    }
+
+    uint32_t const now = OsGetAsyncTimeMs();
+    for (auto it = s_wantedSightings.begin(); it != s_wantedSightings.end();) {
+        if (now - it->second.seenAt >= WantedSightingLifetimeMs) {
+            it = s_wantedSightings.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    for (auto guid : players) {
+        if (guid == viewer ||
+            (s_wantedSightings.size() >= MaxWantedSightings && s_wantedSightings.find(guid) == s_wantedSightings.end())) {
+            continue;
+        }
+        auto* unit = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(WOWGUID{ guid }, TYPEMASK_PLAYER, __FILE__, __LINE__));
+        if (unit) {
+            const char* name = unit->GetUnitName(nullptr, 1);
+            if (name && *name) {
+                s_wantedSightings.insert_or_assign(guid, WantedSighting{ name, unit->GetPosition(), now });
+            }
+        }
+    }
+}
+
+static int32_t Script_EsteriaGetVisibleWantedMapPins(lua_State* L) {
+    lua_newtable(L);
+    if (!s_wantedViewer || ClntObjMgrGetActivePlayer().m_guid != s_wantedViewer || ClntObjMgrGetMapID() != s_wantedMap) {
+        ClearEsteriaWantedSightings();
+        return 1;
+    }
+
+    uint32_t const now = OsGetAsyncTimeMs();
+    int index = 1;
+    for (auto const& entry : s_wantedSightings) {
+        auto const& sighting = entry.second;
+        uint32_t const age = now - sighting.seenAt;
+        if (age >= WantedSightingLifetimeMs) {
+            continue;
+        }
+
+        float x = 0.0f, y = 0.0f;
+        bool outland = false;
+        if (!CGWorldMap::GetWorldPosition(sighting.position, s_wantedMap, &x, &y, &outland, true, 0) || outland ||
+            !(x >= 0.0f && x <= 1.0f && y >= 0.0f && y <= 1.0f) || (x == 0.0f && y == 0.0f)) {
+            continue;
+        }
+
+        auto* unit = static_cast<CGUnit_C*>(
+            ClntObjMgrObjectPtr(WOWGUID{ entry.first }, TYPEMASK_PLAYER, __FILE__, __LINE__));
+        lua_createtable(L, 0, 4);
+        lua_pushstring(L, sighting.name.c_str());
+        lua_setfield(L, -2, "name");
+        lua_pushnumber(L, x);
+        lua_setfield(L, -2, "x");
+        lua_pushnumber(L, y);
+        lua_setfield(L, -2, "y");
+        if (age >= WantedLiveLifetimeMs || !unit || !unit->IsEsteriaWanted()) {
+            lua_pushnumber(L, age / 1000);
+            lua_setfield(L, -2, "age");
+        }
+        lua_rawseti(L, -2, index++);
+    }
+    return 1;
 }
 
 // VERIFY: 8bcfd2ff manual
@@ -1179,6 +1276,7 @@ static FrameScript_Method s_ScriptFunctions[] = {
     { "ProcessMapClick", &Script_ProcessMapClick },
     { "UpdateMapHighlight", &Script_UpdateMapHighlight },
     { "GetPlayerMapPosition", &Script_GetPlayerMapPosition },
+    { "EsteriaGetVisibleWantedMapPins", &Script_EsteriaGetVisibleWantedMapPins },
     { "GetCorpseMapPosition", &Script_GetCorpseMapPosition },
     { "GetDeathReleasePosition", &Script_GetDeathReleasePosition },
     { "GetNumMapLandmarks", &Script_GetNumMapLandmarks },

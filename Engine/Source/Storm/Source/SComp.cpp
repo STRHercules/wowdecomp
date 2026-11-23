@@ -6,7 +6,7 @@
 #include "Engine/Source/Storm/H/stpl.h"
 #include "Engine/Source/Storm/H/storm.h"
 #include "ThirdParty/bzip2/bzlib.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 namespace {
 

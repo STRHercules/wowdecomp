@@ -14,9 +14,9 @@
 #include "Engine/Source/BlizzardCore/Source/System/Lock/Lock.h"
 #include "Engine/Source/BlizzardCore/Source/System/String/String.h"
 extern "C" {
-#include "ThirdParty/zlib/contrib/blast/blast.h"
+#include "blast.h"
 }
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 // VERIFY: ca82d7d9 manual
 // OFFSET: 0x00431DB0

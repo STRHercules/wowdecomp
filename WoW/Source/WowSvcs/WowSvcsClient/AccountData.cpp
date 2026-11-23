@@ -8,7 +8,7 @@
 #include "Engine/Source/Storm/Source/MD5.h"
 #include "WoW/Source/Glue/CGlueMgr.h"
 #include "WoW/Source/WowSvcs/WowSvcsClient/ClientServices.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 #include "WoW/Source/Client.h"
 #include "Engine/Source/Event/Event.h"
 

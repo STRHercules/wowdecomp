@@ -14,7 +14,7 @@ import cars_mount_pack  # noqa: E402
 
 STORM_DLL = REPO / "Tools" / "MountStudio" / "runtime" / "backend" / "StormLib.dll"
 FILES = ("EsteriaEmotes.toc", "Bindings.xml", "esteria_style.lua", "EsteriaEmotesData.lua", "EsteriaEmotes.lua",
-         "EsteriaEmotesWheel.lua")
+         "EsteriaEmotesWheel.lua", "EsteriaSpellEmotes.lua")
 
 
 def main():

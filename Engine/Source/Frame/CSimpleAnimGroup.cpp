@@ -20,6 +20,7 @@
 #include "Engine/Source/Storm/H/storm.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/Frame/RetailXML.h"
 
 // STATIC: 0x00AC1AB4
 int32_t CSimpleAnimGroup::s_metatable = LUA_NOREF;
@@ -162,9 +163,9 @@ void CSimpleAnimGroup::LoadXML_Scripts(XMLNode* node, CStatus* status) {
             continue;
         }
 
-        if (script->m_luaRef) {
-            luaL_unref(L, LUA_REGISTRYINDEX, script->m_luaRef);
-        }
+        // Not in the original: the inherited handler is kept until retail's inherit= says what to do with it.
+        const int32_t inheritedRef = script->m_luaRef;
+        script->m_luaRef = 0;
 
         if (!child->m_userData && body && *body) {
             char functionName[1024];
@@ -195,6 +196,7 @@ void CSimpleAnimGroup::LoadXML_Scripts(XMLNode* node, CStatus* status) {
             script->m_luaRef = 0;
         }
 
+        script->m_luaRef = RetailXML_ScriptRef(L, child, inheritedRef, script->m_luaRef);
         script->m_tainted = nullptr;
     }
 }

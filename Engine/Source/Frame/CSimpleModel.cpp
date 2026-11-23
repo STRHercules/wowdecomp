@@ -37,6 +37,9 @@ const char* CSimpleModel::s_objectTypeName = "Model";
 // STATIC: 0x00DCE428
 int32_t CSimpleModel::s_objectType;
 
+// Set by the inn character select (WoW/Source/Glue/CharacterSelection.cpp) to draw its room before the scene; null otherwise.
+void (*g_innSelectBackdropHook)(CSimpleModel*) = nullptr;
+
 // STATIC: 0x00DCE42C
 CDataAllocator CSimpleModel::s_allocator(sizeof(CSimpleModel), 3);
 
@@ -513,6 +516,7 @@ void CSimpleModel::RenderModelImpl(CSimpleModel* simpleModel, bool offscreen) {
     ASECM3::Client::UpdatePreviewModel(simpleModel->m_model);
 
     if (simpleModel->m_pendingCameraIndex == 0xFFFFFFFF) {
+        if (g_innSelectBackdropHook) g_innSelectBackdropHook(simpleModel);
         simpleModel->GetScene()->Animate(cameraPos);
         simpleModel->GetScene()->Draw(M2PASS_0);
         simpleModel->GetScene()->Draw(M2PASS_1);

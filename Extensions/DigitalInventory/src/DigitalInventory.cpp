@@ -137,10 +137,12 @@ bool Number(lua_State* L, int index, uint32_t maximum, uint32_t& out) {
 }
 
 int32_t Request(lua_State* L) {
+    bool specialTabs = lua_toboolean(L, 11) && (s_snapshots[0].flags & 0x10) != 0;
     uint32_t action, revision, guid, count, argument, category, sort, scope = 0;
     if (!Number(L, 1, 13, action) || !Number(L, 2, UINT32_MAX, revision)
         || !Number(L, 3, UINT32_MAX, guid) || !Number(L, 4, UINT32_MAX, count)
-        || !Number(L, 5, MaximumStored + 1100, argument) || !Number(L, 6, 5, category) || !Number(L, 7, 4, sort))
+        || !Number(L, 5, MaximumStored + 1100, argument) || !Number(L, 6, specialTabs ? 7 : 5, category)
+        || !Number(L, 7, 4, sort))
         return luaL_error(L, "Invalid Esteria inventory request");
     size_t length = 0;
     char const* search = lua_tolstring(L, 8, &length);
@@ -155,6 +157,7 @@ int32_t Request(lua_State* L) {
         if (result.ec != std::errc() || result.ptr != text + size) return luaL_error(L, "Invalid vendor GUID");
     }
     if (lua_isnumber(L, 10) && !Number(L, 10, 2, scope)) return luaL_error(L, "Invalid inventory scope");
+    if (specialTabs && scope != 2) category |= 0x80;
     if (++s_request == 0) ++s_request;
     CDataStore payload;
     payload.Put(ProtocolVersion).Put(uint8_t(action)).Put(uint8_t(scope)).Put(s_request).Put(revision).Put(guid).Put(count)
@@ -179,9 +182,12 @@ int32_t GetSnapshot(lua_State* L) {
     uint32_t which = 0;
     if (lua_isnumber(L, 1) && !Number(L, 1, 2, which)) return luaL_error(L, "Invalid inventory scope");
     Snapshot const& s_snapshot = s_snapshots[which];
-    lua_createtable(L, 0, 18);
+    lua_createtable(L, 0, 21);
     NumberField(L, "scope", s_snapshot.scope); NumberField(L, "unlockCost", s_snapshot.unlockCost);
     BoolField(L, "bankUnlocked", (s_snapshot.flags & 1) != 0); BoolField(L, "atBanker", (s_snapshot.flags & 2) != 0);
+    BoolField(L, "hasEars", (s_snapshot.flags & 4) != 0);
+    BoolField(L, "hasKeys", (s_snapshot.flags & 8) != 0);
+    BoolField(L, "specialTabs", (s_snapshot.flags & 0x10) != 0);
     NumberField(L, "request", s_snapshot.request); NumberField(L, "revision", s_snapshot.revision);
     NumberField(L, "capacity", s_snapshot.capacity); NumberField(L, "used", s_snapshot.used);
     NumberField(L, "total", s_snapshot.total); NumberField(L, "offset", s_snapshot.offset);
@@ -193,8 +199,13 @@ int32_t GetSnapshot(lua_State* L) {
     for (Row const& row : s_snapshot.rows) {
         lua_createtable(L, 0, 17);
         NumberField(L, "guid", row.guid); NumberField(L, "entry", row.entry); NumberField(L, "count", row.count);
-        NumberField(L, "bag", row.bag == 255 ? 0 : row.bag - 18);
-        NumberField(L, "slot", row.bag == 255 ? row.slot - 22 : row.slot + 1);
+        if (!row.digital && row.bag == 255 && row.slot >= 86 && row.slot < 118) {
+            lua_pushinteger(L, -3); lua_setfield(L, -2, "bag");
+            NumberField(L, "slot", row.slot - 85);
+        } else {
+            NumberField(L, "bag", row.bag == 255 ? 0 : row.bag - 18);
+            NumberField(L, "slot", row.bag == 255 ? row.slot - 22 : row.slot + 1);
+        }
         NumberField(L, "quality", row.quality); NumberField(L, "category", row.category);
         NumberField(L, "inventoryType", row.inventoryType); NumberField(L, "durability", row.durability);
         NumberField(L, "maxDurability", row.maxDurability); BoolField(L, "digital", row.digital != 0);

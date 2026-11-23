@@ -809,6 +809,17 @@ function GarrisonBuildingFrameComplete_OnEnter(self)
 	end
 end
 
+-- Esteria: retail finalizes at the in-world construction sign only; the architect's "Building complete" icon does it
+-- too (server UI action 11, Garrison::ActivateBuilding).
+function GarrisonBuildingFrameComplete_OnClick(self)
+	local selected = GarrisonBuildingFrame.selectedBuilding;
+	if (GarrisonBuildingFrame.InfoBox.canActivate and selected and selected.plotID and EsteriaGarrison_Action) then
+		EsteriaGarrison_Action(11, selected.plotID, 0);
+		PlaySound("igMainMenuOptionCheckBoxOn");
+		GameTooltip_Hide();
+	end
+end
+
 function GarrisonBuildingInfoBox_ShowFollowerPortrait(owned, hasFollowerSlot, infoBox, isBuilding, canActivate, ID)
 	if (not hasFollowerSlot) then
 		infoBox.AddFollowerButton:Hide();

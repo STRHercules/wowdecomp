@@ -30,6 +30,7 @@
 #include "Engine/Source/Tempest/CRect.h"
 #include "Engine/Source/lua-5.1/src/lauxlib.h"
 #include "Engine/Source/lua-5.1/src/lua.h"
+#include "Engine/Source/Frame/RetailXML.h"
 #include "WoW/Source/Extension/ExtensionMgr.h"
 
 // STATIC: 0x00AC154C
@@ -669,6 +670,12 @@ void CSimpleFrame::LoadXML_Layers(XMLNode* node, CStatus* status) {
             } else if (!SStrCmpI(child->m_name.m_str, "FontString", STORM_MAX_STR)) {
                 CSimpleFontString* string = LoadXML_String(child, this, status);
                 string->SetFrame(this, drawLayer, string->m_shown);
+            } else if (!SStrCmpI(child->m_name.m_str, "MaskTexture", STORM_MAX_STR)) {
+                // Not in the original: a retail mask. 3.3.5a cannot mask, so it loads as a texture with no image (the
+                // mask file would draw as a white shape), keeping its key, anchors and Show/Hide working.
+                CSimpleTexture* texture = LoadXML_Texture(child, this, status);
+                texture->SetTexture(static_cast<CTexture*>(nullptr));
+                texture->SetFrame(this, drawLayer, texture->m_shown);
             } else {
                 const char* frameName = this->GetName();
                 status->Add(STATUS_WARNING, "Frame %s: Unknown child node in %s element: %s", frameName ? frameName : "<unnamed>", layerNode->m_name.m_str, child->m_name.m_str);
@@ -1184,9 +1191,9 @@ void CSimpleFrame::LoadXML_Scripts(XMLNode* node, CStatus* status) {
             continue;
         }
 
-        if (script->m_luaRef) {
-            luaL_unref(L, LUA_REGISTRYINDEX, script->m_luaRef);
-        }
+        // Not in the original: the inherited handler is kept until retail's inherit= says what to do with it.
+        const int32_t inheritedRef = script->m_luaRef;
+        script->m_luaRef = 0;
 
         if (!child->m_userData && body && *body) {
             char name[1024];
@@ -1216,6 +1223,8 @@ void CSimpleFrame::LoadXML_Scripts(XMLNode* node, CStatus* status) {
         } else {
             script->m_luaRef = 0;
         }
+
+        script->m_luaRef = RetailXML_ScriptRef(L, child, inheritedRef, script->m_luaRef);
 
         script->m_tainted = nullptr;
 
@@ -1644,8 +1653,10 @@ void CSimpleFrame::SetFrameLevel(int32_t level, int32_t shiftChildren) {
         this->m_simpleTop->HideFrame(this, 1);
     }
 
-    if (delta > 128) {
-        delta = 128;
+    // Not in the original: the stock client limits a change to +128, which flattens retail's absolute levels
+    // (a panel's border at 500 under its close button at 510). The level itself is capped as retail caps it.
+    if (this->m_level + delta > 10000) {
+        delta = 10000 - this->m_level;
     }
 
     this->m_level += delta;

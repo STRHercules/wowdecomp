@@ -99,7 +99,7 @@ def stage(args):
     starts = {table: max(ids) + 1 for table, ids in used.items() if table != "Spell"}
     starts["Spell"] = 300000
     packs.mkdir(parents=True)
-    server_spells, server_strings, learn, slugs = [], {}, [], {p.name for p in (args.client / "Data/Retail/Packs").iterdir()}
+    server_spells, server_strings, learn, slugs = [], {}, [], {p.name for p in n.packs_dir(args.client / "Data/Retail").iterdir()}
     for hearth in hearths():
         name = hearth["name"]
         if name.lower() in item_names or name.lower() in spell_names:

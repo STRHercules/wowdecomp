@@ -12,4 +12,5 @@ target_include_directories(Glue
 target_link_libraries(Glue
     PRIVATE
         Extension
+        zlib
 )

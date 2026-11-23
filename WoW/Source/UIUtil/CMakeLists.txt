@@ -19,3 +19,8 @@ target_include_directories(UIUtil
     PUBLIC
         ${CMAKE_SOURCE_DIR}
 )
+
+target_link_libraries(UIUtil
+    PRIVATE
+        zlib
+)

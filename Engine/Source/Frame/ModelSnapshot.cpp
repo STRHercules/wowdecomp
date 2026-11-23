@@ -17,7 +17,7 @@
 #include "Engine/Source/Gx/CGxTexFlags.h"
 #include "Engine/Source/Gx/Gx.h"
 #include "Engine/Source/Services/Texture.h"
-#include "ThirdParty/zlib/zlib.h"
+#include <zlib.h>
 
 namespace ModelSnapshot {
 

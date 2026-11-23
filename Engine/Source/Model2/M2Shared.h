@@ -100,6 +100,7 @@ class CM2Shared {
     int32_t InitializeSkinProfile();
     int32_t Load(SFileImpl* file, int32_t flags, CAaBox* boundingBox);
     CM2SequenceLoad* LoadLowPrioritySequence(uint16_t sequenceIndex);
+    bool LowPrioritySequenceChainValid(uint16_t sequenceIndex);
     int32_t LoadSkinProfile(uint32_t profile);
     void Release();
     int32_t SetIndices();
