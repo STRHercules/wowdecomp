@@ -112,6 +112,7 @@ namespace gxvk::vk::pipelines
         bool     indexed     = false;
         VkBuffer indexBuffer = VK_NULL_HANDLE;   ///< 16-bit indices, bound at offset 0
         uint32_t firstIndex  = 0;
+        int32_t  vertexOffset = 0;               ///< added to each index (CGxBatch::m_baseVertex)
         uint32_t count       = 0;                ///< indices when indexed, vertices otherwise
 
         uint32_t topology = 3;       ///< EGxPrim

@@ -1,11 +1,15 @@
 #include <cstdint>
+#include <cstdlib>
 #include "Engine/Source/Base/SIMD.h"
 #include "Engine/Source/Storm/H/storm.h"
 
 // VERIFY: aaf6c69b auto
 // OFFSET: 0x0083DE50
 void* SIMD::AllocA16(uint32_t size, const char* fileName, int32_t lineNumber) {
-    uint8_t* ptr = static_cast<uint8_t*>(SMemAlloc(size + 16, fileName, lineNumber, 0));
+    // Not in the original binary: a block this large is a full-detail model (Model2 wide skins, tens of MB). Storm's
+    // allocator ends the game when it fails; here the caller gets null instead and the model is left out.
+    uint8_t* ptr = size >= (16u << 20) ? static_cast<uint8_t*>(std::malloc(size + 16))
+        : static_cast<uint8_t*>(SMemAlloc(size + 16, fileName, lineNumber, 0));
 
     if (!ptr) {
         return nullptr;

@@ -353,7 +353,7 @@ namespace gxvk::vk::pipelines
                 d.CmdBindIndexBuffer(cmd, draw.indexBuffer, 0, VK_INDEX_TYPE_UINT16);
                 b.ib = draw.indexBuffer;
             }
-            d.CmdDrawIndexed(cmd, draw.count, 1, draw.firstIndex, 0, 0);
+            d.CmdDrawIndexed(cmd, draw.count, 1, draw.firstIndex, draw.vertexOffset, 0);
         }
         else
         {

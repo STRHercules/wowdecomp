@@ -630,6 +630,58 @@ M2HitRec* CM2Scene::HitTestGeometry(const CM2Model* model, uint32_t pass, const 
     M2SkinProfile* skinData = model->m_shared->m_skinData;
     M2Data* data = model->m_shared->m_data;
 
+    // Esteria: a wide model (M2Data.h M2SkinIsWide) has up to millions of vertices; transforming them on the CPU every
+    // frame the cursor is over it would stall, so it is picked by its collision hull instead.
+    if (model->m_shared->m_wideVertexStarts) {
+        uint32_t count = data->m_collisionPositions.m_count;
+        uint32_t indexCount = data->m_collisionIndices.m_count - data->m_collisionIndices.m_count % 3;
+        const C3Vector* positions = count ? data->m_collisionPositions.Data() : nullptr;
+        const uint16_t* indices = indexCount ? data->m_collisionIndices.Data() : nullptr;
+        // no hull (walk-through furniture): its bounding box
+        static const uint16_t s_boxIndices[36] = { 0, 1, 3, 0, 3, 2, 4, 6, 7, 4, 7, 5, 0, 4, 5, 0, 5, 1,
+                                                   2, 3, 7, 2, 7, 6, 0, 2, 6, 0, 6, 4, 1, 5, 7, 1, 7, 3 };
+        C3Vector box[8];
+
+        if (!count || !indexCount) {
+            const CAaBox& extent = data->m_bounds.m_extent;
+
+            for (uint32_t i = 0; i < 8; i++) {
+                box[i] = C3Vector(i & 4 ? extent.t.x : extent.b.x, i & 2 ? extent.t.y : extent.b.y, i & 1 ? extent.t.z : extent.b.z);
+            }
+
+            positions = box;
+            count = 8;
+            indices = s_boxIndices;
+            indexCount = 36;
+        }
+
+        if (!model->m_boneMatrices) {
+            return best;
+        }
+
+        if (count > this->m_hitVertCapacity) {
+            delete[] this->m_hitVerts;
+            this->m_hitVertCapacity = count;
+            this->m_hitVerts = new (__FILE__, __LINE__) C3Vector[count];
+        }
+
+        const C44Matrix& matrix = model->m_boneMatrices[0];
+
+        for (uint32_t i = 0; i < count; i++) {
+            C3Vector p = positions[i] * matrix;
+            float dist = dir.z * p.z + dir.y * p.y + dir.x * p.x - d;
+            this->m_hitVerts[i] = C3Vector(p.x - dir.x * dist, p.y - dir.y * dist, dist);
+        }
+
+        for (uint32_t i = 0; i < indexCount; i++) {
+            if (indices[i] >= count) {
+                return best;
+            }
+        }
+
+        return this->IntersectHitTestTriangles(indices, indices + indexCount, 0, start, pass, rec, t, best);
+    }
+
     for (uint32_t i = 0; i < skinData->m_batches.m_count; i++) {
         M2Batch* batch = &skinData->m_batches[i];
 

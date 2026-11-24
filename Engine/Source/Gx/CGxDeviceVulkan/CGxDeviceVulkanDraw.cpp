@@ -64,7 +64,8 @@ namespace {
 // of its attributes' sizes, bound at the buf's byte offset in its pool (D3D's stream offset); every
 // attribute of the table goes to the pipeline, which picks what its programs read. D3D's
 // DrawIndexedPrimitive becomes vkCmdDrawIndexed with firstIndex = the index buf's offset in 16-bit
-// indices + the batch's start; the base vertex is 0, since the streams are bound at their offsets.
+// indices + the batch's start; the base vertex is the batch's (0 but for wide M2 sections), since the streams are
+// bound at their offsets.
 //
 // The shaders decide the programs (CGxDeviceVulkanShader.cpp) and which texture stages the draw
 // reads; each is updated at the draw (D3D's bind-time ISetTexture), which may record an upload
@@ -182,6 +183,7 @@ void CGxDeviceVulkan::Draw(CGxBatch* batch, int32_t count) {
 
         d.indexed = true;
         d.firstIndex = indexBuf->m_index / sizeof(uint16_t) + batch->m_start;
+        d.vertexOffset = batch->m_baseVertex;
     }
 
     d.count = batch->m_count;

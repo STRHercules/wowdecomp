@@ -361,6 +361,34 @@ static void ConvertTextureComboEntry(TextureComboList* list, int32_t adjust, uin
     list->m_data[index + 1] = second;
 }
 
+// Not in the original binary: a section's first vertex, 32-bit for a wide skin. `section` may be the file's or the
+// shared copy (m_skinSections).
+uint32_t CM2Shared::VertexStart(const M2SkinSection* section) const {
+    if (this->m_wideVertexStarts) {
+        uint32_t count = this->m_skinData->m_skinSections.m_count;
+        const M2SkinSection* raw = this->m_skinData->m_skinSections.Data();
+
+        if (section >= this->m_skinSections && section < this->m_skinSections + count) {
+            return this->m_wideVertexStarts[section - this->m_skinSections];
+        }
+
+        if (section >= raw && section < raw + count) {
+            return this->m_wideVertexStarts[section - raw];
+        }
+    }
+
+    return section->m_vertexStart;
+}
+
+// Not in the original binary: a wide section draws its section-relative indices from its first vertex.
+void CM2Shared::WideBatch(const M2SkinSection* section, CGxBatch& batch) const {
+    if (this->m_wideVertexStarts) {
+        batch.m_baseVertex = static_cast<int32_t>(this->VertexStart(section));
+        batch.m_minIndex = 0;
+        batch.m_maxIndex = static_cast<uint16_t>(section->m_vertexCount ? section->m_vertexCount - 1 : 0);
+    }
+}
+
 // VERIFY: 59c9e83f manual
 // OFFSET: 0x008360A0
 int32_t CM2Shared::SetIndices() {
@@ -378,7 +406,9 @@ int32_t CM2Shared::SetIndices() {
 
         // Sections may share source triangles; the packed output still emits each section for every instance.
         const uint32_t packedCount = static_cast<uint32_t>(indexCount * this->m_instances);
-        this->m_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index, GxPoolUsage_Dynamic,
+        // Esteria: a wide skin's indices never change after the upload, so no CPU shadow (tens of MB) for them
+        this->m_indexPool = g_theGxDevicePtr->PoolCreate(GxPoolTarget_Index,
+            this->m_wideVertexStarts ? GxPoolUsage_Static : GxPoolUsage_Dynamic,
             sizeof(uint16_t) * packedCount, GxPoolHintBit_Unk1, this->m_fileNameWithoutPath);
         this->m_indexBuf = g_theGxDevicePtr->BufCreate(this->m_indexPool, sizeof(uint16_t), packedCount, 0);
 
@@ -400,7 +430,8 @@ int32_t CM2Shared::SetIndices() {
         for (uint32_t i = 0; i < this->m_skinData->m_skinSections.m_count; i++) {
             M2SkinSection* section = &this->m_skinSections[i];
             uint32_t start = M2WideIndexStart(&this->m_skinData->m_skinSections[i], this->m_skinData->m_indices.m_count);
-            uint16_t offset = sharedVertices ? 0 : static_cast<uint16_t>(-section->m_vertexStart);
+            // a wide skin's indices are already section-relative (drawn with a base vertex)
+            uint16_t offset = sharedVertices || this->m_wideVertexStarts ? 0 : static_cast<uint16_t>(-section->m_vertexStart);
 
             for (uint32_t instance = 0; instance < this->m_instances; instance++) {
                 for (uint32_t j = 0; j < section->m_indexCount; j++) {
@@ -448,10 +479,11 @@ int32_t CM2Shared::SetVertices(uint32_t texCoordIndex) {
 
             for (uint32_t i = 0; i < this->m_skinData->m_skinSections.m_count; i++) {
                 M2SkinSection* section = &this->m_skinData->m_skinSections[i];
-                uint32_t end = section->m_vertexStart + section->m_vertexCount;
+                uint32_t first = this->VertexStart(section);
+                uint32_t end = first + section->m_vertexCount;
 
-                for (uint32_t j = section->m_vertexStart; j < end; j++) {
-                    M2Vertex* source = &this->m_data->m_vertices[this->m_skinData->m_vertices[j]];
+                for (uint32_t j = first; j < end; j++) {
+                    M2Vertex* source = &this->m_data->m_vertices[M2SkinVertex(this->m_skinData, j)];
                     M2VertexPNT2* vertex = &vertices[j];
                     vertex->m_position = source->m_position;
                     vertex->m_normal = source->m_normal;
@@ -481,10 +513,11 @@ int32_t CM2Shared::SetVertices(uint32_t texCoordIndex) {
             for (uint32_t i = 0; i < this->m_skinData->m_skinSections.m_count; i++) {
                 M2SkinSection* section = &this->m_skinData->m_skinSections[i];
                 uint32_t boneOffset = 0x01010101 * instance * section->m_boneCount;
-                uint32_t end = section->m_vertexStart + section->m_vertexCount;
+                uint32_t first = this->VertexStart(section);
+                uint32_t end = first + section->m_vertexCount;
 
-                for (uint32_t j = section->m_vertexStart; j < end; j++) {
-                    memcpy(&vertices[j], &this->m_data->m_vertices[this->m_skinData->m_vertices[j]], sizeof(M2Vertex));
+                for (uint32_t j = first; j < end; j++) {
+                    memcpy(&vertices[j], &this->m_data->m_vertices[M2SkinVertex(this->m_skinData, j)], sizeof(M2Vertex));
                     *reinterpret_cast<uint32_t*>(&vertices[j].m_indices) = boneOffset + *reinterpret_cast<uint32_t*>(&this->m_skinData->m_bones[j]);
                 }
             }
@@ -991,6 +1024,9 @@ void CM2Shared::ConvertTextureValuesToCombos() {
     if (comboBytes || transformBytes) {
         uint32_t size = (this->m_fileSize + 15) & ~15u;
         M2Data* data = static_cast<M2Data*>(SIMD::AllocA16(size + comboBytes + transformBytes, __FILE__, __LINE__));
+        if (!data) {
+            return; // Esteria: out of memory for a full-detail model (SIMD::AllocA16); its combos stay as loaded
+        }
         memcpy(data, this->m_data, this->m_fileSize);
         SIMD::FreeA16(this->m_data);
         this->m_data = data;
@@ -1260,6 +1296,35 @@ int32_t CM2Shared::InitializeSkinProfile() {
     }
 
     this->m_instances = 1;
+
+    // Esteria: a wide skin (M2Data.h M2SkinIsWide) needs the shader path's one shared vertex buffer, sections laid
+    // back to back (the low 16 bits of each start must agree), and no instancing (one copy is already huge).
+    delete[] this->m_wideVertexStarts;
+    this->m_wideVertexStarts = nullptr;
+
+    if (M2SkinIsWide(skinData)) {
+        if (!(this->m_cache->m_flags & 8) || skinData->m_vertices.m_count > this->m_data->m_vertices.m_count) {
+            return 0;
+        }
+
+        uint32_t* starts = new uint32_t[skinData->m_skinSections.m_count];
+        uint32_t first = 0;
+
+        for (uint32_t i = 0; i < skinData->m_skinSections.m_count; i++) {
+            const M2SkinSection& section = skinData->m_skinSections[i];
+
+            if ((first & 0xFFFF) != section.m_vertexStart || section.m_vertexCount > skinData->m_vertices.m_count - first) {
+                delete[] starts;
+                return 0;
+            }
+
+            starts[i] = first;
+            first += section.m_vertexCount;
+        }
+
+        this->m_wideVertexStarts = starts;
+        this->m_maxInstances = 1;
+    }
 
     uint32_t size = sizeof(M2SkinSection) * skinData->m_skinSections.m_count;
 
@@ -2063,6 +2128,9 @@ CM2Shared::~CM2Shared() {
     }
 
     this->DestroyBuffers();
+
+    delete[] this->m_wideVertexStarts;
+    this->m_wideVertexStarts = nullptr;
 
     if (this->m_skinSections) {
         SMemFree(this->m_skinSections, __FILE__, __LINE__, 0);

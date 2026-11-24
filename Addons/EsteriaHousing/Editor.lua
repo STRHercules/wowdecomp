@@ -22,7 +22,7 @@ local RESULT = {
 -- our categories and the retail category icon for each
 local CATEGORIES = { { nil, "All", "all" }, { 1, "Furniture", "furnishings" }, { 2, "Accents", "accents" },
   { 3, "Lighting", "lighting" }, { 4, "Nature", "plants" }, { 5, "Structure", "structural" }, { 0, "Misc", "misc" }, { 6, "Shops", "interactive" },
-  { 7, "Utility", "utility" }, { 8, "Collections", "featured" }, { 9, "Services", "storage" } }
+  { 7, "Utility", "utility" }, { 8, "Collections", "featured" }, { 9, "Services", "storage" }, { 10, "Arcade", "interactive" } }
 
 -- shop decor shows the picture of the retail piece it borrows its model from
 H.SHOP_MODEL = { [40002] = 4428, [40003] = 4422, [40004] = 16098, [40005] = 15061, [40006] = 26483, [40007] = 3985,
@@ -318,7 +318,7 @@ local tabs = {}
 for i, c in ipairs(CATEGORIES) do
   local icon = "category-icons_" .. c[3]
   local b = AtlasButton(chest, nil, 40, 40, icon .. "_inactive", icon .. "_active", icon .. "_pressed")
-  b:SetPoint("TOP", chest, "TOPLEFT", 27, -48 - (i - 1) * 41) -- eleven categories fit the chest's height at 41
+  b:SetPoint("TOP", chest, "TOPLEFT", 27, -48 - (i - 1) * 37) -- twelve categories fit the chest's height at 37
   b.category = c[1]
   b:SetScript("OnClick", function() category = c[1]; page = 0; H.RedrawDecor() end)
   b:SetScript("OnEnter", function(self)
@@ -441,7 +441,8 @@ function H.RedrawDecor()
         if t.fdid ~= e.fileDataId then
           t.fdid = e.fileDataId
           t.model:ClearModel()
-          t.model:SetModel("retail/" .. e.fileDataId .. ".m2")
+          t.model:SetModel(EsteriaHousing_DecorModelPath and EsteriaHousing_DecorModelPath(e.fileDataId)
+            or ("retail/" .. e.fileDataId .. ".m2"))
           FitModel(t.model)
         end
       end

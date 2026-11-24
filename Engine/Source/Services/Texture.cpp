@@ -260,6 +260,7 @@ MipBits* GetDefaultTexture(uint32_t width, uint32_t height) {
 // OFFSET: 0x004B5300
 void AsyncTextureFailureCallback(CTexture* texture) {
     CAsyncObject* object = texture->m_asyncObject;
+    Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Texture read failed: %s (%u bytes)\n", texture->m_filename, object->m_size);  // Esteria diagnostic
     s_asyncLoadBufferUsed -= object->m_size;
     void* buffer = object->m_buffer;
     AsyncFileReadDestroyObject(object);
@@ -1060,6 +1061,8 @@ void CTextureAtlas::Reload() {
 // VERIFY: 7f5ee904 manual
 // OFFSET: 0x004B64E0
 void AsyncTextureProcess(CAsyncObject* object, int32_t immediate) {
+    if (object->m_size > 0x400000)  // Esteria diagnostic: large textures' progress
+        Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Large texture read started: %u bytes (budget used %u)\n", object->m_size, s_asyncLoadBufferUsed);
     object->m_link.Unlink();
     object->m_buffer = SMemAlloc(object->m_size, __FILE__, __LINE__, 0);
     s_asyncLoadBufferUsed += object->m_size;
@@ -1244,7 +1247,8 @@ void FillInSolidTexture(const CImVector& color, CTexture* texture) {
 // unsigned budget happened to wrap. Let an oversized read through whenever the budget is not already spent (waiting
 // for an idle budget stalled if any load's share was never returned).
 static bool AsyncTextureOversizedReady(const CAsyncObject* object) {
-    return object->m_size > 0x400000 && s_asyncLoadBufferUsed < 0x400000;
+    // (a budget below zero, should anything still drive it there, counts as idle)
+    return object->m_size > 0x400000 && static_cast<int32_t>(s_asyncLoadBufferUsed) < 0x400000;
 }
 
 // VERIFY: f77dd4dd manual
@@ -1909,7 +1913,10 @@ int32_t PumpBlpTextureAsync(CTexture* texture, void* data) {
 // VERIFY: 85a7ce70 manual
 // OFFSET: 0x004B7E80
 void AsyncTextureSuccessCallback(CTexture* texture) {
+    const bool large = texture->m_asyncObject->m_size > 0x400000;  // Esteria diagnostic: large textures' progress
+    if (large) Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Large texture read: %s (%u bytes)\n", texture->m_filename, texture->m_asyncObject->m_size);
     if (!PumpBlpTextureAsync(texture, texture->m_asyncObject->m_buffer)) {
+        if (large) Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Large texture decode failed (solid fill): %s\n", texture->m_filename);
         if (!texture->m_status.IsEmpty()) {
             SysMsgAdd(&texture->m_status);
         }
@@ -2174,7 +2181,12 @@ CTexture::~CTexture() {
             void* buffer = this->m_asyncObject->m_buffer;
 
             if (AsyncFile::Cancel(this->m_asyncObject, AsyncTextureDestroyedCallback)) {
-                s_asyncLoadBufferUsed -= this->m_asyncObject->m_size;
+                // Esteria fix: only a started read (it has its buffer) was counted in the budget. A texture freed
+                // while still waiting in line was subtracted too, driving the budget below zero, where every
+                // texture over 4 MB waited forever and left its model undrawable.
+                if (buffer) {
+                    s_asyncLoadBufferUsed -= this->m_asyncObject->m_size;
+                }
                 SMemFree(buffer, __FILE__, __LINE__, 0);
             }
         }
@@ -2298,6 +2310,8 @@ CTexture* CreateBlpAsync(char* extension, const char* fileName, uint32_t flags, 
 
     CAsyncObject* object = texture->m_asyncObject;
 
+    if (object->m_size > 0x400000)  // Esteria diagnostic: large textures' progress
+        Blizzard::Log::Printf(1, "Logs/RetailAssets.log", "Large texture queued: %s (%u bytes, budget used %u)\n", fileName, object->m_size, s_asyncLoadBufferUsed);
     if (0x400000 - s_asyncLoadBufferUsed < object->m_size && !AsyncTextureOversizedReady(object)) {
         s_asyncTextureList.LinkNode(object, 2, nullptr);
     } else {

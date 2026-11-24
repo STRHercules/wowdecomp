@@ -518,6 +518,10 @@ void CM2Model::UnlinkFromCallbackList() {
 int32_t CM2Model::IsBatchDoodadCompatible(M2Batch* batch) {
     uint32_t cacheFlags = M2GetCacheFlags();
 
+    if (this->m_shared && this->m_shared->m_wideVertexStarts) {
+        return 0; // Esteria: never instanced (M2Data.h M2SkinIsWide)
+    }
+
     if ((cacheFlags & 0x20) && (this->m_fFlags & 0x10) && (this->m_shared->m_data->m_bones.m_count > 1 || !(cacheFlags & 0x40)) && (batch->m_flags & 0x10)) {
         CM2Lighting* lighting = this->m_currentLighting;
 
@@ -2929,7 +2933,7 @@ int32_t CM2Model::GetRegionBounds(M2SkinSection* section, CAaBox& box, C44Matrix
     box.t = C3Vector(-FLT_MAX, -FLT_MAX, -FLT_MAX);
 
     for (uint32_t i = 0; i < section->m_vertexCount; i++) {
-        M2Vertex* vertex = &data->m_vertices[skin->m_vertices[i + section->m_vertexStart]];
+        M2Vertex* vertex = &data->m_vertices[M2SkinVertex(skin, i + this->m_shared->VertexStart(section))];
 
         if (*reinterpret_cast<uint32_t*>(&vertex->m_weights) != weights || *reinterpret_cast<uint32_t*>(&vertex->m_indices) != indices) {
             weights = *reinterpret_cast<uint32_t*>(&vertex->m_weights);
@@ -3079,6 +3083,7 @@ void CM2Model::RenderModelBatchesForProjectedTexture() {
             gxBatch.m_count = section->m_indexCount;
             gxBatch.m_minIndex = 0;
             gxBatch.m_maxIndex = this->m_shared->m_skinData->m_vertices.m_count - 1;
+            this->m_shared->WideBatch(section, gxBatch);
             g_theGxDevicePtr->Draw(&gxBatch, 1);
         }
     }
@@ -3169,6 +3174,7 @@ void CM2Model::RenderBatchShadowMap(int32_t untextured, M2Batch* batch, const CM
 
         gxBatch.m_count = instances * section->m_indexCount;
         gxBatch.m_maxIndex = static_cast<uint16_t>(instances * this->m_shared->m_skinData->m_vertices.m_count - 1);
+        this->m_shared->WideBatch(section, gxBatch);
         g_theGxDevicePtr->Draw(&gxBatch, 1);
     }
 }
@@ -4319,6 +4325,11 @@ void CM2Model::SetGeosetVisibilityRange(uint32_t first, uint32_t last, int32_t v
 // VERIFY: 88605bc8 manual
 // OFFSET: 0x0082C970
 void CM2Model::OptimizeVisibleGeometry() {
+    // Esteria: a wide skin's sections can't be merged into one 16-bit index range.
+    if ((this->m_fFlags & 1) && this->m_shared && this->m_shared->m_wideVertexStarts) {
+        return;
+    }
+
     if (!(this->m_fFlags & 1)) {
         CM2ModelCall* call = new (__FILE__, __LINE__) CM2ModelCall();
 

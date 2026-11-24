@@ -185,6 +185,8 @@ class CGxBatch {
     /* 0008 */ uint32_t m_count;
     /* 000C */ uint16_t m_minIndex;
     /* 000E */ uint16_t m_maxIndex;
+    // Not in the original binary: added to every index of an indexed draw (wide M2 sections, M2Data.h M2SkinIsWide).
+    int32_t m_baseVertex = 0;
 };
 
 enum EGxColorFormat {

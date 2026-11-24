@@ -186,6 +186,32 @@ C4Quaternion Quat(float x, float y, float z, float w) {
 
 // A catalog model_fdid with this bit is a WMO decor (the server sets it): its ghost is a client-only map object.
 constexpr uint32_t WmoDecorBit = 0x80000000u;
+// A model_fdid with this bit (and not the WMO bit) is an Esteria-made model, not a retail file: its low bits pick
+// the path below. 1 = the arcade cabinet (mod-esteria-arcade), 2-7 the casino tables and the stool
+// (mod-esteria-casino); all built by wowdecomp Tools/ArcadeProp.
+constexpr uint32_t CustomDecorBit = 0x40000000u;
+
+std::string DecorModelPath(uint32_t fdid) {
+    if ((fdid & CustomDecorBit) && !(fdid & WmoDecorBit)) {
+        switch (fdid & ~CustomDecorBit) {
+            case 1: return "World\\Esteria\\Arcade\\LionheartArcade.m2";
+            case 2: return "World\\Esteria\\Casino\\GildedDiceTable.m2";
+            case 3: return "World\\Esteria\\Casino\\LionheartChessTable.m2";
+            case 4: return "World\\Esteria\\Casino\\LionheartBlackjackTable.m2";
+            case 5: return "World\\Esteria\\Casino\\GoldenGryphonCardTable.m2";
+            case 6: return "World\\Esteria\\Casino\\LionheartJackpot.m2";
+            case 7: return "World\\Esteria\\Casino\\LionheartStool.m2";
+            case 8: return "World\\Esteria\\Arcade\\GalacticBattleArcade.m2";  // the StarCraft cabinet
+            case 9: return "World\\Esteria\\Arcade\\WarfrontArcade.m2";        // WarCraft: Orcs & Humans
+            case 10: return "World\\Esteria\\Arcade\\WarcraftIIArcade.m2";     // Warcraft II
+            case 11: return "World\\Esteria\\Arcade\\VikingArcade.m2";         // The Lost Vikings
+            case 12: return "World\\Esteria\\Arcade\\NitroSkullArcade.m2";     // Rock n' Roll Racing
+            case 13: return "World\\Esteria\\Arcade\\WarcraftClanArcade.m2";   // Lord of the Clans
+            default: return "";
+        }
+    }
+    return "retail/" + std::to_string(fdid) + ".m2";
+}
 
 struct Ghost {
     CM2Model* model = nullptr;
@@ -1321,11 +1347,17 @@ int32_t SetGhost(lua_State* L) {
         shown = fdid;
         return 0;
     }
-    std::string const path = "retail/" + std::to_string(fdid) + ".m2";
-    s_ghost.model = World::s_m2Scene ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
+    std::string const path = DecorModelPath(fdid);
+    s_ghost.model = World::s_m2Scene && !path.empty() ? World::s_m2Scene->CreateModel(path.c_str(), 0) : nullptr;
     if (s_ghost.model) s_ghost.entity = CMap::ObjectCreate(s_ghost.model, UpdateGhost, nullptr, 0, 0, 10);
     shown = fdid;
     return 0;
+}
+
+// EsteriaHousing_DecorModelPath(fileDataId) -> the M2 path a catalog entry previews with (custom models included).
+int32_t DecorModel(lua_State* L) {
+    lua_pushstring(L, DecorModelPath(uint32_t(luaL_checknumber(L, 1))).c_str());
+    return 1;
 }
 
 // EsteriaHousing_ShowPlotBounds(on) shows the plot's boundary while you stand on your own plot.
@@ -1645,6 +1677,7 @@ void AddHousingExtension() {
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_PlacePlotHouse", PlacePlotHouse, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetCursorWorld", GetCursorWorld, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_SetGhost", SetGhost, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("EsteriaHousing_DecorModelPath", DecorModel, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_GetGhost", GetGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_PinGhost", PinGhost, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("EsteriaHousing_ShowPlotBounds", ShowPlotBounds, FRAMESCRIPT_CONTEXTS_GAME);

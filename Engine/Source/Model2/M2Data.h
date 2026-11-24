@@ -388,6 +388,19 @@ inline uint32_t M2ProcessedIndexStart(const M2SkinSection* section) {
     return (section->m_skinSectionId >> 16 << 16) | section->m_indexStart;
 }
 
+// Esteria: a "wide" skin has more than 65535 vertices (models used at full detail, never decimated). Its vertex lookup
+// is the identity (the 16-bit entries are ignored: the model's vertices are already in skin order), its sections lie
+// back to back in that order with at most 65535 vertices each (m_vertexStart keeps the low 16 bits of each start), and
+// its indices count from their own section's first vertex. Each section draws with that first vertex as the base
+// vertex (CGxBatch::m_baseVertex). Wide skins load on the shader path only (CM2Shared::InitializeSkinProfile).
+inline bool M2SkinIsWide(const M2SkinProfile* skin) {
+    return skin->m_vertices.m_count > 0xFFFF;
+}
+
+inline uint32_t M2SkinVertex(const M2SkinProfile* skin, uint32_t i) {
+    return M2SkinIsWide(skin) ? i : skin->m_vertices[i];
+}
+
 // OFFSET: [0x0081CD50]
 template <class T>
 inline T& M2Array<T>::operator[](uint32_t index) const {

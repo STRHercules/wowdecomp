@@ -8,6 +8,7 @@
 #include "Engine/Source/Storm/H/stpl.h"
 
 class CAsyncObject;
+class CGxBatch;
 struct CGxBuf;
 struct CGxPool;
 class CM2Cache;
@@ -72,6 +73,8 @@ class CM2Shared {
     /* 0198 */ uint16_t m_billboardBoneCount;
     /* 019C */ uint32_t m_lastUsedTime;
     /* 01A0 */ TSLink<CM2Shared> m_updateLink;
+    // Not in the original binary: each section's first vertex when the skin is wide (M2Data.h M2SkinIsWide), else null.
+    uint32_t* m_wideVertexStarts = nullptr;
 
     static void LoadFailedCallback(void* param);
     static void LoadSucceededCallback(void* param);
@@ -105,6 +108,8 @@ class CM2Shared {
     void Release();
     int32_t SetIndices();
     int32_t SetVertices(uint32_t texCoordIndex);
+    uint32_t VertexStart(const M2SkinSection* section) const;
+    void WideBatch(const M2SkinSection* section, CGxBatch& batch) const;
     void SubstituteSimpleShaders();
     void SubstituteSpecializedShaders();
 };

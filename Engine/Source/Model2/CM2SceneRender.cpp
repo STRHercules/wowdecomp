@@ -507,6 +507,7 @@ void CM2SceneRender::DrawBatch() {
     if (CShaderEffect::s_enableShaders) {
         batch.m_minIndex = this->m_curSkinSection->m_vertexStart;
         batch.m_maxIndex = this->m_curSkinSection->m_vertexCount + this->m_curSkinSection->m_vertexStart - 1;
+        this->m_curShared->WideBatch(this->m_curSkinSection, batch);
         // Not in the original binary: the unit outline re-draws a recorded unit's batch into its mask first.
         CUnitOutline::StampBatch(batch, this->m_curModel);
         g_theGxDevicePtr->Draw(&batch, 1);

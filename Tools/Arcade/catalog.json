@@ -1,0 +1,1463 @@
+[
+ {
+  "system": "nes",
+  "title": "Super Mario Bros. / Duck Hunt / Track Meet",
+  "file": "V:\\ROMs\\NES\\3-in-1 Super Mario Bros - Duck Hunt - World Class Track Meet.nes",
+  "sha256": "e76f5c837d6c751e3c0a96317fe5f80e3e3e93d6ff1b37f9b94be3d42576c5be"
+ },
+ {
+  "system": "nes",
+  "title": "Tetris",
+  "file": "V:\\ROMs\\NES\\Tetris (Nintendo).nes",
+  "sha256": "acab10f2dbad4d4ef5d56b31cd4cea208bb6e2e2c5dba5eb339d711ec04e3535",
+  "id": 16
+ },
+ {
+  "system": "nes",
+  "title": "Dr. Mario",
+  "file": "V:\\ROMs\\NES\\Dr. Mario.nes",
+  "sha256": "479059e174013a743a4b319cc5b39d8b1fe452e303e2655af6a58bf86a4e8219"
+ },
+ {
+  "system": "nes",
+  "title": "Excitebike",
+  "file": "V:\\ROMs\\NES\\Excitebike.nes",
+  "sha256": "372654d4c62d214d92200288611ff176ae1727949c6f012e2fc95bf2452a33d7",
+  "id": 17
+ },
+ {
+  "system": "nes",
+  "title": "Golf",
+  "file": "V:\\ROMs\\NES\\Golf.nes",
+  "sha256": "70986ed4fb441199a9ff50c7b5c6388d9f7a17c29990d1b5f7214572ae0a4bc6",
+  "id": 18
+ },
+ {
+  "system": "nes",
+  "title": "Dragon Warrior III",
+  "file": "V:\\ROMs\\NES\\Dragon Warrior III.nes",
+  "sha256": "7c965051ffa461969df7d7b56d6ce03a8c85eb485ebdfa65a716269087dbf969",
+  "id": 19
+ },
+ {
+  "system": "nes",
+  "title": "Kung Fu",
+  "file": "V:\\ROMs\\NES\\Kung Fu.nes",
+  "sha256": "7c7b6c6633d102976637e8eaac644337dd9c4fd0364fe7c067599da39052a67c",
+  "id": 20
+ },
+ {
+  "system": "nes",
+  "title": "Baseball",
+  "file": "V:\\ROMs\\NES\\Baseball.nes",
+  "sha256": "27e2b0db695e54c159a89fc7cd162085e3eeb00c71ce48894e5374986f7cd980",
+  "id": 21
+ },
+ {
+  "system": "nes",
+  "title": "Dragon Warrior IV",
+  "file": "V:\\ROMs\\NES\\Dragon Warrior IV.nes",
+  "sha256": "cd97a75a89557c663c8994ae7af255e1886d4038fc657c543b4bdb7a9c1ec9f5",
+  "id": 22
+ },
+ {
+  "system": "nes",
+  "title": "Punch-Out!!",
+  "file": "V:\\ROMs\\NES\\Punch-Out!!.nes",
+  "sha256": "80b152313b45564787d03937de768db3e1ecaaa419fa091b8159aa3b8120c3ad",
+  "id": 23
+ },
+ {
+  "system": "nes",
+  "title": "Dragon Warrior II",
+  "file": "V:\\ROMs\\NES\\Dragon Warrior II.nes",
+  "sha256": "114f70f42e55a39e730b201c7876d2e97fa99611200ae6a812659f3a0efce49e",
+  "id": 24
+ },
+ {
+  "system": "nes",
+  "title": "Ice Hockey",
+  "file": "V:\\ROMs\\NES\\Ice Hockey.nes",
+  "sha256": "3ea8ec4486efc6c925704177505b957895171066cea2d4d80527798b23330bd3",
+  "id": 25
+ },
+ {
+  "system": "nes",
+  "title": "Pro Wrestling",
+  "file": "V:\\ROMs\\NES\\Pro Wrestling.nes",
+  "sha256": "46db2d21302c548eb869f1bf727101654db463abc1333867e6540cc58ff85610",
+  "id": 26
+ },
+ {
+  "system": "nes",
+  "title": "Tennis",
+  "file": "V:\\ROMs\\NES\\Tennis.nes",
+  "sha256": "208fc5ddbc6963ae1dac6360abdf4064ebefdb6251b40ba57ff4245de25f758c",
+  "id": 27
+ },
+ {
+  "system": "nes",
+  "title": "Volleyball",
+  "file": "V:\\ROMs\\NES\\Volleyball.nes",
+  "sha256": "1dd45868a4a4860e8963adc7324b955088729e6f6aa9b38b54b0a4315d1d19d0",
+  "id": 28
+ },
+ {
+  "system": "nes",
+  "title": "R.C. Pro-Am",
+  "file": "V:\\ROMs\\NES\\R.C. Pro-Am.nes",
+  "sha256": "4aaaa0f1c125e96f2f76af926bec72f657a0331e80aeb697123be27cd81d870a",
+  "id": 29
+ },
+ {
+  "system": "nes",
+  "title": "Dragon Warrior",
+  "file": "V:\\ROMs\\NES\\Dragon Warrior.nes",
+  "sha256": "676b89d76cf9e83eed76c0a67f81da906916f0bce321cf3a9a39ac78bc9c0845",
+  "id": 30
+ },
+ {
+  "system": "nes",
+  "title": "Top Gun",
+  "file": "V:\\ROMs\\NES\\Top Gun.nes",
+  "sha256": "a22a159fd4ab7f378c2e376713dd1c2aa8e848e4613e0520f17ea5ef6bb9272a",
+  "id": 31
+ },
+ {
+  "system": "n64",
+  "title": "Super Mario 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Super Mario 64.v64",
+  "sha256": "f3b0fc9f565f995368b6fa5aefc8ec1e5194c488948b41f3534dece4abcec2b4",
+  "id": 32
+ },
+ {
+  "system": "n64",
+  "title": "GoldenEye 007",
+  "file": "V:\\ROMs\\Nintendo 64\\GoldenEye 007.v64",
+  "sha256": "6dd88de4a587962690579e6d7c1c616a34f8b217c75333691a12b312d1314fff",
+  "id": 33
+ },
+ {
+  "system": "n64",
+  "title": "Mario Kart 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Mario Kart 64.z64",
+  "sha256": "8d9d2a68bbc5e9512200cab281b6d98c1d49e1028c092e3fb821ae4076e1ce6d",
+  "id": 34
+ },
+ {
+  "system": "n64",
+  "title": "The Legend of Zelda: Ocarina of Time",
+  "file": "V:\\ROMs\\Nintendo 64\\Legend of Zelda - Ocarina of Time.z64",
+  "sha256": "74f9266fd7fa23cc700b5b46a21fbe99cdc6ea10438bc4b48eeb625763b8611c",
+  "id": 35
+ },
+ {
+  "system": "n64",
+  "title": "Ocarina of Time - Master Quest",
+  "file": "V:\\ROMs\\Nintendo 64\\Legend of Zelda - Ocarina of Time - Master Quest.z64",
+  "sha256": "ed392a890d5fab1c4d6863c69a40df6ca966f568160f2b2a9a73e5d02a6e93c2",
+  "id": 36
+ },
+ {
+  "system": "n64",
+  "title": "Super Smash Bros.",
+  "file": "V:\\ROMs\\Nintendo 64\\Smash Brothers.v64",
+  "sha256": "92aef09197abc70dc79ac799c7a5fd13eb87660659662d2fb4c744b5683e1fe5",
+  "id": 37
+ },
+ {
+  "system": "n64",
+  "title": "Star Fox 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Star Fox 64.v64",
+  "sha256": "d14cf5add600e3003b0aa210ef3f8ceafcd4b175fb7b687f8375578cf9ebcbe1",
+  "id": 38
+ },
+ {
+  "system": "n64",
+  "title": "Donkey Kong 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Donkey Kong 64.v64",
+  "sha256": "5778c9ef72ef269cdcc52333710a79961a343b1f01d12189d1dbe94df3cbabed",
+  "id": 39
+ },
+ {
+  "system": "n64",
+  "title": "The Legend of Zelda: Majora's Mask",
+  "file": "V:\\ROMs\\Nintendo 64\\Legend of Zelda - Majora's Mask.v64",
+  "sha256": "efb1365b3ae362604514c0f9a1a2d11f5dc8688ba5be660a37debf5e3be43f2b",
+  "id": 40
+ },
+ {
+  "system": "n64",
+  "title": "Banjo-Kazooie",
+  "file": "V:\\ROMs\\Nintendo 64\\Banjo-Kazooie.v64",
+  "sha256": "43f9866ab70d15a19e7b4c7a3f133d18140ecacff6135d1e9946d55e9beb7a90",
+  "id": 41
+ },
+ {
+  "system": "n64",
+  "title": "Star Wars: Rogue Squadron",
+  "file": "V:\\ROMs\\Nintendo 64\\Star Wars - Rogue Squadron.n64",
+  "sha256": "65472b65f5928b185adc8a8e0de6312fbe78309928f02d8b14494144ed5206cd",
+  "id": 42
+ },
+ {
+  "system": "n64",
+  "title": "Perfect Dark",
+  "file": "V:\\ROMs\\Nintendo 64\\Perfect Dark.n64",
+  "sha256": "8484f0328200aea3aecfc66a1840f25db8214793d83c4127f4c5c6b3cc849b1f",
+  "id": 43
+ },
+ {
+  "system": "n64",
+  "title": "Turok 2: Seeds of Evil",
+  "file": "V:\\ROMs\\Nintendo 64\\Turok 2 - Seeds of Evil.n64",
+  "sha256": "c97ce59718a7647cf468c9bb0772e2919728165af99131efb1872fdd3da5be83",
+  "id": 44
+ },
+ {
+  "system": "n64",
+  "title": "Turok: Dinosaur Hunter",
+  "file": "V:\\ROMs\\Nintendo 64\\Turok - Dinosaur Hunter.n64",
+  "sha256": "d8c87aef86400ef8891d1933224d7b06bdebe688bb99a6923481db2a0d3ab31e",
+  "id": 45
+ },
+ {
+  "system": "n64",
+  "title": "Mario Party 3",
+  "file": "V:\\ROMs\\Nintendo 64\\Mario Party 3.v64",
+  "sha256": "8c7b42ead5c7d2a93147447460900ff17563e06e1954b2ba960b55b5ae2b4e37",
+  "id": 46
+ },
+ {
+  "system": "n64",
+  "title": "Mortal Kombat Trilogy",
+  "file": "V:\\ROMs\\Nintendo 64\\Mortal Kombat Trilogy.n64",
+  "sha256": "73d6a09e717af9160d01dab12a229ee99b82ebcc289c112419d92b29a9218594",
+  "id": 47
+ },
+ {
+  "system": "n64",
+  "title": "Mortal Kombat 4",
+  "file": "V:\\ROMs\\Nintendo 64\\Mortal Kombat 4.n64",
+  "sha256": "afb2d4b8f57189ff20fea6a71bf6e9873bc785e07a39121bc593caf5401746da",
+  "id": 48,
+  "skip": "no picture on parallel_n64 (angrylion) (smoke test 2026-11-22)"
+ },
+ {
+  "system": "n64",
+  "title": "Toy Story 2",
+  "file": "V:\\ROMs\\Nintendo 64\\Toy Story 2.n64",
+  "sha256": "0e1d6738e300562b5416a9802221d673db9ee40e0b896c527c1ebb83f447011e",
+  "id": 49,
+  "skip": "no picture on parallel_n64 (angrylion) (smoke test 2026-11-22)"
+ },
+ {
+  "system": "n64",
+  "title": "Excitebike 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Excitebike 64.v64",
+  "sha256": "2909229be3cdaac1b5ead544648b970a23e8ea83c2c3a7f891ce121fefe918cc",
+  "id": 50,
+  "skip": "crashes parallel_n64 (smoke test 2026-11-22)"
+ },
+ {
+  "system": "n64",
+  "title": "Kirby 64: The Crystal Shards",
+  "file": "V:\\ROMs\\Nintendo 64\\Kirby 64 - The Crystal Shards.z64",
+  "sha256": "391a33a74dedffb870aad78c19d1d8c443f4b6963c582066ee77b14b343ba520",
+  "id": 51
+ },
+ {
+  "system": "n64",
+  "title": "Paper Mario",
+  "file": "V:\\ROMs\\Nintendo 64\\Paper Mario.z64",
+  "sha256": "aea89279731b2a45c079095c5a8d1c8827b3e3cc8024d89e6bdc1aa3e7aa79f3",
+  "id": 52
+ },
+ {
+  "system": "n64",
+  "title": "Tony Hawk's Pro Skater 2",
+  "file": "V:\\ROMs\\Nintendo 64\\Tony Hawk's Pro Skater 2.n64",
+  "sha256": "039e9baf011b66711904a59f4331e55fd3eb47179616181f86238479898b00b7",
+  "id": 53
+ },
+ {
+  "system": "n64",
+  "title": "Duke Nukem 64",
+  "file": "V:\\ROMs\\Nintendo 64\\Duke Nukem 64).n64",
+  "sha256": "6dd9ab3781b1af79efc3f21da8d4fa4ba6aad4b5f9fccb62150a6dd493203854",
+  "id": 54
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Red",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Red.gb",
+  "sha256": "5ca7ba01642a3b27b0cc0b5349b52792795b62d3ed977e98a09390659af96b7b",
+  "id": 55
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Blue",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Blue.gb",
+  "sha256": "2a951313c2640e8c2cb21f25d1db019ae6245d9c7121f754fa61afd7bee6452d"
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Yellow",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Yellow.gb",
+  "sha256": "8cbaa499397e4f1a679c992ea9382a2dd7942ab398b48c19829c2d9529de47bf",
+  "id": 56
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Trading Card Game",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Trading Card Game.gb",
+  "sha256": "a54515bb6b3e364964d3c0226f5a6b0c8c0f7318c9296ef2e321df0bbb8541ce"
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Brown",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Brown.gb",
+  "sha256": "6a58cd3f766044b3b151c88cf1df67a4f5d9c1dbb8e78039ce449aa8a072a5ed",
+  "id": 57,
+  "skip": "no picture on gambatte (smoke test 2026-11-22)"
+ },
+ {
+  "system": "gb",
+  "title": "Pokemon Grape",
+  "file": "V:\\ROMs\\Nintendo GameBoy\\Pokemon Grape.gb",
+  "sha256": "6048633411c189909e5aa09c02448aade88e0dea3265227521a7f0ed528473fe",
+  "id": 58
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Gold",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon - Gold Version (USA, Europe).gbc",
+  "sha256": "fb0016d27b1e5374e1ec9fcad60e6628d8646103b5313ca683417f52b97e7e4e",
+  "id": 59
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Silver",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Silver.gbc",
+  "sha256": "72b190859a59623cbef6c49d601f8de52c1d2331b4f08a8d2acc17274fc19a8c",
+  "id": 60
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Crystal",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon - Crystal Version (USA, Europe).gbc",
+  "sha256": "d6702e353dcbe2d2c69183046c878ef13a0dae4006e8cdff521cca83dd1582fe"
+ },
+ {
+  "system": "gbc",
+  "title": "Link's Awakening DX",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Legend of Zelda, The - Link's Awakening DX (USA, Europe).gbc",
+  "sha256": "c95dd3d9cb798e86c28e3269554e458d434bf3277b96cadf5bc81cfacfb5ee60"
+ },
+ {
+  "system": "gbc",
+  "title": "Oracle of Ages",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Legend of Zelda, The - Oracle of Ages (USA).gbc",
+  "sha256": "0b56b78a9e45452e98c33edd111234931f1e034dc097f6f23082eb8db6055474",
+  "id": 61
+ },
+ {
+  "system": "gbc",
+  "title": "Oracle of Seasons",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Legend of Zelda, The - Oracle of Seasons (USA).gbc",
+  "sha256": "862a51368fb30539279d336b3fe193b43876d2cb15c87a36f5da517804ab3971",
+  "id": 62
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Puzzle Challenge",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Puzzle Challenge.gbc",
+  "sha256": "42e6bf3b26f186f1ddf23d2ab0e78dea423c55562119f1988ffab906e8f86fe6",
+  "id": 63
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Crystal Clear (Crystal_Clear)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Crystal_Clear.gbc",
+  "sha256": "45280750c0c7abdec43b719fda1b866de9fc65940ef914ff74d33079b4286893",
+  "id": 64
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Crystal Clear (Pokemon Crystal Clear 2.0 Beta)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Crystal Clear 2.0 Beta.gbc",
+  "sha256": "a9685b36314d095495f634f918ae36dcecc9bc4ab47fbaf2eda8d029f6bf7521",
+  "id": 65
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Crystal Clear (Pokemon Crystal Clear 2.5.1)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Crystal Clear 2.5.1.gbc",
+  "sha256": "f28c0b2f67e7f765190b643bc1295f9500a8bb932f623c635ad8cd729871f2fa",
+  "id": 66
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Prism (Pokemon - Prism Version)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon - Prism Version.gbc",
+  "sha256": "d13194f37c2d7ebf39e652ceac6f7568c68e5977e5687bdbb2acf3ad49743616",
+  "id": 67
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Prism (Pokemon Prism 0.94)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Prism 0.94.gbc",
+  "sha256": "4ce4a754939bc718838d492d8718b35a45837ab718bfbe64d581eec68fa5ec99",
+  "id": 68
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Pink",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon - Pink Version.gbc",
+  "sha256": "45a9929bb173fe1b36bf7a7eb2a4ae405b7f1713c05d976455bafe94ae955ede",
+  "id": 69
+ },
+ {
+  "system": "gbc",
+  "title": "Pokemon Red (GS Prototype Sprites)",
+  "file": "V:\\ROMs\\Nintendo GameBoy Color\\Pokemon Red (GS Prototype Sprites).gb",
+  "sha256": "689352b5342f768e0f24630acdf4176b48b84c8d9c78c29e2cf2d9343ba58192",
+  "id": 70
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Ruby",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon Ruby.GBA",
+  "sha256": "fe0853b8e62670460ed9e79e03e1dd98d2ce809d9d0836b622ffe237e83e6498",
+  "id": 71
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Sapphire",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon Sapphire.GBA",
+  "sha256": "50ea6e44f6e28a08e2f2b44ba0b593682ed7debc2613797fceaa4665dfa3c28b",
+  "id": 72
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon FireRed",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon - Fire Red.GBA",
+  "sha256": "3d0c79f1627022e18765766f6cb5ea067f6b5bf7dca115552189ad65a5c3a8ac",
+  "id": 73
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon LeafGreen",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon - Leaf Green.GBA",
+  "sha256": "136d75e48ef4212f6188387d317964f9746ad46f54f2792289d1717064911f64",
+  "id": 74
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon - Emerald Version (USA, Europe).gba",
+  "sha256": "a9dec84dfe7f62ab2220bafaef7479da0929d066ece16a6885f6226db19085af"
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Mystery Dungeon: Red Rescue Team",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon Mystery Dungeon - Red Rescue Team.GBA",
+  "sha256": "0f9d125d513d9cba628d97e2c345382eba9ba73b402b24a8fdd81f604c14cbcd",
+  "id": 75
+ },
+ {
+  "system": "gba",
+  "title": "Yu-Gi-Oh! The Eternal Duelist Soul",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\0670 - Yu-Gi-Oh! - The Eternal Duelist Soul (U)(Mode7).gba",
+  "sha256": "16224aa9477011002e9e418e1bdec2f4a5bf92bea3cf4673a47e9824a38cd542",
+  "id": 76
+ },
+ {
+  "system": "gba",
+  "title": "Dragon Ball Z: The Legacy of Goku",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Dragon Ball Z - The Legacy Of Goku (U)(Mode7).gba",
+  "sha256": "c41d95d10981a23e80a105f173df38415e294065bcc4d1b22ef80977d6bb6bed",
+  "id": 77
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Pinball: Ruby & Sapphire",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Pokemon Pinball - Ruby and Sapphire.GBA",
+  "sha256": "62bb6060fa73c1f5b701890084e0143a32a02ea5205787f7622d429ccc9aaf18",
+  "id": 78
+ },
+ {
+  "system": "gba",
+  "title": "Dragon Ball Z: The Legacy of Goku II",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\1085 - Dragon Ball Z - The Legacy of Goku II (U)(TrashMan).gba",
+  "sha256": "64a967899839740dc59522c7d451cf861e73348c823d7df6065b21a484d11348"
+ },
+ {
+  "system": "gba",
+  "title": "Yu-Gi-Oh! The Sacred Cards",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\1240 - Yu-Gi-Oh! - The Sacred Cards (U)(Venom).gba",
+  "sha256": "093f986a92d73c48e11de0a83c6678c3620f8def6173f5e69133815301b40d8f",
+  "id": 79
+ },
+ {
+  "system": "gba",
+  "title": "Dragon Ball Z: Buu's Fury",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\1646 - Dragon Ball Z - Buu's Fury (U)(Psychosis).gba",
+  "sha256": "940ad5f01db4465b8877dfe739510cbf34f4ea3d390f3df13519808bc36f059e",
+  "id": 80
+ },
+ {
+  "system": "gba",
+  "title": "Dragon Ball Z: Supersonic Warriors",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\1548 - DragonBall Z - Supersonic Warriors (U)(Rising Sun).gba",
+  "sha256": "588fd0bb53541a0c0ac49cc4192226988ab307dc3bee3c8328ee1a952d52091c",
+  "id": 81
+ },
+ {
+  "system": "gba",
+  "title": "Yu-Gi-Oh! GX: Duel Academy",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\2302 - Yu-Gi-Oh! GX - Duel Academy (U)(Independent).gba",
+  "sha256": "0c2f606986c84d584510d0b80e7cb8e2970f9c15c71d29f9bb9d5f67ceef2afe",
+  "id": 82
+ },
+ {
+  "system": "gba",
+  "title": "Yu-Gi-Oh! Ultimate Masters 2006",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\2343 - Yu-Gi-Oh! Ultimate Masters 2006 (U)(Trashman).gba",
+  "sha256": "f405c620da05a817a5d63f45a4707b914260fb5802fe519b1e31bf050ba8f524",
+  "id": 83
+ },
+ {
+  "system": "gba",
+  "title": "Dragon Ball GT: Transformation",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\2079 - Dragon Ball GT - Transformation (U)(Trashman).gba",
+  "sha256": "67a2a45f942b8a43fdef24ccee2b45ae322681653fb48e356bb978247d8e6f05",
+  "id": 84
+ },
+ {
+  "system": "gba",
+  "title": "Baldur's Gate: Dark Alliance",
+  "file": "V:\\ROMs\\Nintendo GameBoy Advance\\Baldur's Gate - Dark Alliance.gba",
+  "sha256": "66cf2869256946f245ceccf0695bba7d87b3759347547c78261db34e5c85d8cf",
+  "id": 85
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon - Inclement Emerald",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon - Inclement Emerald.gba",
+  "sha256": "9623d05908aa5ea086535c6830a69bb3fcfe9bfd1b017e0101352e520587571a",
+  "id": 86
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon - Rogue Emerald",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon - Rogue Emerald.gba",
+  "sha256": "29ecf6549b16cd10785b8aacc2aa841d1f20c6a5f24d096a695e6eaaea39a98c",
+  "id": 87
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Advanced Adventures",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Advanced Adventures.gba",
+  "sha256": "ae378cd8136a86c441db234d9ffc5d6b56f1b1d61c7b48347d3252a8ffc50674",
+  "id": 88
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Adventure Red Chapter",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Adventure Red Chapter.gba",
+  "sha256": "fd06946d29836675e4aadee11395b1fb9e39bd9ce08994913a2b61954280b090",
+  "id": 89
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Aquamarine",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Aquamarine.gba",
+  "sha256": "db3e8f1ef0357146117de6f3826c450184b6a9db181f17a6fcae9d96aeae3edc",
+  "id": 90
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Ash Gray",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Ash Gray.GBA",
+  "sha256": "b9b4d99b136aa964beec8c2222a9c75b04c06fa7a612b40dd16eea85ffb9489d",
+  "id": 91
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Cloud White",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Cloud White.gba",
+  "sha256": "f70922408ea71257a2893f06b51cc02aa890e573beb1b84043a100060de1d11d",
+  "id": 92
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Clover v1.3.3",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Clover v1.3.3.gba",
+  "sha256": "42f99abd548934d77999ac3eb563fb9bc70a34701d37a262b21b882a43a8bdd9",
+  "id": 93
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Crown (Beta 1 v9)",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Crown (Beta 1 v9).gba",
+  "sha256": "28d7f55c96bde57269e3bbae8c5e8e177dcb92f16feaee65d556ab387ccaddd0",
+  "id": 94
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Cyan",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Cyan.gba",
+  "sha256": "4a96584452095b3f63e07bf2bb78b124d8a84388932ac104cee69c1fbd707bf9",
+  "id": 95
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Dark Rising",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Dark Rising.gba",
+  "sha256": "8f430dc5324855cef3adf7a208eaca686043a89688980bee2ab73ccde30e2dd1",
+  "id": 96
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Dark Violet",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Dark Violet.gba",
+  "sha256": "6b7e6df19c974371a4f80ea5c0f1e8d68a2cfee248faf34080a48ae3f0135e21",
+  "id": 97
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Darkfire Beta(2.0.5)",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Darkfire Beta(2.0.5).gba",
+  "sha256": "3b47c3a82c9b51626cfb97aead3eb51ee8ad6aed91f7b3872cff6d147bc2e141",
+  "id": 98
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Dreamstone Mysteries",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Dreamstone Mysteries.gba",
+  "sha256": "ac31df9cc158823861294b17bd4e66857deab2a53dd81620ddcf6fc03a6a4220",
+  "id": 99
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald Crest",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald Crest.gba",
+  "sha256": "aa9718f2f57af032380031be5883ae58f09e07623e797f9db814885b0d518cfc",
+  "id": 100
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald Kaizo",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald Kaizo.gba",
+  "sha256": "ceb218cf629343dff7fc284f8c2de246fbc7f3e817a24f8b096b8d7102cbac4b",
+  "id": 101
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald Rogue 2",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald Rogue 2.gba",
+  "sha256": "514d29951df8862a54381f454df0c81fa4383706f2ad1a8f5df626842e32cc34",
+  "id": 102
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald Seaglass",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald Seaglass.gba",
+  "sha256": "6098296dca53655bb51493658d74ba206abe6bacbbe60db8d4f497367926809f",
+  "id": 103
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald's Eight",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald's Eight.gba",
+  "sha256": "04cf5d64c2eaab3804b3c0b360bb29c4818b51b673d5e01993b2a08d6934838f",
+  "id": 104
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Emerald",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Emerald.GBA",
+  "sha256": "482baae087bafc8f60e3d4ad73b54fa9d940d1981e21829914cd72d1192b5ef0",
+  "id": 105
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Exceeded",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Exceeded.gba",
+  "sha256": "11be421a1cd03db597409449bb87ec1bac0b1e41b9a542e3b12fbb91265d6cf9",
+  "id": 106
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Fire Red 898 Randomizer",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Fire Red 898 Randomizer.gba",
+  "sha256": "d02a4ae49ed389b91cbef10058480b84de46912178759a5b62f1894125725918",
+  "id": 107
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Fire Red Omega",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Fire Red Omega.gba",
+  "sha256": "4b454174d3e04609428adbb49348f70cd6795896e99f5b0501fa3f40487cf6a9",
+  "id": 108
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Fire Red Team Rocket Edition",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Fire Red Team Rocket Edition.gba",
+  "sha256": "e6f232d0df265323c995e6025fe0ebcc532dfaf7634548a13ee9fb5673152442",
+  "id": 109
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Flora Sky",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Flora Sky.GBA",
+  "sha256": "aac242276e2cfedcc4cf8a07210d3eba7306c3d1e701fac107a2659dc0407c4e",
+  "id": 110
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Fuligin",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Fuligin.GBA",
+  "sha256": "d7aaaf2c995f909af3ac646964c5568bf7beb7ddd68b82c20f87de473b3de23b",
+  "id": 111
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Gaia",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Gaia.gba",
+  "sha256": "186a36cd389aecf10fb9ba112e7340fd81127fcb23d9564294df80b1e1473ab5",
+  "id": 112
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Glazed",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Glazed.gba",
+  "sha256": "b8eb851615963a498719a6a451f1bfc32bb1137fbd6d841a8894b6c15e7dd448",
+  "id": 113
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon GS Cronicles",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon GS Cronicles.gba",
+  "sha256": "d106c2c90688acffec2e0d19e3bacd81b4180fd84296c21e9c214e7199b14fa2",
+  "id": 114
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Heart & Soul",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Heart & Soul.gba",
+  "sha256": "9e113bd4f5f926b4ab030b050b70284fc214bdf8088f2a56fe23cca548f7ec4e",
+  "id": 115
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Imperium",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Imperium.gba",
+  "sha256": "79bfd6266f7980452c864a20ffe47783b8bb91ec9957174ed416b77d3facb3a0",
+  "id": 116
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Lazarus",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Lazarus.gba",
+  "sha256": "d756b2783dede0bb2c534d1f07713bef733cf53500388e3912f14220a7e16e97",
+  "id": 117
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon LIFE",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon LIFE.gba",
+  "sha256": "82353cb95dacfe7b83bbab79e6743180076307ba79ff544872420787cd8fbffb",
+  "id": 118,
+  "skip": "mgba refuses it (smoke test 2026-11-22)"
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Light Platinum",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Light Platinum.gba",
+  "sha256": "7c7bec2fed5c89bfb8e1b22b11b011ef3e52af312917d23acf76549e5d2f32d2",
+  "id": 119
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Liquid Crystal",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Liquid Crystal.gba",
+  "sha256": "925cd6bd824e3e903636340e5f3519bc9ecb2f5f75c0bb87248213250514c965",
+  "id": 120
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Mega evolution v1.0",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Mega evolution v1.0.gba",
+  "sha256": "93f5869579fefc3fee4ead6a7f6c62f54b2a88fa54c4aa32f6c4d2c3e1d09418",
+  "id": 121
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Modern Emerald",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Modern Emerald.gba",
+  "sha256": "2ef1d2a2124aa07086e888c5a222b0aa2825e64281dd38dadddec25b955d33b8",
+  "id": 122
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Moon Galaxy",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Moon Galaxy.gba",
+  "sha256": "87766f522368b6208c840f0803641e41046c2b79c765892b2885a8fbbc682117",
+  "id": 123
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Odyssey",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Odyssey.gba",
+  "sha256": "44c7e3eafab19c39df7c39d54bafb78a1d9caf7c371244b6f5efb12cfd98d0d0",
+  "id": 124
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Quartz",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Quartz.gba",
+  "sha256": "203341a1e361232649e737d2f01c6bd884c86279dd0455674ae2b39c12a9490f",
+  "id": 125
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Radical Red (v3.1)",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Radical Red (v3.1).gba",
+  "sha256": "41078f9b90b0240dd311c43acf042433d98f853ba1f37e8dfc5cc017536bcc41",
+  "id": 126
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Run & Bun (v1.07)",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Run & Bun (v1.07).gba",
+  "sha256": "68ec5b0c02e6def8da8dc2b1857b269505418803d44cc2b816fb7471587bf89d",
+  "id": 127
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Saiph",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Saiph.gba",
+  "sha256": "b8dc42132873c74ba9655f2f73976e6a82247b4a933369211513211d93125dfd",
+  "id": 128
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Shiny Gold",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Shiny Gold.gba",
+  "sha256": "94f4e24531b0d0634dd7a1e02b93e8f096fb4c892e7bbd2e6eb167737a117115",
+  "id": 129
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Snakewood",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Snakewood.gba",
+  "sha256": "c2dab6e9348a09c5b74504b43e6cc556c0a10f5556969017662e1e97dbc5cacb",
+  "id": 130
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Sovereign Of The Skies",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Sovereign Of The Skies.gba",
+  "sha256": "5f84520bb1b1703db949f22b12167bcb438f40a6d0a289001dea53d3be4d256b",
+  "id": 131
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Sun Sky",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Sun Sky.gba",
+  "sha256": "f5bf7340a5eab05047273fdca6437fffbcd20ae3c67f1637df7535913510edcc",
+  "id": 132
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Sword and Shield Ultimate Plus",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Sword and Shield Ultimate Plus.gba",
+  "sha256": "f6d2e7092831b983318b685132a19567ff5e6428665255738c4e5a63371bcce3",
+  "id": 133
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Unbound Official",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Unbound Official.gba",
+  "sha256": "a8965761aeb4439206194c0fdf04c3388c7159cb6132c8a6f5aacbb9ed1d2c6a",
+  "id": 134
+ },
+ {
+  "system": "gba",
+  "title": "Pokemon Voyager",
+  "file": "E:\\ROMs\\Nintendo Gameboy Advance\\Pokemon Voyager.gba",
+  "sha256": "c68f5d2932f605ac578a1e49000b522e19371e304d1ac8babf0d9d0fee315b14",
+  "id": 135
+ },
+ {
+  "system": "genesis",
+  "title": "Sonic the Hedgehog",
+  "file": "V:\\ROMs\\SEGA\\S\\Sonic The Hedgehog (W) (REV 00) [!].bin",
+  "sha256": "46160baa06362c711c9f1a5017cb7371026444936c8af5e93a78996cf32ff2a6",
+  "id": 136
+ },
+ {
+  "system": "genesis",
+  "title": "Sonic the Hedgehog 2",
+  "file": "V:\\ROMs\\SEGA\\S\\Sonic The Hedgehog 2 (W) [!].bin",
+  "sha256": "193bc4064ce0daf27ea9e908ed246d87ec576cc294833badebb590b6ad8e8f6b"
+ },
+ {
+  "system": "genesis",
+  "title": "Sonic the Hedgehog 3",
+  "file": "V:\\ROMs\\SEGA\\S\\Sonic The Hedgehog 3 (U) [!].bin",
+  "sha256": "d6404843c5ba32486f4c8c744acb7e1932069376960d886b1de37969787d3f9c",
+  "id": 137
+ },
+ {
+  "system": "genesis",
+  "title": "Sonic & Knuckles",
+  "file": "V:\\ROMs\\SEGA\\S\\Sonic and Knuckles (W) [!].bin",
+  "sha256": "6e12e6b33c26ebfcd0be433251d21cf6284eafe9f71b027bda3767ae59affec1",
+  "id": 138
+ },
+ {
+  "system": "genesis",
+  "title": "Mortal Kombat",
+  "file": "V:\\ROMs\\SEGA\\M\\Mortal Kombat (W) (REV 00) [!].bin",
+  "sha256": "658547d3115c52f165a269099a9f7eaf66e5303a5004abf4a8774bcce6565bd2",
+  "id": 139
+ },
+ {
+  "system": "genesis",
+  "title": "Disney's Aladdin",
+  "file": "V:\\ROMs\\SEGA\\A\\Aladdin (E) [!].bin",
+  "sha256": "3fbaee79d52b426f554e817e70397fa51279aca0705fe6df304e7f61bfe8ec5f",
+  "id": 140
+ },
+ {
+  "system": "genesis",
+  "title": "John Madden Football '93",
+  "file": "V:\\ROMs\\SEGA\\J\\John Madden Football '93 (U) [c][!].bin",
+  "sha256": "8958d7d382aa99d91122564397a5aa438c26f4bab2c20626756f7802b2467624",
+  "id": 141
+ },
+ {
+  "system": "genesis",
+  "title": "NHL '94",
+  "file": "V:\\ROMs\\SEGA\\N\\NHL Hockey 94 (W) [!].bin",
+  "sha256": "ccc0298c118d580863c877abd470c71186ef0a1b60f1e7c6ff1e5a38f48fd053",
+  "id": 142
+ },
+ {
+  "system": "genesis",
+  "title": "Joe Montana Football",
+  "file": "V:\\ROMs\\SEGA\\J\\Joe Montana Football (U) [!].bin",
+  "sha256": "89353fffe8942e2add8088cc1c05ae64f7c1240902cfe8dfc5ec9fd2bdc98bdd",
+  "id": 143
+ },
+ {
+  "system": "genesis",
+  "title": "Jurassic Park",
+  "file": "V:\\ROMs\\SEGA\\J\\Jurassic Park (U) [!].bin",
+  "sha256": "b3596cd161858bcd47e95717b0151c07050c408eab25a50139eba4ebca683554",
+  "id": 144
+ },
+ {
+  "system": "genesis",
+  "title": "NBA Jam",
+  "file": "V:\\ROMs\\SEGA\\N\\NBA Jam (W) (REV 00) [!].bin",
+  "sha256": "9ee77c144505a10940976bb48e32600c83d5910c737612868ff6088faf3eb7f4",
+  "id": 145
+ },
+ {
+  "system": "genesis",
+  "title": "Mortal Kombat II",
+  "file": "V:\\ROMs\\SEGA\\M\\Mortal Kombat II (W) [!].bin",
+  "sha256": "e8d4514ebcb91e09ffa636268660e7b3e24317e95179c3a9572f58c40866b747",
+  "id": 146
+ },
+ {
+  "system": "genesis",
+  "title": "Street Fighter II': Special Champion Edition",
+  "file": "V:\\ROMs\\SEGA\\S\\Street Fighter II Special Champion Edition (U) [!].bin",
+  "sha256": "d9224423c80754a4ee945f7348d7478d56a134654a9389e02cd82caab76dddef",
+  "id": 147
+ },
+ {
+  "system": "genesis",
+  "title": "Eternal Champions",
+  "file": "V:\\ROMs\\SEGA\\E\\Eternal Champions (U) [!].bin",
+  "sha256": "6d8bdaf8c994d9f718c8f991900c58cdf1af84e030524b57f6dda263cc4ea247",
+  "id": 148
+ },
+ {
+  "system": "genesis",
+  "title": "FIFA Soccer 95",
+  "file": "V:\\ROMs\\SEGA\\F\\FIFA Soccer 95 (W) [!].bin",
+  "sha256": "3a2c8a1485c07c9f876f69d7b51c253b4983665041c9ea64b526759c0b3bebed",
+  "id": 149
+ },
+ {
+  "system": "genesis",
+  "title": "Altered Beast",
+  "file": "V:\\ROMs\\SEGA\\A\\Altered Beast (JU) (REV 01) [!].bin",
+  "sha256": "d3362f04ec9b805c57408999c8f572e5b40ab4550a0a64538b5e9783e5da86a1",
+  "id": 150
+ },
+ {
+  "system": "genesis",
+  "title": "Mortal Kombat 3",
+  "file": "V:\\ROMs\\SEGA\\M\\Mortal Kombat 3 (U) [!].bin",
+  "sha256": "d43f5fced516838836487b58603e30b0f8d3b1f30d923e20706d7c6bffa7c18b",
+  "id": 151
+ },
+ {
+  "system": "genesis",
+  "title": "X-Men",
+  "file": "V:\\ROMs\\SEGA\\X\\X-Men (U) [!].bin",
+  "sha256": "49f601abfa61f23f70420a2cc0c4cc90273540b4d199fb61d516f6344e9067ef",
+  "id": 152
+ },
+ {
+  "system": "genesis",
+  "title": "Ms. Pac-Man",
+  "file": "V:\\ROMs\\SEGA\\M\\Ms. Pac-Man (U) [!].bin",
+  "sha256": "87f3c75fea5c4e105163a3b6d4467527fdc3fcc4b8e385155067719b98b2be7c",
+  "id": 153
+ },
+ {
+  "system": "genesis",
+  "title": "Streets of Rage",
+  "file": "V:\\ROMs\\SEGA\\S\\Streets of Rage (W) (REV 00) [!].bin",
+  "sha256": "dd44f120446654bb91c448762f3e0cd0d9b034f35d0e3266a4dc34402ada95c0",
+  "id": 154
+ },
+ {
+  "system": "genesis",
+  "title": "Streets of Rage 2",
+  "file": "V:\\ROMs\\SEGA\\S\\Streets of Rage 2 (U) [!].bin",
+  "sha256": "4a314edbfee92282850fe95c4c764921916efd9d3c2277fdec2581279b1369b1"
+ },
+ {
+  "system": "genesis",
+  "title": "Phantasy Star IV",
+  "file": "V:\\ROMs\\SEGA\\P\\Phantasy Star - The End of the Millenium (U) [!].bin",
+  "sha256": "511f35cc11f88316f8b8940e28ab298bd75a4da193672a80172884d6eb913b6a"
+ },
+ {
+  "system": "snes",
+  "title": "Street Fighter II: The World Warrior",
+  "file": "V:\\ROMs\\SNES\\Street Fighter II - The World Warrior.smc",
+  "sha256": "8c5c706b40839784df31bba05729cf7bb0255c04c7745f99652fe8f8093d6a4a",
+  "id": 155
+ },
+ {
+  "system": "snes",
+  "title": "Street Fighter II Turbo",
+  "file": "V:\\ROMs\\SNES\\Street Fighter II Turbo - Hyper Fighting.smc",
+  "sha256": "e23336183b3536dabd15b6c1c04d1ee347593a1ab931b458e399f2578d23bd79",
+  "id": 156
+ },
+ {
+  "system": "snes",
+  "title": "Killer Instinct",
+  "file": "V:\\ROMs\\SNES\\Killer Instinct.smc",
+  "sha256": "7a5261f1a5e84b67483c79fb002ce1539f2360f88333bda60f12e617d86e0def",
+  "id": 157
+ },
+ {
+  "system": "snes",
+  "title": "F-Zero",
+  "file": "V:\\ROMs\\SNES\\F-Zero.smc",
+  "sha256": "bf16c3c867c58e2ab061c70de9295b6930d63f29f81cc986f5ecae03e0ad18d2",
+  "id": 158
+ },
+ {
+  "system": "snes",
+  "title": "Mario Paint",
+  "file": "V:\\ROMs\\SNES\\Mario Paint.smc",
+  "sha256": "e842cac1a4301be196f1e137fbd1a16866d5c913f24dbca313f4dd8bd7472f45",
+  "id": 159
+ },
+ {
+  "system": "snes",
+  "title": "Pilotwings",
+  "file": "V:\\ROMs\\SNES\\Pilotwings.smc",
+  "sha256": "03d0127f5de3237e22ad00de0c20763274da7b71142dde693240ac96d10983a3",
+  "id": 160
+ },
+ {
+  "system": "snes",
+  "title": "Super Street Fighter II",
+  "file": "V:\\ROMs\\SNES\\Super Street Fighter II - The New Challengers.smc",
+  "sha256": "d17cb5c73174060fcbd9cba6c705643f19c3b8be24d0f7ee43aee674ff1ea38e",
+  "id": 161
+ },
+ {
+  "system": "snes",
+  "title": "SimCity",
+  "file": "V:\\ROMs\\SNES\\SimCity.smc",
+  "sha256": "f54f0484652d2b82ce313036984721acc1722dc7b80db0745560442bf873b9a1",
+  "id": 162
+ },
+ {
+  "system": "snes",
+  "title": "Secret of Mana",
+  "file": "V:\\ROMs\\SNES\\Secret of Mana.smc",
+  "sha256": "3e43bd912b4bf19b3f74df102e879fbc286a5d57f1c34c3c25f63d4d6fde2b38",
+  "id": 163
+ },
+ {
+  "system": "snes",
+  "title": "Final Fight",
+  "file": "V:\\ROMs\\SNES\\Final Fight.smc",
+  "sha256": "60cca2592d0756b8c4c7a0a254fafa5ac47aa752521fd1f77dcbf4b6ee1bee90",
+  "id": 164
+ },
+ {
+  "system": "snes",
+  "title": "The Magical Quest Starring Mickey Mouse",
+  "file": "V:\\ROMs\\SNES\\Magical Quest starring Mickey Mouse, The.smc",
+  "sha256": "f301bb8ea867e530ecb64e8eff504ed5b9697cf076c70e2036ecf2ffbe6c487a",
+  "id": 165
+ },
+ {
+  "system": "snes",
+  "title": "Ken Griffey Jr. Presents Major League Baseball",
+  "file": "V:\\ROMs\\SNES\\Ken Griffey Jr. Presents - Major League Baseball.smc",
+  "sha256": "28856f0d727d8cdac9cde1dab8132f1c247f3b858579352710d1bbdcc57e9445",
+  "id": 166
+ },
+ {
+  "system": "snes",
+  "title": "Super Ghouls 'n Ghosts",
+  "file": "V:\\ROMs\\SNES\\Super Ghouls 'N Ghosts.smc",
+  "sha256": "7468c271d7240cf4e0d08c16e9969a1b1b1caf5adc0e5adc568d93c92651a057",
+  "id": 167
+ },
+ {
+  "system": "snes",
+  "title": "Final Fight 2",
+  "file": "V:\\ROMs\\SNES\\Final Fight 2.smc",
+  "sha256": "0caf9a9d85424d27c0e59482bf44bd9c48f2e9abafae11d780e51c9a8dc07b71",
+  "id": 168
+ },
+ {
+  "system": "snes",
+  "title": "Tetris 2",
+  "file": "V:\\ROMs\\SNES\\Tetris 2.smc",
+  "sha256": "70dea29a928c1625def31c862dc74960e39e587e416b45829efc21f13ebd9630",
+  "id": 169
+ },
+ {
+  "system": "snes",
+  "title": "Space Invaders",
+  "file": "V:\\ROMs\\SNES\\Space Invaders.smc",
+  "sha256": "86aa46022ea9afddb0f501dea0ddb3831d7c097291043ff408e06be09c0d0218",
+  "id": 170
+ },
+ {
+  "system": "snes",
+  "title": "Super Bomberman 2",
+  "file": "V:\\ROMs\\SNES\\Super Bomberman 2.smc",
+  "sha256": "0a4b4a783a7faf6ada3e1326ecf85de77e8c2a171659b42a78a1fae43f806ca6",
+  "id": 171
+ },
+ {
+  "system": "snes",
+  "title": "Contra III: The Alien Wars",
+  "file": "V:\\ROMs\\SNES\\Contra III - The Alien Wars.smc",
+  "sha256": "a93ea87fc835c530b5135c5294433d15eef6dbf656144b387e89ac19cf864996"
+ },
+ {
+  "system": "snes",
+  "title": "ActRaiser",
+  "file": "V:\\ROMs\\SNES\\ActRaiser.smc",
+  "sha256": "b8055844825653210d252d29a2229f9a3e7e512004e83940620173c57d8723f0"
+ },
+ {
+  "system": "snes",
+  "title": "Tetris Attack",
+  "file": "V:\\ROMs\\SNES\\Tetris Attack.smc",
+  "sha256": "579bf1a1988d4af06a69cc1d82a2478ebe51940c5ced7f97e83029a24e6aa778",
+  "id": 172
+ },
+ {
+  "system": "snes",
+  "title": "Tetris & Dr. Mario",
+  "file": "V:\\ROMs\\SNES\\Tetris & Dr. Mario.smc",
+  "sha256": "3cdebbd8adc4bb6773a7995f542fdac49adefca71cba583255a1c1bf37ac3946"
+ },
+ {
+  "system": "ps1",
+  "title": "Spyro: Year of the Dragon",
+  "file": "V:\\ROMs\\Sony Playstation\\Spyro - Year of the Dragon\\Spyro - Year of the Dragon (USA) (v1.1).cue",
+  "sha256": "44bff8aecb2cc150553b6e4757420dee97e563effcd3e3b23d841fc664beb7d2",
+  "id": 173
+ },
+ {
+  "system": "arcade",
+  "title": "1942",
+  "file": "V:\\ROMs\\MAME\\1942.zip",
+  "sha256": "469a257bfde1982c7f0f53560a8e6c3723597c48dfa2285583960c33b4e01e9f",
+  "id": 174
+ },
+ {
+  "system": "arcade",
+  "title": "asteroid",
+  "file": "V:\\ROMs\\MAME\\asteroid.zip",
+  "sha256": "a76385f075c5c880fa05d38dd40358776a4aa2b84991b98628b868e402c10bfc",
+  "id": 175
+ },
+ {
+  "system": "arcade",
+  "title": "avsp",
+  "file": "V:\\ROMs\\MAME\\avsp.zip",
+  "sha256": "94aa7eecc1f0505af63f80bb660f25120272da0d5f73f6f644333d7623236ad4",
+  "id": 176
+ },
+ {
+  "system": "arcade",
+  "title": "centiped",
+  "file": "V:\\ROMs\\MAME\\centiped.zip",
+  "sha256": "5c7f98d0b47a867093795f94768d1e9eea03659629fb926fa036e10fa00fe0fe",
+  "id": 177
+ },
+ {
+  "system": "arcade",
+  "title": "defender",
+  "file": "V:\\ROMs\\MAME\\defender.zip",
+  "sha256": "06420ae9d65ce5be6b83e88ec5bd174001e29d2b246a69ae7ad7b0c7f4b730a5",
+  "id": 178
+ },
+ {
+  "system": "arcade",
+  "title": "digdug",
+  "file": "V:\\ROMs\\MAME\\digdug.zip",
+  "sha256": "bb432908d6b1506148730c74eaeec3154d82bf23b05ad0b7cbb35b48922bb260",
+  "id": 179
+ },
+ {
+  "system": "arcade",
+  "title": "dino",
+  "file": "V:\\ROMs\\MAME\\dino.zip",
+  "sha256": "51d2e39742cbecf02e84df9dcb65216cdd31b07bafddfcae5d1614d39e0d2d9f",
+  "id": 180
+ },
+ {
+  "system": "arcade",
+  "title": "dkong",
+  "file": "V:\\ROMs\\MAME\\dkong.zip",
+  "sha256": "bcfdad4052be66b40923afb97ff996c7cc0157358fcebe3374c93d270b22c8d5",
+  "id": 181
+ },
+ {
+  "system": "arcade",
+  "title": "ffight",
+  "file": "V:\\ROMs\\MAME\\ffight.zip",
+  "sha256": "a7cc8894488ee126851ee1f45eccb99e6da96f63b5bbd31689adaf08f7a37eab",
+  "id": 182
+ },
+ {
+  "system": "arcade",
+  "title": "frogger",
+  "file": "V:\\ROMs\\MAME\\frogger.zip",
+  "sha256": "b975a63ea4c3fd87781d3233660928e3b822334ad415ac495599cf85230ad01f",
+  "id": 183
+ },
+ {
+  "system": "arcade",
+  "title": "galaga",
+  "file": "V:\\ROMs\\MAME\\galaga.zip",
+  "sha256": "f58992060d98e075605e2fd2d6e285862395018d8234a2a95ab717f1eb06a002",
+  "id": 184
+ },
+ {
+  "system": "arcade",
+  "title": "gauntlet",
+  "file": "V:\\ROMs\\MAME\\gauntlet.zip",
+  "sha256": "9567ed7cda4da7802872d714d3adb68565f64948e8c4af83f2458e0d811cb9e8",
+  "id": 185
+ },
+ {
+  "system": "arcade",
+  "title": "goldnaxe",
+  "file": "V:\\ROMs\\MAME\\goldnaxe.zip",
+  "sha256": "8b07534eb883b0ce38d434cd4323295e43fdd9792225f637a7a8d0fb002bc609",
+  "id": 186
+ },
+ {
+  "system": "arcade",
+  "title": "invaders",
+  "file": "V:\\ROMs\\MAME\\invaders.zip",
+  "sha256": "a0a87e61e594a3095479a76b7f179d37e34df76965a675ac8e838e6b238d2ca6",
+  "id": 187
+ },
+ {
+  "system": "arcade",
+  "title": "kof2002",
+  "file": "V:\\ROMs\\MAME\\kof2002.zip",
+  "sha256": "adacb57bcd4047a34710bfb17d35450e8fb608c504c7d8915650ba16edd70fe6",
+  "id": 188
+ },
+ {
+  "system": "arcade",
+  "title": "kof98",
+  "file": "V:\\ROMs\\MAME\\kof98.zip",
+  "sha256": "3473e70e912bd65df79ae9201305682e530af77b3b516e31f6ded3574a95b9e5",
+  "id": 189
+ },
+ {
+  "system": "arcade",
+  "title": "mslug",
+  "file": "V:\\ROMs\\MAME\\mslug.zip",
+  "sha256": "8497091b488d8ab771e34cbbded625b8f65c00896a6563defc64ecf911c68df1",
+  "id": 190
+ },
+ {
+  "system": "arcade",
+  "title": "mslug2",
+  "file": "V:\\ROMs\\MAME\\mslug2.zip",
+  "sha256": "f4bf9a4c33b7152a90e52d7948da76ac78ee42cf2d8d29aeca0f217a0d94154f",
+  "id": 191
+ },
+ {
+  "system": "arcade",
+  "title": "mslug3",
+  "file": "V:\\ROMs\\MAME\\mslug3.zip",
+  "sha256": "93873d255fe57671b39a64deb8cb59ad5bbd13604993dbb6aa7d41ad7bae9b1d",
+  "id": 192
+ },
+ {
+  "system": "arcade",
+  "title": "mslugx",
+  "file": "V:\\ROMs\\MAME\\mslugx.zip",
+  "sha256": "8c74458bd79fb4ebf8a22781e44d1c24fdb4f8b84f135726ea3a04330f2b4abc",
+  "id": 193
+ },
+ {
+  "system": "arcade",
+  "title": "mspacman",
+  "file": "V:\\ROMs\\MAME\\mspacman.zip",
+  "sha256": "8374fafe9f0053a2e0f6de0b3b62088a0a48cb2115219b9507ddd63145acc131",
+  "id": 194
+ },
+ {
+  "system": "arcade",
+  "title": "mvsc",
+  "file": "V:\\ROMs\\MAME\\mvsc.zip",
+  "sha256": "d0e1c07c4fe699ef8ac82660f01b50af8a81d2b0d9c968ab6ec8e54759a557a2",
+  "id": 195
+ },
+ {
+  "system": "arcade",
+  "title": "pacman",
+  "file": "V:\\ROMs\\MAME\\pacman.zip",
+  "sha256": "e7eea30acadb72c9bb9b33ef80f6bd516eb7689994ac695648fcaec1438e78ec",
+  "id": 196
+ },
+ {
+  "system": "arcade",
+  "title": "punisher",
+  "file": "V:\\ROMs\\MAME\\punisher.zip",
+  "sha256": "8977f7d0c8f74ed06356d8688d70cea0bcd3ebb0cad401a1b9c561d3422df867",
+  "id": 197
+ },
+ {
+  "system": "arcade",
+  "title": "rampage",
+  "file": "V:\\ROMs\\MAME\\rampage.zip",
+  "sha256": "786d5cb5c1fe9dce41f10f3eaf90f242a8153c2f1b88f2700204adcebb99ae81",
+  "id": 198
+ },
+ {
+  "system": "arcade",
+  "title": "sf2",
+  "file": "V:\\ROMs\\MAME\\sf2.zip",
+  "sha256": "4abbfccd30caf163f18064bf8c27b2780f370d67d34ee802999dcbb7e6436a30",
+  "id": 199
+ },
+ {
+  "system": "arcade",
+  "title": "sfa3",
+  "file": "V:\\ROMs\\MAME\\sfa3.zip",
+  "sha256": "f1af2dc9d95fb4ef346d6686455f675017fe083c3e8ddbe25449d2d07dff3cbd",
+  "id": 200
+ },
+ {
+  "system": "arcade",
+  "title": "sfiii3n",
+  "file": "V:\\ROMs\\MAME\\sfiii3n.zip",
+  "sha256": "d7d2c4bd1122d026d77a071de3b5ecf604fb574808121e82e9a4cca682cd74c9",
+  "id": 201
+ },
+ {
+  "system": "arcade",
+  "title": "simpsons",
+  "file": "V:\\ROMs\\MAME\\simpsons.zip",
+  "sha256": "c88e549ab8f039ec3079b34bc39af6738379d306ca06cf81123f4d3501cf8dfa",
+  "id": 202
+ },
+ {
+  "system": "arcade",
+  "title": "tmnt",
+  "file": "V:\\ROMs\\MAME\\tmnt.zip",
+  "sha256": "7eb767995f3d992bc505d8c1488d14e31bfc46b3c07298489d37023a30e6a893",
+  "id": 203
+ },
+ {
+  "system": "arcade",
+  "title": "tmnt2",
+  "file": "V:\\ROMs\\MAME\\tmnt2.zip",
+  "sha256": "09ec2f5aa8cbcd599ef4c93c68d73dfb32c58f4798e643646630ac25bbbae5f2",
+  "id": 204
+ },
+ {
+  "system": "arcade",
+  "title": "umk3",
+  "file": "V:\\ROMs\\MAME\\umk3.zip",
+  "sha256": "1611ae8a7854240ebd0569e216a714c1b9ae9492267be755400b603c42f00b90",
+  "id": 205
+ },
+ {
+  "system": "dos",
+  "title": "WarCraft: Orcs & Humans",
+  "file": "G:\\arcade-build\\warcraft\\warcraft.zip",
+  "sha256": "6bfd4edeed0c5a76073434149b7bb5b464249ca674191f74c83a6a943a703a37",
+  "id": 206
+ },
+ {
+  "system": "pc",
+  "title": "StarCraft: Brood War",
+  "file": "G:\\arcade-build\\starcraft\\game\\StarCraft.exe",
+  "sha256": "e2b5489ef3a70dd749ff5878b93e67f34e667d9100849fe14378f465e2008ad9",
+  "id": 207
+ },
+ {
+  "system": "snes",
+  "title": "The Lost Vikings",
+  "file": "G:\\arcade-build\\roms\\snes\\Lost Vikings, The (USA).sfc",
+  "sha256": "9f7782a92fda789f9d119b1f0a2f7da0f35606357556a48eca9487797ee1a888",
+  "id": 208
+ },
+ {
+  "system": "snes",
+  "title": "Rock n' Roll Racing",
+  "file": "G:\\arcade-build\\roms\\snes\\Rock N' Roll Racing (USA).sfc",
+  "sha256": "9d721753301278325c851f1843d669a697aed757dcf6495a31fc31ddf664b182",
+  "id": 209
+ },
+ {
+  "system": "pc",
+  "title": "Warcraft Adventures: Lord of the Clans",
+  "file": "G:\\arcade-build\\lotc\\game\\PlayWin.exe",
+  "sha256": "ed76cb1f13955f197ff9de36fcaf772ebea1666f1ba7c803ed3ce8016b215813",
+  "id": 210
+ },
+ {
+  "system": "pc",
+  "title": "Warcraft II: Battle.net Edition",
+  "file": "G:\\arcade-build\\warcraft2\\game\\Warcraft II BNE.exe",
+  "sha256": "65f5a1cd6f45d5f4bce6649fb4f2f646f1427af0780b1c252923a413f6eeb21c",
+  "id": 211
+ }
+]

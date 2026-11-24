@@ -2,4 +2,5 @@
 ## Title: Esteria Arcade
 ## SavedVariables: EsteriaArcadeDB
 ## Notes: Arcade cabinet screen. The game runs in the client's Arcade extension; this window shows it and takes the keys.
+esteria_style.lua
 EsteriaArcade.lua

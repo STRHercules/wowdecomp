@@ -6,15 +6,24 @@
 //
 // Wire (one opcode each way, first byte is the sub-command; blobs are [u32 rawSize][zlib], chunked):
 //   SMSG 0x54E  1 START  u32 session, cstr core, cstr rom, cstr title, u32 sramBytes, u32 stateBytes, u64 cabinet
+//               (rom: archive paths under Arcade\Roms\ joined by '|'; the first is the game, the rest sit beside it:
+//               a .cue's .bin, an arcade set's BIOS)
 //               2 DATA   u32 session, u8 kind, u32 total, u32 offset, bytes
 //               3 STOP   u32 session, cstr reason            (server ended it: walked away, logged out, ...)
 //               4 VIEW   u32 session, u64 cabinet, u32 frame, u8 flags, u32 total, u32 offset, bytes  (someone else's game)
 //               5 VIEW_END u32 session, u64 cabinet
+//               6 NET_ADDR u32 session, u32 address                (this cabinet's address on the arcade network)
+//               7 NET    u32 session, u32 from, u16 srcPort, u16 dstPort, bytes     (a datagram from another cabinet)
 //   CMSG 0x54D  1 DATA   u32 session, u8 kind, u32 total, u32 offset, bytes
 //               2 QUIT   u32 session                         (after the final DATA; the server then stores them)
 //               3 VIEW   u32 session, u32 frame, u8 flags, u32 total, u32 offset, bytes
+//               4 NET_JOIN u32 session                       (the core plays over the arcade network)
+//               5 NET    u32 session, u32 to, u16 srcPort, u16 dstPort, bytes       (0xFFFFFFFF = every cabinet)
 // VIEW pictures are the cabinet screen at 128x128 RGB565, zlib'd; flags bit 0 = full picture, otherwise XOR with the
 // previous one. The server relays them to the players around, so they see the game on the cabinet too.
+// The arcade network is a virtual LAN between cabinets playing the same game: a core that exports esteria_net_*
+// (Tools/ArcadeCores/starcraft) hands over the game's UDP datagrams, the server assigns addresses (10.77.x.y) and
+// relays them. StarCraft's LAN games run on it.
 #include "Extensions/Arcade/src/libretro.h"
 
 #include "Engine/Source/Base/CDataStore.h"
@@ -24,6 +33,7 @@
 #include "Engine/Source/Frame/CSimpleTexture.h"
 #include "Engine/Source/FrameScript/FrameScript.h"
 #include "Engine/Source/Gx/Gx.h"
+#include "Engine/Source/Gx/CGxDevice/CGxDevice.h"
 #include "Engine/Source/Services/Texture.h"
 #include "Engine/Source/Model2/M2Model.h"
 #include "Engine/Source/Model2/M2Shared.h"
@@ -40,8 +50,10 @@
 #pragma comment(lib, "xinput9_1_0.lib")
 
 #include <algorithm>
+#include <cctype>
 #include <cstdarg>
 #include <cstring>
+#include <deque>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -50,16 +62,19 @@
 
 namespace {
 constexpr uint32_t CMSG_ARCADE = 0x54D, SMSG_ARCADE = 0x54E;
-enum : uint8_t { S_START = 1, S_DATA = 2, S_STOP = 3, S_VIEW = 4, S_VIEW_END = 5, C_DATA = 1, C_QUIT = 2, C_VIEW = 3 };
+enum : uint8_t { S_START = 1, S_DATA = 2, S_STOP = 3, S_VIEW = 4, S_VIEW_END = 5, S_NET_ADDR = 6, S_NET = 7,
+                 C_DATA = 1, C_QUIT = 2, C_VIEW = 3, C_NET_JOIN = 4, C_NET = 5 };
+constexpr uint32_t kNetMax = 2048;            // one datagram (Tools/ArcadeCores/starcraft/ScShared.h kNetMax)
+constexpr int kNetPerFrame = 128;             // datagrams sent per client frame at most (StarCraft sends ~10 a second)
 enum : uint8_t { KIND_SRAM = 0, KIND_STATE = 1 };
 constexpr uint32_t kChunk = 8000;             // keeps every packet well under the server's 10 KiB client limit
 constexpr uint32_t kMaxBlob = 16u << 20;      // compressed; the server refuses more
-constexpr uint32_t kTexW = 512, kTexH = 1024; // widest core frame is 512 (SNES hi-res); 2x height for scanlines
-constexpr uint32_t kFrameMax = 512;           // the core's frame is clipped to 512x512
+constexpr uint32_t kTexW = 1024, kTexH = 1024; // N64 frames are 640 wide; 2x height for scanlines
+constexpr uint32_t kFrameMax = 1024;          // the core's frame is clipped to 1024x1024 (none come close)
 constexpr uint32_t kScreen = 256;             // the cabinet's in-world screen texture
 constexpr float kScreenAspect = 1.56f;        // Tools/ArcadeProp SCREEN_ASPECT: the quad over the cabinet's opening
 constexpr uint32_t kScreenType = 11;          // the quad's replaceable texture type (Tools/ArcadeProp SCREEN_TYPE)
-constexpr const char* kCabinetModel = "lionheartarcade.m2";
+constexpr const char* kCabinetModel = "arcade.m2"; // every cabinet look: World\Esteria\Arcade\<Name>Arcade.m2
 constexpr uint32_t kView = 128;               // the picture streamed to spectators (the cabinet screen, halved)
 constexpr float kViewInterval = 0.125f;       // 8 pictures a second
 constexpr uint32_t kViewKeyEvery = 16;        // a full picture every 2 s (also keeps spectators alive while paused)
@@ -109,6 +124,10 @@ struct Core {
     bool (*unserialize)(const void*, size_t);
     void* (*memoryData)(unsigned);
     size_t (*memorySize)(unsigned);
+    // optional: the arcade network (see the wire notes above)
+    void (*netAddress)(uint32_t) = nullptr;
+    unsigned (*netTake)(void*, unsigned, uint32_t*, uint16_t*, uint16_t*) = nullptr;
+    void (*netGive)(const void*, unsigned, uint32_t, uint16_t, uint16_t) = nullptr;
 
     template <class T> bool Get(T& fn, const char* name) {
         fn = reinterpret_cast<T>(GetProcAddress(dll, name));
@@ -117,6 +136,9 @@ struct Core {
     bool Load(const std::string& path) {
         dll = LoadLibraryA(path.c_str());
         if (!dll) return false;
+        Get(netAddress, "esteria_net_address");  // optional (most cores have no network)
+        Get(netTake, "esteria_net_take");
+        Get(netGive, "esteria_net_give");
         return Get(init, "retro_init") && Get(deinit, "retro_deinit") && Get(getSystemInfo, "retro_get_system_info")
             && Get(getAvInfo, "retro_get_system_av_info") && Get(setEnvironment, "retro_set_environment")
             && Get(setVideo, "retro_set_video_refresh") && Get(setAudio, "retro_set_audio_sample")
@@ -127,11 +149,25 @@ struct Core {
             && Get(unserialize, "retro_unserialize") && Get(memoryData, "retro_get_memory_data")
             && Get(memorySize, "retro_get_memory_size");
     }
+    bool Networked() const { return netAddress && netTake && netGive; }
     void Free() {
         if (dll) FreeLibrary(dll);
         dll = nullptr;
+        netAddress = nullptr;
+        netTake = nullptr;
+        netGive = nullptr;
     }
 };
+
+// Keyboard and mouse, for computer cores (DOSBox Pure): the add-on passes keys through and the cursor over the
+// picture (Arcade_SetKey, Arcade_SetPointer, Arcade_SetMouseButton). Cores read them with input_state and/or a
+// keyboard callback; DOSBox Pure needs both (a key the callback pressed is released unless input_state still holds it).
+retro_keyboard_event_t s_keyboardEvent;
+bool s_keyDown[RETROK_LAST];
+int16_t s_pointerX, s_pointerY;  // libretro pointer range, -0x7FFF..0x7FFF across the picture
+bool s_pointerIn;
+uint8_t s_mouseButtons;  // 1 left, 2 right, 4 middle
+void ReleaseKeyboard();
 
 // ---- frontend state -----------------------------------------------------------------------------------------
 enum class Phase { Idle, Receiving, Running };
@@ -149,12 +185,13 @@ struct Session {
 Core s_core;
 bool s_gameLoaded;
 std::vector<uint8_t> s_romData;
-std::string s_romTemp, s_systemDir;
+std::string s_systemDir;
 retro_pixel_format s_format = RETRO_PIXEL_FORMAT_0RGB1555;
 double s_fps = 60.0, s_clock;
 float s_aspect = 4.0f / 3.0f;
 bool s_paused;
-uint16_t s_keys;                           // RETRO_DEVICE_ID_JOYPAD_* bits from the add-on's keyboard capture
+uint32_t s_keys;  // keyboard: RETRO_DEVICE_ID_JOYPAD_* bits 0-15, then KEY_LSTICK_* / KEY_RSTICK_* (16-23)
+enum : uint32_t { KEY_LSTICK = 16, KEY_RSTICK = 20 };  // + 0 up, 1 down, 2 left, 3 right
 uint32_t s_sramHash;
 float s_sramTimer;
 
@@ -207,6 +244,21 @@ void CoreLog(retro_log_level level, const char* format, ...) {
     sExtensionMgr->Log("Arcade core: %s", text);
 }
 
+// Core options the frontend sets; every other option keeps the core's default.
+const char* CoreOption(const char* key) {
+    static const struct { const char* core; const char* key; const char* value; } options[] = {
+        {"parallel_n64", "parallel-n64-gfxplugin", "angrylion"},  // the software renderer: no GL context here
+        {"dosbox_pure", "dosbox_pure_mouse_input", "direct"},       // the game's cursor sits where the player's is
+    };
+    for (const auto& o : options)
+        if (s_session.core == o.core && key && !std::strcmp(key, o.key)) return o.value;
+    return nullptr;
+}
+
+bool s_coreShutdown = false;  // set by RETRO_ENVIRONMENT_SHUTDOWN, acted on in the frame loop (not inside the core's call)
+
+bool AnalogCore() { return s_session.core == "parallel_n64"; }  // games steered with the stick, not the d-pad
+
 bool Environment(unsigned command, void* data) {
     switch (command & ~RETRO_ENVIRONMENT_EXPERIMENTAL) {
         case RETRO_ENVIRONMENT_SET_PIXEL_FORMAT: {
@@ -232,6 +284,12 @@ bool Environment(unsigned command, void* data) {
         case RETRO_ENVIRONMENT_GET_LANGUAGE:
             if (data) *static_cast<unsigned*>(data) = RETRO_LANGUAGE_ENGLISH;
             return true;
+        case RETRO_ENVIRONMENT_GET_VARIABLE: {
+            auto* variable = static_cast<retro_variable*>(data);
+            const char* value = variable ? CoreOption(variable->key) : nullptr;
+            if (value) variable->value = value;
+            return value != nullptr;
+        }
         case RETRO_ENVIRONMENT_GET_VARIABLE_UPDATE:
             if (data) *static_cast<bool*>(data) = false;
             return true;
@@ -256,6 +314,12 @@ bool Environment(unsigned command, void* data) {
         case RETRO_ENVIRONMENT_SET_PERFORMANCE_LEVEL:
         case RETRO_ENVIRONMENT_SET_SUPPORT_ACHIEVEMENTS:
         case RETRO_ENVIRONMENT_SET_SERIALIZATION_QUIRKS:
+            return true;
+        case RETRO_ENVIRONMENT_SHUTDOWN:  // the game itself exited (a PC game's own Quit): end the session after this frame
+            s_coreShutdown = true;
+            return true;
+        case RETRO_ENVIRONMENT_SET_KEYBOARD_CALLBACK:
+            s_keyboardEvent = data ? static_cast<const retro_keyboard_callback*>(data)->callback : nullptr;
             return true;
         default:
             return false;
@@ -331,18 +395,48 @@ FMOD_RESULT F_CALLBACK AudioRead(FMOD_SOUND*, void* data, unsigned int bytes) {
     return FMOD_OK;
 }
 
+int16_t s_analog[2][2];  // [left/right stick][x/y], libretro range, +y down
+
+int16_t Axis(bool negative, bool positive) { return int16_t((positive ? 0x7FFF : 0) - (negative ? 0x7FFF : 0)); }
+
 uint16_t PadBits() {
-    uint16_t bits = s_keys;
+    uint16_t bits = uint16_t(s_keys & 0xFFFF);
+    const bool analog = AnalogCore();
+    const auto key = [](uint32_t bit) { return (s_keys >> bit) & 1; };
+    s_analog[0][0] = Axis(key(KEY_LSTICK + 2), key(KEY_LSTICK + 3));
+    s_analog[0][1] = Axis(key(KEY_LSTICK + 0), key(KEY_LSTICK + 1));
+    s_analog[1][0] = Axis(key(KEY_RSTICK + 2), key(KEY_RSTICK + 3));
+    s_analog[1][1] = Axis(key(KEY_RSTICK + 0), key(KEY_RSTICK + 1));
+    if (analog) {  // the keyboard's d-pad keys steer the stick (N64 games are played on it)
+        const auto pad = [&](unsigned id) { return (bits >> id) & 1; };
+        if (!s_analog[0][0]) s_analog[0][0] = Axis(pad(RETRO_DEVICE_ID_JOYPAD_LEFT), pad(RETRO_DEVICE_ID_JOYPAD_RIGHT));
+        if (!s_analog[0][1]) s_analog[0][1] = Axis(pad(RETRO_DEVICE_ID_JOYPAD_UP), pad(RETRO_DEVICE_ID_JOYPAD_DOWN));
+        bits &= uint16_t(~((1u << RETRO_DEVICE_ID_JOYPAD_UP) | (1u << RETRO_DEVICE_ID_JOYPAD_DOWN)
+            | (1u << RETRO_DEVICE_ID_JOYPAD_LEFT) | (1u << RETRO_DEVICE_ID_JOYPAD_RIGHT)));
+    }
     XINPUT_STATE pad = {};
     if (XInputGetState(0, &pad) == ERROR_SUCCESS) {
         const WORD b = pad.Gamepad.wButtons;
         const SHORT lx = pad.Gamepad.sThumbLX, ly = pad.Gamepad.sThumbLY;
         constexpr SHORT dead = 12000;
         auto set = [&](bool on, unsigned id) { if (on) bits |= uint16_t(1u << id); };
-        set((b & XINPUT_GAMEPAD_DPAD_UP) || ly > dead, RETRO_DEVICE_ID_JOYPAD_UP);
-        set((b & XINPUT_GAMEPAD_DPAD_DOWN) || ly < -dead, RETRO_DEVICE_ID_JOYPAD_DOWN);
-        set((b & XINPUT_GAMEPAD_DPAD_LEFT) || lx < -dead, RETRO_DEVICE_ID_JOYPAD_LEFT);
-        set((b & XINPUT_GAMEPAD_DPAD_RIGHT) || lx > dead, RETRO_DEVICE_ID_JOYPAD_RIGHT);
+        const auto stick = [](SHORT v, bool invert) {
+            const int s = std::abs(int(v)) < 7000 ? 0 : std::clamp(invert ? -int(v) : int(v), -0x7FFF, 0x7FFF);
+            return int16_t(s);
+        };
+        if (int16_t x = stick(lx, false)) s_analog[0][0] = x;
+        if (int16_t y = stick(ly, true)) s_analog[0][1] = y;
+        if (int16_t x = stick(pad.Gamepad.sThumbRX, false)) s_analog[1][0] = x;
+        if (int16_t y = stick(pad.Gamepad.sThumbRY, true)) s_analog[1][1] = y;
+        const bool stickAsPad = !analog;  // digital-only systems: the left stick also works the d-pad
+        set((b & XINPUT_GAMEPAD_DPAD_UP) || (stickAsPad && ly > dead), RETRO_DEVICE_ID_JOYPAD_UP);
+        set((b & XINPUT_GAMEPAD_DPAD_DOWN) || (stickAsPad && ly < -dead), RETRO_DEVICE_ID_JOYPAD_DOWN);
+        set((b & XINPUT_GAMEPAD_DPAD_LEFT) || (stickAsPad && lx < -dead), RETRO_DEVICE_ID_JOYPAD_LEFT);
+        set((b & XINPUT_GAMEPAD_DPAD_RIGHT) || (stickAsPad && lx > dead), RETRO_DEVICE_ID_JOYPAD_RIGHT);
+        set(pad.Gamepad.bLeftTrigger > 64, RETRO_DEVICE_ID_JOYPAD_L2);
+        set(pad.Gamepad.bRightTrigger > 64, RETRO_DEVICE_ID_JOYPAD_R2);
+        set(b & XINPUT_GAMEPAD_LEFT_THUMB, RETRO_DEVICE_ID_JOYPAD_L3);
+        set(b & XINPUT_GAMEPAD_RIGHT_THUMB, RETRO_DEVICE_ID_JOYPAD_R3);
         // Nintendo layout: the face button in the same position, not the same letter.
         set(b & XINPUT_GAMEPAD_B, RETRO_DEVICE_ID_JOYPAD_A);
         set(b & XINPUT_GAMEPAD_A, RETRO_DEVICE_ID_JOYPAD_B);
@@ -359,8 +453,30 @@ uint16_t PadBits() {
 uint16_t s_polled;
 void InputPoll() { s_polled = PadBits(); }
 
-int16_t InputState(unsigned port, unsigned device, unsigned, unsigned id) {
-    if (port != 0 || (device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
+int16_t InputState(unsigned port, unsigned device, unsigned index, unsigned id) {
+    if (port != 0) return 0;
+    switch (device & RETRO_DEVICE_MASK) {
+        case RETRO_DEVICE_KEYBOARD:
+            return id < RETROK_LAST && s_keyDown[id];
+        case RETRO_DEVICE_MOUSE:
+            if (id == RETRO_DEVICE_ID_MOUSE_LEFT) return s_mouseButtons & 1;
+            if (id == RETRO_DEVICE_ID_MOUSE_RIGHT) return (s_mouseButtons >> 1) & 1;
+            if (id == RETRO_DEVICE_ID_MOUSE_MIDDLE) return (s_mouseButtons >> 2) & 1;
+            return 0;  // no relative movement: the pointer is absolute
+        case RETRO_DEVICE_POINTER:
+            if (!s_pointerIn || index != 0) return 0;
+            if (id == RETRO_DEVICE_ID_POINTER_X) return s_pointerX;
+            if (id == RETRO_DEVICE_ID_POINTER_Y) return s_pointerY;
+            if (id == RETRO_DEVICE_ID_POINTER_PRESSED) return s_mouseButtons & 1;
+            return 0;
+        default:
+            break;
+    }
+    if ((device & RETRO_DEVICE_MASK) == RETRO_DEVICE_ANALOG) {
+        if (index == RETRO_DEVICE_INDEX_ANALOG_BUTTON) return id < 16 && ((s_polled >> id) & 1) ? 0x7FFF : 0;
+        return index < 2 && id < 2 ? s_analog[index][id] : 0;
+    }
+    if ((device & RETRO_DEVICE_MASK) != RETRO_DEVICE_JOYPAD) return 0;
     if (id == RETRO_DEVICE_ID_JOYPAD_MASK) return int16_t(s_polled);
     return id < 16 ? int16_t((s_polled >> id) & 1) : 0;
 }
@@ -415,7 +531,7 @@ uint32_t Shade(uint32_t p) {
 void UploadFrame() {
     if (!s_dirty) return;
     s_dirty = false;
-    const bool lines = s_opt.scanlines > 0.0f;
+    const bool lines = s_opt.scanlines > 0.0f && 2 * s_height <= kTexH;  // doubled lines must fit
     const float dark = 1.0f - s_opt.scanlines;
     for (uint32_t y = 0; y < s_height; ++y) {
         const uint32_t* in = s_frame.data() + y * kFrameMax;
@@ -631,6 +747,35 @@ bool SafeName(const std::string& name) {
         && std::all_of(name.begin(), name.end(), [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_'; });
 }
 
+// Saves leave at most kOutboxPerFrame packets per client frame (an N64 resume state is hundreds of packets).
+constexpr size_t kOutboxPerFrame = 12;
+std::deque<std::vector<uint8_t>> s_outbox;
+
+// The game's outgoing datagrams to the server, every frame (also while paused: a PC game keeps running).
+void SendNet() {
+    if (s_session.phase != Phase::Running || !s_gameLoaded || !s_core.Networked()) return;
+    std::vector<uint8_t> packet(1 + 4 + 4 + 2 + 2 + kNetMax);
+    packet[0] = C_NET;
+    std::memcpy(&packet[1], &s_session.id, 4);
+    for (int i = 0; i < kNetPerFrame; ++i) {
+        uint32_t to = 0;
+        uint16_t srcPort = 0, dstPort = 0;
+        const unsigned n = s_core.netTake(&packet[13], kNetMax, &to, &srcPort, &dstPort);
+        if (!n) break;
+        std::memcpy(&packet[5], &to, 4);
+        std::memcpy(&packet[9], &srcPort, 2);
+        std::memcpy(&packet[11], &dstPort, 2);
+        sExtensionMgr->SendClientMessage(CMSG_ARCADE, packet.data(), 13 + n);
+    }
+}
+
+void FlushOutbox(size_t limit) {
+    for (; limit && !s_outbox.empty(); --limit) {
+        sExtensionMgr->SendClientMessage(CMSG_ARCADE, s_outbox.front().data(), uint32_t(s_outbox.front().size()));
+        s_outbox.pop_front();
+    }
+}
+
 void SendBlob(uint8_t kind, const std::vector<uint8_t>& blob) {
     const uint32_t total = uint32_t(blob.size());
     for (uint32_t offset = 0; offset < total; offset += kChunk) {
@@ -642,7 +787,7 @@ void SendBlob(uint8_t kind, const std::vector<uint8_t>& blob) {
         std::memcpy(&packet[6], &total, 4);
         std::memcpy(&packet[10], &offset, 4);
         std::memcpy(&packet[14], blob.data() + offset, n);
-        sExtensionMgr->SendClientMessage(CMSG_ARCADE, packet.data(), uint32_t(packet.size()));
+        s_outbox.push_back(std::move(packet));
     }
 }
 
@@ -684,24 +829,101 @@ void Shutdown(bool save, const char* reason) {
         }
     }
     if (s_session.phase != Phase::Idle) {
-        uint8_t packet[5] = {C_QUIT};
+        std::vector<uint8_t> packet(5, C_QUIT);
         std::memcpy(&packet[1], &s_session.id, 4);
-        sExtensionMgr->SendClientMessage(CMSG_ARCADE, packet, sizeof(packet));
+        s_outbox.push_back(std::move(packet));  // after its uploads
     }
     StopAudio();
     RestoreCabinet(s_session.cabinet);
+    ReleaseKeyboard();          // key-ups while the core can still take them
+    s_keyboardEvent = nullptr;  // it points into the core's DLL: a later key (or release) after Free crashed the client
     if (s_gameLoaded) s_core.unloadGame();
     if (s_core.dll) s_core.deinit();
     s_core.Free();
     s_gameLoaded = false;
-    if (!s_romTemp.empty()) DeleteFileA(s_romTemp.c_str());
-    s_romTemp.clear();
     s_romData.clear();
     s_romData.shrink_to_fit();
     const bool wasActive = s_session.phase != Phase::Idle;
     s_session = Session();
     s_keys = 0;
     if (wasActive) Signal("ARCADE_STOPPED", reason ? reason : "");
+}
+
+std::vector<std::string> Split(const std::string& text, char sep) {
+    std::vector<std::string> parts;
+    size_t start = 0;
+    for (size_t at; (at = text.find(sep, start)) != std::string::npos; start = at + 1) parts.push_back(text.substr(start, at - start));
+    parts.push_back(text.substr(start));
+    return parts;
+}
+
+void MakeDirectories(const std::string& path) {  // every folder of a file path
+    for (size_t at = path.find('\\', 3); at != std::string::npos; at = path.find('\\', at + 1))
+        CreateDirectoryA(path.substr(0, at).c_str(), nullptr);
+}
+
+// A core that opens files itself gets <client>\Arcade\Cache\<path under Arcade\Roms\>, copied out of the archives
+// once; a "<file>.ok" marker holding the size says the copy finished.
+bool CacheFile(const std::string& archived, std::string& out) {
+    out = ExeDir() + "Arcade\\Cache\\" + archived.substr(std::strlen("Arcade\\Roms\\"));
+    const std::string marker = out + ".ok";
+    WIN32_FILE_ATTRIBUTE_DATA info = {};
+    if (GetFileAttributesExA(out.c_str(), GetFileExInfoStandard, &info)) {
+        char text[32] = "";
+        DWORD read = 0;
+        HANDLE m = CreateFileA(marker.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING, 0, nullptr);
+        if (m != INVALID_HANDLE_VALUE) {
+            ReadFile(m, text, sizeof(text) - 1, &read, nullptr);
+            CloseHandle(m);
+            const uint64_t cached = uint64_t(info.nFileSizeHigh) << 32 | info.nFileSizeLow;
+            // still the archive's version? (a game repacked under the same name must not keep playing the old copy)
+            SFileImpl* file = nullptr;
+            uint64_t archivedSize = cached;
+            if (SFileOpenFile(archived.c_str(), &file) && file) {
+                uint32_t high = 0;
+                const uint32_t low = SFileGetFileSize(file, &high);
+                archivedSize = uint64_t(high) << 32 | low;
+                SFileCloseFile(file);
+            }
+            if (std::strtoull(text, nullptr, 10) == cached && archivedSize == cached) return true;
+        }
+    }
+    // streamed in chunks: a whole-file load of a several-hundred-MB game file can fail the allocation (fatal in Storm)
+    SFileImpl* file = nullptr;
+    if (!SFileOpenFile(archived.c_str(), &file) || !file) {
+        sExtensionMgr->Log("Arcade: %s is not in the client's archives", archived.c_str());
+        return false;
+    }
+    uint32_t high = 0;
+    const uint32_t low = SFileGetFileSize(file, &high);
+    const uint64_t size = uint64_t(high) << 32 | low;
+    MakeDirectories(out);
+    DeleteFileA(marker.c_str());
+    HANDLE h = CreateFileA(out.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    bool ok = h != INVALID_HANDLE_VALUE;
+    std::vector<uint8_t> chunk(ok ? 8u << 20 : 0);
+    DWORD written = 0;
+    for (uint64_t done = 0; ok && done < size;) {
+        const uint32_t want = uint32_t(std::min<uint64_t>(chunk.size(), size - done));
+        uint32_t got = 0;
+        ok = SFileReadFile(file, chunk.data(), want, &got, nullptr, 0) && got == want &&
+             WriteFile(h, chunk.data(), want, &written, nullptr) && written == want;
+        done += want;
+    }
+    SFileCloseFile(file);
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+    if (!ok) {
+        sExtensionMgr->Log("Arcade: copying %s to the cache failed", archived.c_str());
+        DeleteFileA(out.c_str());
+        return false;
+    }
+    HANDLE m = CreateFileA(marker.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, 0, nullptr);
+    const std::string text = std::to_string(size);
+    if (m != INVALID_HANDLE_VALUE) {
+        WriteFile(m, text.data(), DWORD(text.size()), &written, nullptr);
+        CloseHandle(m);
+    }
+    return true;
 }
 
 bool Boot() {
@@ -715,6 +937,9 @@ bool Boot() {
     }
     s_format = RETRO_PIXEL_FORMAT_0RGB1555;
     s_core.setEnvironment(Environment);
+    s_keyboardEvent = nullptr;  // a new core registers its own (in retro_init)
+    s_coreShutdown = false;
+    ReleaseKeyboard();
     s_core.init();
     s_core.setVideo(Video);
     s_core.setAudio(AudioSample);
@@ -722,28 +947,28 @@ bool Boot() {
     s_core.setInputPoll(InputPoll);
     s_core.setInputState(InputState);
 
-    void* data = nullptr;
-    uint32_t size = 0;
-    if (!SFile::LoadFile(s_session.rom.c_str(), &data, &size, 0, nullptr) || !data) {
-        sExtensionMgr->Log("Arcade: ROM %s is not in the client's archives", s_session.rom.c_str());
-        return false;
-    }
-    s_romData.assign(static_cast<uint8_t*>(data), static_cast<uint8_t*>(data) + size);
-    SFile::Unload(data);
-
     retro_system_info system = {};
     s_core.getSystemInfo(&system);
     retro_game_info game = {};
-    const std::string file = s_session.rom.substr(s_session.rom.find_last_of('\\') + 1);
-    if (system.need_fullpath) {  // the core opens the file itself: give it a private temporary copy
-        s_romTemp = s_systemDir + "\\running_" + file;
-        HANDLE h = CreateFileA(s_romTemp.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, nullptr);
-        DWORD written = 0;
-        const bool ok = h != INVALID_HANDLE_VALUE && WriteFile(h, s_romData.data(), DWORD(s_romData.size()), &written, nullptr);
-        if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
-        if (!ok) return false;
-        game.path = s_romTemp.c_str();
+    const std::vector<std::string> files = Split(s_session.rom, '|');
+    const std::string file = files[0].substr(files[0].find_last_of('\\') + 1);
+    std::string path;
+    if (system.need_fullpath) {  // the core opens the files itself: the extract cache (companions beside the game)
+        for (size_t i = files.size(); i-- > 0;) {
+            std::string cached;
+            if (!CacheFile(files[i], cached)) return false;
+            if (i == 0) path = cached;
+        }
+        game.path = path.c_str();
     } else {
+        void* data = nullptr;
+        uint32_t size = 0;
+        if (!SFile::LoadFile(files[0].c_str(), &data, &size, 0, nullptr) || !data) {
+            sExtensionMgr->Log("Arcade: ROM %s is not in the client's archives", files[0].c_str());
+            return false;
+        }
+        s_romData.assign(static_cast<uint8_t*>(data), static_cast<uint8_t*>(data) + size);
+        SFile::Unload(data);
         game.path = file.c_str();
         game.data = s_romData.data();
         game.size = s_romData.size();
@@ -754,6 +979,11 @@ bool Boot() {
     }
     s_gameLoaded = true;
     s_core.setControllerPort(0, RETRO_DEVICE_JOYPAD);
+    if (s_core.Networked()) {  // ask for an address on the arcade network (NET_ADDR answers)
+        std::vector<uint8_t> join(5, C_NET_JOIN);
+        std::memcpy(&join[1], &s_session.id, 4);
+        s_outbox.push_back(std::move(join));
+    }
 
     retro_system_av_info av = {};
     s_core.getAvInfo(&av);
@@ -842,8 +1072,9 @@ int32_t Receive(void*, NETMESSAGE, uint32_t, CDataStore* message) {
             uint32_t sram = 0, state = 0;
             if (!str(next.core) || !str(next.rom) || !str(next.title) || !u32(sram) || !u32(state)) return 0;
             if (bytes.size() - at >= 8) std::memcpy(&next.cabinet, &bytes[at], 8);
-            if (!SafeName(next.core) || next.rom.rfind("Arcade\\Roms\\", 0) != 0 || next.rom.find("..") != std::string::npos
-                || sram > kMaxBlob || state > kMaxBlob) return 0;
+            if (!SafeName(next.core) || next.rom.find("..") != std::string::npos || sram > kMaxBlob || state > kMaxBlob) return 0;
+            for (const std::string& part : Split(next.rom, '|'))
+                if (part.rfind("Arcade\\Roms\\", 0) != 0 || part.size() <= 12) return 0;
             if (s_session.phase != Phase::Idle) Shutdown(true, "replaced");
             next.phase = Phase::Receiving;
             next.expected[KIND_SRAM] = sram;
@@ -885,6 +1116,26 @@ int32_t Receive(void*, NETMESSAGE, uint32_t, CDataStore* message) {
             u32(total);
             u32(offset);
             ReceiveView(cabinet, frame, flags, total, offset, bytes.data() + at, bytes.size() - at);
+            return 1;
+        }
+        case S_NET_ADDR: {
+            uint32_t address = 0;
+            if (session != s_session.id || !s_core.Networked() || !u32(address)) return 0;
+            s_core.netAddress(address);
+            sExtensionMgr->Log("Arcade: on the arcade network as %u.%u.%u.%u", address >> 24, address >> 16 & 255,
+                address >> 8 & 255, address & 255);
+            return 1;
+        }
+        case S_NET: {
+            uint32_t from = 0;
+            if (session != s_session.id || !s_core.Networked() || !u32(from) || bytes.size() - at < 4) return 0;
+            uint16_t srcPort, dstPort;
+            std::memcpy(&srcPort, &bytes[at], 2);
+            std::memcpy(&dstPort, &bytes[at + 2], 2);
+            at += 4;
+            const size_t n = bytes.size() - at;
+            if (n > kNetMax) return 0;
+            s_core.netGive(bytes.data() + at, unsigned(n), from, srcPort, dstPort);
             return 1;
         }
         case S_VIEW_END: {
@@ -954,21 +1205,97 @@ int SetOption(lua_State* L) {
 
 int SetFastForward(lua_State* L) { s_fast = lua_toboolean(L, 1) != 0; return 0; }
 
-// Arcade_SetButton(name, down): name is one of UP DOWN LEFT RIGHT A B X Y L R START SELECT.
+// Arcade_SetButton(name, down): UP DOWN LEFT RIGHT A B X Y L R START SELECT L2 R2 L3 R3, or a stick direction
+// (LSTICK_UP ... RSTICK_RIGHT).
 int SetButton(lua_State* L) {
     static const struct { const char* name; unsigned id; } map[] = {
         {"UP", RETRO_DEVICE_ID_JOYPAD_UP}, {"DOWN", RETRO_DEVICE_ID_JOYPAD_DOWN}, {"LEFT", RETRO_DEVICE_ID_JOYPAD_LEFT},
         {"RIGHT", RETRO_DEVICE_ID_JOYPAD_RIGHT}, {"A", RETRO_DEVICE_ID_JOYPAD_A}, {"B", RETRO_DEVICE_ID_JOYPAD_B},
         {"X", RETRO_DEVICE_ID_JOYPAD_X}, {"Y", RETRO_DEVICE_ID_JOYPAD_Y}, {"L", RETRO_DEVICE_ID_JOYPAD_L},
-        {"R", RETRO_DEVICE_ID_JOYPAD_R}, {"START", RETRO_DEVICE_ID_JOYPAD_START}, {"SELECT", RETRO_DEVICE_ID_JOYPAD_SELECT}};
+        {"R", RETRO_DEVICE_ID_JOYPAD_R}, {"START", RETRO_DEVICE_ID_JOYPAD_START}, {"SELECT", RETRO_DEVICE_ID_JOYPAD_SELECT},
+        {"L2", RETRO_DEVICE_ID_JOYPAD_L2}, {"R2", RETRO_DEVICE_ID_JOYPAD_R2}, {"L3", RETRO_DEVICE_ID_JOYPAD_L3},
+        {"R3", RETRO_DEVICE_ID_JOYPAD_R3},
+        {"LSTICK_UP", KEY_LSTICK}, {"LSTICK_DOWN", KEY_LSTICK + 1}, {"LSTICK_LEFT", KEY_LSTICK + 2}, {"LSTICK_RIGHT", KEY_LSTICK + 3},
+        {"RSTICK_UP", KEY_RSTICK}, {"RSTICK_DOWN", KEY_RSTICK + 1}, {"RSTICK_LEFT", KEY_RSTICK + 2}, {"RSTICK_RIGHT", KEY_RSTICK + 3}};
     const char* name = luaL_checkstring(L, 1);
     const bool down = lua_toboolean(L, 2) != 0;
     for (const auto& entry : map)
-        if (!std::strcmp(entry.name, name)) s_keys = down ? uint16_t(s_keys | (1u << entry.id)) : uint16_t(s_keys & ~(1u << entry.id));
+        if (!std::strcmp(entry.name, name)) s_keys = down ? (s_keys | (1u << entry.id)) : (s_keys & ~(1u << entry.id));
     return 0;
 }
 
-int ReleaseButtons(lua_State*) { s_keys = 0; return 0; }
+void ReleaseKeyboard() {
+    for (unsigned k = 0; k < RETROK_LAST; k++)
+        if (s_keyDown[k]) {
+            s_keyDown[k] = false;
+            if (s_keyboardEvent) s_keyboardEvent(false, k, 0, 0);
+        }
+    s_mouseButtons = 0;
+}
+
+int ReleaseButtons(lua_State*) {
+    s_keys = 0;
+    ReleaseKeyboard();
+    return 0;
+}
+
+// Arcade_SetKey(wowKeyName, down): a key straight to a computer core (letters, digits, F-keys, arrows, modifiers...).
+int SetKey(lua_State* L) {
+    static const struct { const char* name; unsigned key; } named[] = {
+        {"ENTER", RETROK_RETURN}, {"ESCAPE", RETROK_ESCAPE}, {"SPACE", RETROK_SPACE}, {"BACKSPACE", RETROK_BACKSPACE},
+        {"TAB", RETROK_TAB}, {"UP", RETROK_UP}, {"DOWN", RETROK_DOWN}, {"LEFT", RETROK_LEFT}, {"RIGHT", RETROK_RIGHT},
+        {"LSHIFT", RETROK_LSHIFT}, {"RSHIFT", RETROK_RSHIFT}, {"LCTRL", RETROK_LCTRL}, {"RCTRL", RETROK_RCTRL},
+        {"LALT", RETROK_LALT}, {"RALT", RETROK_RALT}, {"INSERT", RETROK_INSERT}, {"DELETE", RETROK_DELETE},
+        {"HOME", RETROK_HOME}, {"END", RETROK_END}, {"PAGEUP", RETROK_PAGEUP}, {"PAGEDOWN", RETROK_PAGEDOWN},
+        {"CAPSLOCK", RETROK_CAPSLOCK}, {"NUMLOCK", RETROK_NUMLOCK}, {"PRINTSCREEN", RETROK_PRINT},
+        {"NUMPADDIVIDE", RETROK_KP_DIVIDE}, {"NUMPADMULTIPLY", RETROK_KP_MULTIPLY}, {"NUMPADMINUS", RETROK_KP_MINUS},
+        {"NUMPADPLUS", RETROK_KP_PLUS}, {"NUMPADDECIMAL", RETROK_KP_PERIOD}};
+    const char* name = luaL_checkstring(L, 1);
+    const bool down = lua_toboolean(L, 2) != 0;
+    unsigned key = RETROK_UNKNOWN;
+    for (const auto& n : named)
+        if (!std::strcmp(n.name, name)) key = n.key;
+    const size_t len = std::strlen(name);
+    if (!key && len == 1) {  // letters, digits and punctuation are their own (lower-case) character codes
+        const char ch = char(std::tolower(static_cast<unsigned char>(name[0])));
+        if (ch > 32 && ch < 127) key = unsigned(ch);
+    } else if (!key && name[0] == 'F' && len <= 3 && std::isdigit(static_cast<unsigned char>(name[1]))) {
+        const int n = std::atoi(name + 1);
+        if (n >= 1 && n <= 15) key = RETROK_F1 + unsigned(n - 1);
+    } else if (!key && !std::strncmp(name, "NUMPAD", 6) && len == 7 && std::isdigit(static_cast<unsigned char>(name[6]))) {
+        key = RETROK_KP0 + unsigned(name[6] - '0');
+    }
+    if (!key || key >= RETROK_LAST || s_keyDown[key] == down) return 0;
+    s_keyDown[key] = down;
+    if (s_keyboardEvent) s_keyboardEvent(down, key, down && key < 128 ? key : 0, 0);
+    return 0;
+}
+
+// Arcade_SetPointer(u, v, inside): the cursor over the picture, 0..1 from its top-left.
+int SetPointer(lua_State* L) {
+    // never exactly 0: DOSBox Pure ignores a pointer at (0, 0) with no button down
+    const auto range = [](double t) { const int16_t v = int16_t(std::clamp(t * 2.0 - 1.0, -1.0, 1.0) * 0x7FFF); return v ? v : int16_t(1); };
+    s_pointerX = range(luaL_checknumber(L, 1));
+    s_pointerY = range(luaL_checknumber(L, 2));
+    s_pointerIn = lua_toboolean(L, 3) != 0;
+    return 0;
+}
+
+// Arcade_HideCursor(hide): the player's cursor off while it is over a game that draws its own (a DOS game's mouse).
+// The client shows it again whenever it changes its cursor image, so the add-on calls this every frame it applies.
+int HideCursor(lua_State* L) {
+    if (g_theGxDevicePtr) g_theGxDevicePtr->CursorSetVisible(lua_toboolean(L, 1) ? 0 : 1);
+    return 0;
+}
+
+// Arcade_SetMouseButton("LeftButton"|"RightButton"|"MiddleButton", down)
+int SetMouseButton(lua_State* L) {
+    const char* name = luaL_checkstring(L, 1);
+    const uint8_t bit = !std::strcmp(name, "LeftButton") ? 1 : !std::strcmp(name, "RightButton") ? 2
+        : !std::strcmp(name, "MiddleButton") ? 4 : 0;
+    s_mouseButtons = lua_toboolean(L, 2) ? (s_mouseButtons | bit) : (s_mouseButtons & ~bit);
+    return 0;
+}
 int Quit(lua_State*) { Shutdown(true, "quit"); return 0; }
 int SetPaused(lua_State* L) {
     s_paused = lua_toboolean(L, 1) != 0;
@@ -986,6 +1313,8 @@ public:
     Frontend() : ClientScript("ArcadeFrontend") {}
 
     void OnUpdate(float elapsed) override {
+        FlushOutbox(kOutboxPerFrame);
+        SendNet();
         UpdateViewers(elapsed);
         if (s_session.phase == Phase::Running && s_session.cabinet && (s_viewTimer += elapsed) >= kViewInterval) {
             s_viewTimer = 0;
@@ -1005,8 +1334,13 @@ public:
         if (capacity && fill < capacity / 8) s_clock += frame;
         const int speed = s_fast ? s_opt.fastSpeed : 1;
         for (int n = 0; s_clock >= frame && n < 4; ++n) {
-            for (int k = 0; k < speed; ++k) s_core.run();
+            for (int k = 0; k < speed && !s_coreShutdown; ++k) s_core.run();
             s_clock -= frame;
+        }
+        if (s_coreShutdown) {
+            s_coreShutdown = false;
+            Shutdown(true, "game exited");
+            return;
         }
         s_clock = std::min(s_clock, frame);
         ApplyCabinet();
@@ -1019,12 +1353,16 @@ public:
 
     void OnLeaveWorld() override {
         Shutdown(true, "left world");
+        FlushOutbox(SIZE_MAX);  // the connection may be gone next frame
         s_cabinetModel = nullptr;
         for (auto& [cabinet, v] : s_viewers)
             if (v->texture) HandleClose(reinterpret_cast<HOBJECT>(v->texture));
         s_viewers.clear();
     }
-    void OnShutdown() override { Shutdown(true, "shutdown"); }
+    void OnShutdown() override {
+        Shutdown(true, "shutdown");
+        FlushOutbox(SIZE_MAX);
+    }
 };
 }
 
@@ -1058,6 +1396,10 @@ void AddArcadeExtension() {
     sExtensionMgr->RegisterLuaFunction("Arcade_SetVolume", SetVolume, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("Arcade_SetOption", SetOption, FRAMESCRIPT_CONTEXTS_GAME);
     sExtensionMgr->RegisterLuaFunction("Arcade_SetFastForward", SetFastForward, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("Arcade_SetKey", SetKey, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("Arcade_SetPointer", SetPointer, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("Arcade_SetMouseButton", SetMouseButton, FRAMESCRIPT_CONTEXTS_GAME);
+    sExtensionMgr->RegisterLuaFunction("Arcade_HideCursor", HideCursor, FRAMESCRIPT_CONTEXTS_GAME);
     new Frontend();
     new CabinetScreens();
 }
