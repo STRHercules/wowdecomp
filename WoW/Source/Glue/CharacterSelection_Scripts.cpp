@@ -89,7 +89,7 @@ static int32_t Script_GetCharacterInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         lua_pushnil(L);
@@ -143,7 +143,7 @@ static int32_t Script_GetCharacterDetails(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         return 0;
@@ -172,7 +172,7 @@ static int32_t Script_DeleteCharacter(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0 && index < static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         CGlueMgr::DeleteCharacter(CCharacterSelection::s_characterList[index].m_characterInfo.m_guid);
@@ -199,7 +199,7 @@ static int32_t Script_RenameCharacter(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         return 0;
@@ -243,7 +243,7 @@ static int32_t Script_DeclineCharacter(lua_State* L) {
         }
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         return 0;
@@ -272,7 +272,7 @@ static int32_t Script_GetSelectBackgroundModel(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (SFile::IsTrial()) {
         lua_pushstring(L, "CharacterSelect");
@@ -355,7 +355,7 @@ static int32_t Script_SelectCharacter(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < -1 || index >= static_cast<int32_t>(CCharacterSelection::s_characterList.Count())) {
         index = -1;
@@ -382,7 +382,7 @@ static int32_t Script_MoveCharacter(lua_State* L) {
     }
 
     int32_t selected = CCharacterSelection::s_selectionIndex;
-    const bool moved = InnCastMoveEntry(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, static_cast<int32_t>(lua_tonumber(L, 2)) - 1, &selected);
+    const bool moved = InnCastMoveEntry(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1, &selected);
     lua_pushnumber(L, selected + 1);
     lua_pushboolean(L, moved);
     return 2;

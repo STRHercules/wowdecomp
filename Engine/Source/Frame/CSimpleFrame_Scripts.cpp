@@ -382,7 +382,7 @@ static int32_t Script_SetFrameLevel(lua_State* L) {
         return 0;
     }
 
-    int32_t level = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t level = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
     if (level < 0) {
         const char* name = frame->GetName();
@@ -945,7 +945,7 @@ static int32_t Script_SetID(lua_State* L) {
         return 0;
     }
 
-    frame->m_id = static_cast<int32_t>(lua_tonumber(L, 2));
+    frame->m_id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     return 0;
 }
 

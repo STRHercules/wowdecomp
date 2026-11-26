@@ -737,11 +737,11 @@ namespace
         }
 
         lua_rawgeti(lua, -1, 1);
-        const int id = static_cast<int>(lua_tonumber(lua, -1));
+        const int id = static_cast<int>(static_cast<int64_t>(lua_tonumber(lua, -1)));
         lua_pop(lua, 1);
 
         lua_rawgeti(lua, -1, 2);
-        const int delta = static_cast<int>(lua_tonumber(lua, -1));
+        const int delta = static_cast<int>(static_cast<int64_t>(lua_tonumber(lua, -1)));
         lua_pop(lua, 2);
 
         ClearGlobal("Manastorm_TalentPick");

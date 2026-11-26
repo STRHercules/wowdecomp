@@ -685,7 +685,7 @@ static int32_t Script_GetBattlegroundInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (!player || index < 0 || index >= static_cast<int32_t>(CGBattlefieldInfo::m_battlegroundTypes.m_count)) {
@@ -755,7 +755,7 @@ static int32_t Script_GetBattlefieldScore(lua_State* L) {
     }
 
     lua_checkstack(L, 12);
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     BattlefieldScore* score;
     NameCache* name;
     WOWGUID none = WOWGUID();
@@ -806,7 +806,7 @@ static int32_t Script_GetBattlefieldScore(lua_State* L) {
 static int32_t Script_SetBattlefieldScoreFaction(lua_State* L) {
     int32_t faction = -1;
 
-    if (!lua_isnumber(L, 1) || (faction = static_cast<int32_t>(lua_tonumber(L, 1)), faction == -1) || static_cast<uint32_t>(faction) < 2) {
+    if (!lua_isnumber(L, 1) || (faction = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))), faction == -1) || static_cast<uint32_t>(faction) < 2) {
         CGBattlefieldInfo::m_logFilterFaction = faction;
         BattlefieldNameCacheCallback();
     }
@@ -822,7 +822,7 @@ static int32_t Script_GetBattlefieldPosition(lua_State* L) {
         return 0;
     }
 
-    int32_t remaining = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t remaining = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     uint32_t index;
     WOWGUID guid;
 
@@ -887,7 +887,7 @@ static int32_t Script_GetBattlefieldVehicleInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     WOWGUID guid = index >= CGBattlefieldInfo::m_numVehicles ? WOWGUID() : CGBattlefieldInfo::m_vehicleGuids[index];
     CGUnit_C* unit = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_UNIT, __FILE__, __LINE__));
 
@@ -933,7 +933,7 @@ static int32_t Script_AcceptBattlefieldPort(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     BattlefieldStatus* status;
 
     if (index >= 2 || !(status = &CGBattlefieldInfo::m_status[index])) {
@@ -1012,7 +1012,7 @@ static int32_t Script_GetBattlefieldFlagPosition(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     WOWGUID carrier = CGBattlefieldInfo::GetFlagCarrier(index);
     C3Vector position(0.0f, 0.0f, 0.0f);
 
@@ -1114,7 +1114,7 @@ static int32_t Script_SortBattlefieldScoreData(lua_State* L) {
 // VERIFY: 991cd414 auto
 // OFFSET: 0x0054E160
 static int32_t Script_BattlefieldMgrEntryInviteResponse(lua_State* L) {
-    int32_t battleId = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t battleId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint8_t accept = static_cast<uint8_t>(StringToBOOL(L, 2, 0));
     CGBattlefieldInfo::BattlefieldMgrEntryInviteResponse(battleId, accept);
     return 0;
@@ -1123,14 +1123,14 @@ static int32_t Script_BattlefieldMgrEntryInviteResponse(lua_State* L) {
 // VERIFY: cd03887f auto
 // OFFSET: 0x0054E1A0
 static int32_t Script_BattlefieldMgrQueueRequest(lua_State* L) {
-    CGBattlefieldInfo::BattlefieldMgrQueueRequest(static_cast<int32_t>(lua_tonumber(L, 1)));
+    CGBattlefieldInfo::BattlefieldMgrQueueRequest(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
     return 0;
 }
 
 // VERIFY: fe4c5bdd auto
 // OFFSET: 0x0054E1C0
 static int32_t Script_BattlefieldMgrQueueInviteResponse(lua_State* L) {
-    int32_t battleId = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t battleId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint8_t accept = static_cast<uint8_t>(StringToBOOL(L, 2, 0));
     CGBattlefieldInfo::BattlefieldMgrQueueInviteResponse(battleId, accept);
     return 0;
@@ -1139,7 +1139,7 @@ static int32_t Script_BattlefieldMgrQueueInviteResponse(lua_State* L) {
 // VERIFY: de36536c auto
 // OFFSET: 0x0054E200
 static int32_t Script_BattlefieldMgrExitRequest(lua_State* L) {
-    CGBattlefieldInfo::BattlefieldMgrExitRequest(static_cast<int32_t>(lua_tonumber(L, 1)));
+    CGBattlefieldInfo::BattlefieldMgrExitRequest(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
     return 0;
 }
 

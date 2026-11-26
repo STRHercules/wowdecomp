@@ -63,8 +63,8 @@ static int32_t Script_GMSurveyAnswerSubmit(lua_State* L) {
         return 0;
     }
 
-    uint32_t question = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    int32_t rank = static_cast<int32_t>(lua_tonumber(L, 2));
+    uint32_t question = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    int32_t rank = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     const char* comment = lua_tolstring(L, 3, nullptr);
 
     if (question >= 10) {
@@ -96,7 +96,7 @@ static int32_t Script_GMSurveyQuestion(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     const char* question;
 
     if (index >= 1 && index <= 10 && (question = CGGMSurveyInfo::GetQuestion(index))) {
@@ -116,7 +116,7 @@ static int32_t Script_GMSurveyAnswer(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     double answerIndex = lua_tonumber(L, 2);
     const char* answer;
 
@@ -138,7 +138,7 @@ static int32_t Script_GMSurveyNumAnswers(lua_State* L) {
     }
 
     int32_t count = 0;
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (index >= 1 && index <= 10) {
         count = CGGMSurveyInfo::GetNumAnswers(index);
@@ -156,7 +156,7 @@ static int32_t Script_GMReportLag(lua_State* L) {
         return 0;
     }
 
-    CGGMReportLag::Submit(static_cast<int32_t>(lua_tonumber(L, 1)));
+    CGGMReportLag::Submit(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
     return 0;
 }
 

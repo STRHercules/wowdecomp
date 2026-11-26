@@ -374,8 +374,8 @@ static int32_t Script_SetGuildBankTabPermissions(lua_State* L) {
         return 0;
     }
 
-    uint8_t tab = static_cast<uint8_t>(lua_tonumber(L, 1)) - 1;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint8_t tab = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     int32_t enabled = StringToBOOL(L, 3, 0);
     uint32_t rights = tab < 6 ? CGGuildInfo::m_rankInfo[s_guildControlRank].m_bankTabRights[tab] : 0;
     uint32_t flag = s_guildBankTabPermissionFlags[index];
@@ -549,7 +549,7 @@ static int32_t Script_GuildControlSetRank(lua_State* L) {
         return 0;
     }
 
-    SetGuildControlRank(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    SetGuildControlRank(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -568,7 +568,7 @@ static int32_t Script_GetGuildRosterLastOnline(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     GuildMemberInfo* member;
 
     if (index >= CGGuildInfo::m_numMembers || !(member = CGGuildInfo::m_roster.m_data[index]) || member->m_online) {
@@ -603,7 +603,7 @@ static int32_t Script_GuildRosterSetPublicNote(lua_State* L) {
     const char* note = lua_tolstring(L, 2, nullptr);
     char scrubbed[128];
     ScrubString(note, scrubbed, 32, sizeof(scrubbed), 1);
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= CGGuildInfo::m_numMembers) {
         return 0;
@@ -642,7 +642,7 @@ static int32_t Script_GuildRosterSetOfficerNote(lua_State* L) {
     const char* note = lua_tolstring(L, 2, nullptr);
     char scrubbed[128];
     ScrubString(note, scrubbed, 32, sizeof(scrubbed), 1);
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= CGGuildInfo::m_numMembers) {
         return 0;
@@ -806,7 +806,7 @@ static int32_t Script_GetGuildBankTabPermissions(lua_State* L) {
         return 0;
     }
 
-    uint8_t tab = static_cast<uint8_t>(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    uint8_t tab = static_cast<uint8_t>(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     uint32_t rights = tab < 6 ? CGGuildInfo::m_rankInfo[s_guildControlRank].m_bankTabRights[tab] : 0;
 
     if (rights & 0x1) {
@@ -865,7 +865,7 @@ static int32_t Script_GuildControlGetRankName(lua_State* L) {
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
     char name[64] = { 0 };
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (player && index < CGGuildInfo::m_numRanks) {
         GuildStats_C* stats = g_guildInfoCache.GetRecord(player->m_player->m_playerGuildid, player->m_obj->m_guid, GuildInfoCacheCallback, nullptr, false);
@@ -888,7 +888,7 @@ static int32_t Script_GetGuildEventInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     GuildEventLogEntry* entry;
 
     if (index >= static_cast<uint32_t>(CGGuildInfo::m_numEventLogEntries) || !(entry = &CGGuildInfo::m_eventLog[index])) {

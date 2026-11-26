@@ -238,7 +238,7 @@ static int32_t Script_CollapseSkillHeader(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         CGSkillInfo::CollapseHeader(index);
@@ -258,7 +258,7 @@ static int32_t Script_ExpandSkillHeader(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         CGSkillInfo::ExpandHeader(index);

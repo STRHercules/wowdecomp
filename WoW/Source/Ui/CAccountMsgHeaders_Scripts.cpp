@@ -167,7 +167,7 @@ static int32_t Script_AccountMsg_GetIndexNextUnreadMsg(lua_State* L) {
     int32_t index = -1;
 
     if (lua_isnumber(L, 1)) {
-        index = static_cast<int32_t>(lua_tonumber(L, 1));
+        index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     }
 
     int32_t next = g_accountMsgHeaders.GetIndexNextUnreadMsg(index);
@@ -189,7 +189,7 @@ static int32_t Script_AccountMsg_SetMsgRead(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (index < 0 || index >= g_accountMsgHeaders.m_count) {
         luaL_error(L, "Usage: AccountMsg_SetMsgRead(number) failed because the number is out of range");

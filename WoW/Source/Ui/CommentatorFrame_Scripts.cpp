@@ -53,7 +53,7 @@ static int32_t Script_CommentatorToggleMode(lua_State* L) {
 // OFFSET: 0x005690A0
 static int32_t Script_CommentatorSetMode(lua_State* L) {
     if (lua_isnumber(L, 1)) {
-        int32_t mode = static_cast<int32_t>(lua_tonumber(L, 1));
+        int32_t mode = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
         WDataStore msg;
         msg.Put(static_cast<uint32_t>(CMSG_COMMENTATOR_ENABLE));
 
@@ -119,7 +119,7 @@ static int32_t Script_CommentatorGetSkirmishQueuePlayerInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (static_cast<uint32_t>(index - 1) >= CGCommentator::s_Commentator.m_skirmishQueue.Count()) {
         return 0;
@@ -930,7 +930,7 @@ static int32_t Script_CommentatorSetSkirmishMatchmakingMode(lua_State* L) {
     }
 
     if (lua_isnumber(L, 1)) {
-        uint8_t mode = static_cast<int32_t>(lua_tonumber(L, 1));
+        uint8_t mode = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
         WDataStore msg;
         msg.Put(static_cast<uint32_t>(CMSG_COMMENTATOR_SKIRMISH_QUEUE_COMMAND));
         msg.Put(static_cast<uint32_t>(0));
@@ -996,7 +996,7 @@ static int32_t Script_CommentatorStartSkirmishMatch(lua_State* L) {
         int32_t team = -1;
 
         if (lua_isnumber(L, 3)) {
-            team = static_cast<int32_t>(lua_tonumber(L, 3));
+            team = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
         }
 
         WDataStore msg;

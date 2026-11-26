@@ -86,8 +86,8 @@ static int32_t Script_GetNumRoutes(lua_State* L) {
 // VERIFY: d1dc00e8 manual
 // OFFSET: 0x00590F40
 static int32_t Script_TaxiGetSrcX(lua_State* L) {
-    int32_t line = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
-    int32_t node = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t line = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
+    int32_t node = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     float value;
 
     if (node < 0 || node >= CGTaxiMap::m_numNodes || line < 0 || line >= static_cast<int32_t>(CGTaxiMap::m_routeLines.m_data[node].Count())) {
@@ -103,8 +103,8 @@ static int32_t Script_TaxiGetSrcX(lua_State* L) {
 // VERIFY: 7476c291 manual
 // OFFSET: 0x00590FE0
 static int32_t Script_TaxiGetSrcY(lua_State* L) {
-    int32_t line = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
-    int32_t node = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t line = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
+    int32_t node = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     float value;
 
     if (node < 0 || node >= CGTaxiMap::m_numNodes || line < 0 || line >= static_cast<int32_t>(CGTaxiMap::m_routeLines.m_data[node].Count())) {
@@ -120,8 +120,8 @@ static int32_t Script_TaxiGetSrcY(lua_State* L) {
 // VERIFY: 8a72d78b manual
 // OFFSET: 0x00591080
 static int32_t Script_TaxiGetDestX(lua_State* L) {
-    int32_t line = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
-    int32_t node = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t line = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
+    int32_t node = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     float value;
 
     if (node < 0 || node >= CGTaxiMap::m_numNodes || line < 0 || line >= static_cast<int32_t>(CGTaxiMap::m_routeLines.m_data[node].Count())) {
@@ -137,8 +137,8 @@ static int32_t Script_TaxiGetDestX(lua_State* L) {
 // VERIFY: 9f2e4158 manual
 // OFFSET: 0x00591120
 static int32_t Script_TaxiGetDestY(lua_State* L) {
-    int32_t line = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
-    int32_t node = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t line = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
+    int32_t node = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     float value;
 
     if (node < 0 || node >= CGTaxiMap::m_numNodes || line < 0 || line >= static_cast<int32_t>(CGTaxiMap::m_routeLines.m_data[node].Count())) {

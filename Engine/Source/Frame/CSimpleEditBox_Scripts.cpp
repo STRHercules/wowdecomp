@@ -372,13 +372,13 @@ static int32_t Script_HighlightText(lua_State* L) {
     int32_t start = 0;
 
     if (lua_isnumber(L, 2)) {
-        start = static_cast<int32_t>(lua_tonumber(L, 2));
+        start = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     }
 
     int32_t end = -1;
 
     if (lua_isnumber(L, 3)) {
-        end = static_cast<int32_t>(lua_tonumber(L, 3));
+        end = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
     }
 
     editBox->HighlightText(start, end);
@@ -480,7 +480,7 @@ static int32_t Script_SetMaxBytes(lua_State* L) {
         return 0;
     }
 
-    int32_t maxBytes = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t maxBytes = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     editBox->m_textMaxLength = maxBytes <= 0 ? -1 : maxBytes - 1;
     return 0;
 }
@@ -503,7 +503,7 @@ static int32_t Script_SetMaxLetters(lua_State* L) {
         return 0;
     }
 
-    editBox->m_textMaxLetters = static_cast<int32_t>(lua_tonumber(L, 2));
+    editBox->m_textMaxLetters = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     return 0;
 }
 
@@ -538,7 +538,7 @@ static int32_t Script_SetHistoryLines(lua_State* L) {
     CSimpleEditBox* editBox = static_cast<CSimpleEditBox*>(FrameScript_GetObjectThis(L, CSimpleEditBox::GetObjectType()));
     int32_t lines;
 
-    if (!lua_isnumber(L, 2) || (lines = static_cast<int32_t>(lua_tonumber(L, 2))) <= 0) {
+    if (!lua_isnumber(L, 2) || (lines = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)))) <= 0) {
         const char* name = editBox->GetName();
         luaL_error(L, "Usage: %s:SetHistoryLines(numLines)", name ? name : "<unnamed>");
         return 0;
@@ -608,7 +608,7 @@ static int32_t Script_SetCursorPosition(lua_State* L) {
         return 0;
     }
 
-    editBox->SetCursorPosition(static_cast<int32_t>(lua_tonumber(L, 2)));
+    editBox->SetCursorPosition(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
     return 0;
 }
 

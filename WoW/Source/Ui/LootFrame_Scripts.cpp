@@ -29,7 +29,7 @@ static int32_t Script_GetLootRollTimeLeft(lua_State* L) {
         return 0;
     }
 
-    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(lua_tonumber(L, 1)));
+    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (roll) {
         lua_pushnumber(L, static_cast<int32_t>(roll->m_expireTime - OsGetAsyncTimeMs()));
@@ -48,7 +48,7 @@ static int32_t Script_LootSlotIsItem(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint32_t index = slot - 1;
 
     if (CGLootInfo::m_lootObj) {
@@ -79,7 +79,7 @@ static int32_t Script_LootSlotIsCoin(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGLootInfo::m_lootObj && CGLootInfo::m_coins > 0 && slot == 1) {
         lua_pushnumber(L, 1.0);
@@ -112,7 +112,7 @@ static int32_t Script_GetLootRollItemInfo(lua_State* L) {
         return 0;
     }
 
-    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(lua_tonumber(L, 1)));
+    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!roll) {
         return 0;
@@ -208,7 +208,7 @@ static int32_t Script_GetLootSlotInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     lua_pushstring(L, CGLootInfo::GetLootSlotTexture(slot));
     char text[256];
     CGLootInfo::GetLootSlotText(text, sizeof(text), slot);
@@ -246,7 +246,7 @@ static int32_t Script_GetLootSlotLink(lua_State* L) {
     }
 
     char link[1024];
-    lua_pushstring(L, CGLootInfo::GetLootSlotLink(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, link, sizeof(link)));
+    lua_pushstring(L, CGLootInfo::GetLootSlotLink(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, link, sizeof(link)));
     return 1;
 }
 
@@ -265,7 +265,7 @@ static int32_t Script_GetLootRollItemLink(lua_State* L) {
         return 0;
     }
 
-    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(lua_tonumber(L, 1)));
+    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!roll) {
         return 0;
@@ -290,8 +290,8 @@ static int32_t Script_RollOnLoot(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
-    LootRoll(id, static_cast<int32_t>(lua_tonumber(L, 2)), false);
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    LootRoll(id, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))), false);
     return 0;
 }
 
@@ -303,8 +303,8 @@ static int32_t Script_ConfirmLootRoll(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
-    LootRoll(id, static_cast<int32_t>(lua_tonumber(L, 2)), true);
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    LootRoll(id, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))), true);
     return 0;
 }
 
@@ -316,7 +316,7 @@ static int32_t Script_LootSlot(lua_State* L) {
         return 0;
     }
 
-    CGLootInfo::LootSlot(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGLootInfo::LootSlot(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -328,7 +328,7 @@ static int32_t Script_ConfirmLootSlot(lua_State* L) {
         return 0;
     }
 
-    CGLootInfo::ConfirmLootSlot(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGLootInfo::ConfirmLootSlot(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -340,8 +340,8 @@ static int32_t Script_GiveMasterLoot(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    WOWGUID target = GetMasterLootCandidate(static_cast<int32_t>(lua_tonumber(L, 2)) - 1);
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    WOWGUID target = GetMasterLootCandidate(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1);
 
     if (target) {
         CGLootInfo::GiveMasterLoot(slot, target);

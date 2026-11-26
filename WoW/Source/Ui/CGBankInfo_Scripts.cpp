@@ -23,7 +23,7 @@ static int32_t Script_BankButtonIDToInvSlotID(lua_State* L) {
         return 0;
     }
 
-    int32_t button = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t button = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t slot;
 
     if (lua_isnumber(L, 2)) {

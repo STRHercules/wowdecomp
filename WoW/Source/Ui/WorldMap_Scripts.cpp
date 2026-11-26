@@ -882,7 +882,7 @@ static int32_t Script_SetMapZoom(lua_State* L) {
         return 0;
     }
 
-    int32_t continent = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t continent = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if ((continent > 0 && static_cast<uint32_t>(continent) >= CGWorldMap::m_continents.m_count) || continent < -2) {
         luaL_error(L, "Usage: SetMapZoom(continentIndex [,zoneIndex]) .. requested continent out of bounds");
@@ -1111,7 +1111,7 @@ static int32_t Script_SetMapByID(lua_State* L) {
         return 0;
     }
 
-    int32_t mapID = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t mapID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     WorldMapAreaRec* area = g_worldMapAreaDB.GetRecord(mapID);
 
     if (!area) {
@@ -1195,7 +1195,7 @@ static int32_t Script_ClickLandmark(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     DungeonMapRec* dungeonMap = g_dungeonMapDB.GetRecord(id);
 
     if (!dungeonMap) {
@@ -1222,7 +1222,7 @@ static int32_t Script_SetDungeonMapLevel(lua_State* L) {
         return 0;
     }
 
-    int32_t level = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t level = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     WorldMapAreaRec* area = g_worldMapAreaDB.GetRecord(CGWorldMap::m_currentOrphanZone);
 
     if (area && area->m_defaultDungeonFloor == -1) {

@@ -120,7 +120,7 @@ static int32_t Script_GetContainerNumSlots(lua_State* L) {
     double slots = 0.0;
 
     if (ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__)) {
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
         if (index == -1) {
             slots = 16.0;
@@ -615,7 +615,7 @@ static int32_t Script_SetBagPortraitTexture(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (slot < 0) {
         return 0;
@@ -798,7 +798,7 @@ static int32_t Script_SplitContainerItem(lua_State* L) {
         return 0;
     }
 
-    int32_t amount = static_cast<int32_t>(lua_tonumber(L, 3));
+    int32_t amount = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
 
     if (amount < 1 || amount > item->m_item->m_itemFieldStackCount) {
         return 0;
@@ -1054,7 +1054,7 @@ static int32_t Script_GetContainerItemPurchaseItem(lua_State* L) {
         return 0;
     }
 
-    int32_t wanted = static_cast<int32_t>(lua_tonumber(L, 3)) - 1;
+    int32_t wanted = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1;
     int32_t found = 0;
     uint32_t i;
 
@@ -1105,7 +1105,7 @@ static int32_t Script_ContainerRefundItemPurchase(lua_State* L) {
 
     CGItem_C* item;
 
-    if (static_cast<int32_t>(lua_tonumber(L, 3))) {
+    if (static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)))) {
         CGBag_C* bag = &ClntObjMgrGetActivePlayerObj()->m_bag;
         uint32_t slot = static_cast<uint32_t>(lua_tonumber(L, 2) - 1);
 

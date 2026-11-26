@@ -271,7 +271,7 @@ static int32_t Script_GetRaidRosterInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     CGRaidMember* member;
     NameCache* name;
     WOWGUID none = WOWGUID();
@@ -553,7 +553,7 @@ static int32_t Script_SetRaidTarget(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<uint8_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (index < 8) {
         if (guid && !CGRaidInfo::IsPlayerOrPetInRaid(guid) && !CGPartyInfo::IsPlayerOrPetInParty(guid)) {

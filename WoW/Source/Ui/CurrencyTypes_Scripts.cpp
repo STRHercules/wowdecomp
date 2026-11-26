@@ -31,7 +31,7 @@ static int32_t Script_GetBackpackCurrencyInfo(lua_State* L) {
         return 0;
     }
 
-    CurrencyTypesRec* currency = CGCurrencyTypes::GetBackpackCurrencyInfo(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CurrencyTypesRec* currency = CGCurrencyTypes::GetBackpackCurrencyInfo(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     WOWGUID none = WOWGUID();
     ItemStats_C* stats;
 
@@ -102,7 +102,7 @@ int32_t Script_GetCurrencyListInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= CGCurrencyTypes::m_listSize) {
         lua_pushnil(L);
@@ -190,8 +190,8 @@ static int32_t Script_ExpandCurrencyList(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    CGCurrencyTypes::SetCategoryExpand(index, static_cast<int32_t>(lua_tonumber(L, 2)));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    CGCurrencyTypes::SetCategoryExpand(index, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
     CGCurrencyTypes::BuildDisplayList();
     return 0;
 }
@@ -204,8 +204,8 @@ static int32_t Script_SetCurrencyUnused(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    CGCurrencyTypes::SetUnused(index, static_cast<int32_t>(lua_tonumber(L, 2)));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    CGCurrencyTypes::SetUnused(index, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
     CGCurrencyTypes::BuildDisplayList();
     return 0;
 }
@@ -218,8 +218,8 @@ static int32_t Script_SetCurrencyBackpack(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    CGCurrencyTypes::SetBackpack(index, static_cast<int32_t>(lua_tonumber(L, 2)));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    CGCurrencyTypes::SetBackpack(index, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
     CGCurrencyTypes::BuildDisplayList();
     return 0;
 }

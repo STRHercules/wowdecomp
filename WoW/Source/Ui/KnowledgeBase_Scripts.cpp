@@ -35,8 +35,8 @@ static int32_t Script_KBSystem_GetServerNotice(lua_State* L) {
 // VERIFY: 64710f8f auto
 // OFFSET: 0x00551720
 static int32_t Script_KBSetup_BeginLoading(lua_State* L) {
-    int32_t numArticles = static_cast<int32_t>(lua_tonumber(L, 1));
-    int32_t pageNumber = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t numArticles = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    int32_t pageNumber = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     g_KnowledgeBaseSetup.BeginLoading(numArticles, pageNumber);
     return 0;
 }
@@ -114,7 +114,7 @@ static int32_t Script_KBSetup_GetLanguageData(lua_State* L) {
         return 0;
     }
 
-    XMLNode* node = g_KnowledgeBaseSetup.GetLanguage(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    XMLNode* node = g_KnowledgeBaseSetup.GetLanguage(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (!node) {
         luaL_error(L, "KBSetup_GetLanguageData() called with invalid category index");
@@ -134,7 +134,7 @@ static int32_t Script_KBSetup_GetCategoryData(lua_State* L) {
         return 0;
     }
 
-    XMLNode* node = g_KnowledgeBaseSetup.GetCategoryNode(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    XMLNode* node = g_KnowledgeBaseSetup.GetCategoryNode(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (!node) {
         luaL_error(L, "KBSetup_GetCategoryData() called with invalid category index");
@@ -154,7 +154,7 @@ static int32_t Script_KBSetup_GetArticleHeaderData(lua_State* L) {
         return 0;
     }
 
-    XMLNode* node = g_KnowledgeBaseSetup.GetArticleHeader(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    XMLNode* node = g_KnowledgeBaseSetup.GetArticleHeader(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (!node) {
         luaL_error(L, "KBSetup_GetArticleHeaderData() called with invalid article header index");
@@ -188,7 +188,7 @@ static int32_t Script_KBQuery_GetArticleHeaderData(lua_State* L) {
         return 0;
     }
 
-    XMLNode* node = g_KnowledgeBaseQuery.GetArticleHeader(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    XMLNode* node = g_KnowledgeBaseQuery.GetArticleHeader(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (!node) {
         luaL_error(L, "KBQuery_GetArticleHeaderData() called with invalid article header index");
@@ -217,8 +217,8 @@ static int32_t Script_KBQuery_GetTotalArticleCount(lua_State* L) {
 // VERIFY: f4fc784c auto
 // OFFSET: 0x00551D60
 static int32_t Script_KBArticle_BeginLoading(lua_State* L) {
-    int32_t articleId = static_cast<int32_t>(lua_tonumber(L, 1));
-    int32_t searchType = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t articleId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    int32_t searchType = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     g_KnowledgeBaseArticle.BeginLoading(articleId, searchType);
     return 0;
 }
@@ -273,8 +273,8 @@ static int32_t Script_KBSetup_GetSubCategoryData(lua_State* L) {
         return 0;
     }
 
-    int32_t subCategory = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
-    int32_t category = static_cast<int32_t>(lua_tonumber(L, 1) - 1.0);
+    int32_t subCategory = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
+    int32_t category = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
     XMLNode* node = g_KnowledgeBaseSetup.GetSubCategory(category, subCategory);
 
     if (!node) {
@@ -307,10 +307,10 @@ static int32_t Script_KBQuery_BeginLoading(lua_State* L) {
         return 0;
     }
 
-    int32_t category = static_cast<int32_t>(lua_tonumber(L, 2));
-    int32_t subCategory = static_cast<int32_t>(lua_tonumber(L, 3));
-    int32_t numArticles = static_cast<int32_t>(lua_tonumber(L, 4));
-    int32_t pageNumber = static_cast<int32_t>(lua_tonumber(L, 5));
+    int32_t category = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
+    int32_t subCategory = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
+    int32_t numArticles = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 4)));
+    int32_t pageNumber = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 5)));
     int32_t categoryId = -1;
 
     if (subCategory || category) {

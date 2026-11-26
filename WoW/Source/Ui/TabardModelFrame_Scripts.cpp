@@ -98,14 +98,14 @@ static int32_t Script_CycleVariation(lua_State* L) {
         return 0;
     }
 
-    uint32_t variation = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t variation = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (variation >= 5) {
         luaL_error(L, "Invalid variationIndex in CycleVariation");
         return 0;
     }
 
-    frame->CycleVariation(variation, static_cast<int32_t>(lua_tonumber(L, 3)));
+    frame->CycleVariation(variation, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))));
     return 0;
 }
 

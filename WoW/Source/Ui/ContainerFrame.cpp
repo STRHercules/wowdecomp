@@ -138,8 +138,8 @@ bool CGContainerInfo::GetLuaBagAndSlot(lua_State* L, CGBag_C** bag, int32_t* slo
 
     *bag = nullptr;
     *bank = 0;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    *slot = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    *slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (index >= 0) {
         if (index < 11) {

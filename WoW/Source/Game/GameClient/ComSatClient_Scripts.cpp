@@ -57,7 +57,7 @@ static int32_t Script_VoiceEnumerateOutputDevices(lua_State* L) {
         return 1;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (comsat->EnumerateOutputDevices(devices, 20) <= index) {
         lua_pushnil(L);
@@ -86,7 +86,7 @@ static int32_t Script_VoiceEnumerateCaptureDevices(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (comsat->EnumerateCaptureDevices(devices, 20) <= index) {
         lua_pushnil(L);
@@ -344,7 +344,7 @@ static int32_t Script_SetActiveVoiceChannelBySessionID(lua_State* L) {
         return 1;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (id <= 0) {
         CGChat::SetActiveVoiceSession(nullptr, 4, -1);

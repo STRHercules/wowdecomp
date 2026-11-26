@@ -2255,7 +2255,7 @@ static int32_t Script_CanEjectPassengerFromSeat(lua_State* L) {
         return 0;
     }
 
-    int32_t seatIndex = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t seatIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     CGUnit_C* mover = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(CGUnit_C::s_activeMover, TYPEMASK_UNIT, __FILE__, __LINE__));
     CGUnit_C* root;
     const CVehicle_C* vehicle;
@@ -2906,11 +2906,11 @@ static int32_t Script_GetPVPRankInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t rank = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t rank = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t faction = 0;
 
     if (lua_isnumber(L, 2)) {
-        faction = static_cast<int32_t>(lua_tonumber(L, 2));
+        faction = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     } else {
         CGPlayer_C* player = nullptr;
         bool valid = true;
@@ -2972,7 +2972,7 @@ static int32_t Script_GetRuneType(lua_State* L) {
         luaL_error(L, "Usage: Script_GetRuneType(slot)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (static_cast<uint32_t>(index) > 7 || !CGRuneInfo::IsRuneIndexValid(index)) {
         return 0;
@@ -3195,7 +3195,7 @@ static int32_t Script_GetCombatRatingBonus(lua_State* L) {
         return 0;
     }
 
-    int32_t rating = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t rating = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (static_cast<uint32_t>(rating - 1) >= 25) {
         luaL_error(L, "ratingIndex is in the range 1 .. %d", 25);
@@ -3218,8 +3218,8 @@ static int32_t Script_GetAttackPowerForStat(lua_State* L) {
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
     if (player) {
-        int32_t stat = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-        int32_t value = static_cast<int32_t>(lua_tonumber(L, 2));
+        int32_t stat = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+        int32_t value = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
         lua_pushnumber(L, player->GetAttackPowerContributionFromStat(stat, value));
     } else {
         lua_pushnumber(L, 0.0);
@@ -4106,7 +4106,7 @@ static int32_t Script_EjectPassengerFromSeat(lua_State* L) {
         return 0;
     }
 
-    int32_t seatIndex = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t seatIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     CGUnit_C* mover = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(CGUnit_C::s_activeMover, TYPEMASK_UNIT, __FILE__, __LINE__));
 
     if (!mover) {
@@ -4249,7 +4249,7 @@ static int32_t Script_GetVehicleUIIndicator(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (s_vehicleUIIndicatorID != id) {
         CacheVehicleUIIndicatorRec(id);
@@ -4272,8 +4272,8 @@ static int32_t Script_GetVehicleUIIndicatorSeat(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (s_vehicleUIIndicatorID != id) {
         CacheVehicleUIIndicatorRec(id);
@@ -4299,7 +4299,7 @@ static int32_t Script_UnitVehicleSeatInfo(lua_State* L) {
         unit = static_cast<CGUnit_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_UNIT, __FILE__, __LINE__));
     }
 
-    int32_t seat = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t seat = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (!unit) {
         return 0;

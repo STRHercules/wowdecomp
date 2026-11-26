@@ -101,7 +101,7 @@ static int32_t Script_GetSpellTabInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     SpellBookSkillInfo* info;
 
     if (static_cast<uint32_t>(index) >= s_numSkillInfos || !(info = s_skillInfos.m_data[index])) {
@@ -209,7 +209,7 @@ static int32_t Script_GetCompanionInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     TSGrowableArray<int32_t>& companions = CGSpellBook::m_companions[type];
 
     if (index >= companions.m_count) {
@@ -504,7 +504,7 @@ static int32_t Script_GetSpellCooldown(lua_State* L) {
     int32_t spellId;
 
     if (lua_isnumber(L, 1) && lua_gettop(L) == 1) {
-        spellId = static_cast<int32_t>(lua_tonumber(L, 1));
+        spellId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
         if (GetSpellSlot(spellId, 0) >= 0) {
             petSpell = 0;
@@ -1152,7 +1152,7 @@ static int32_t Script_GetSpellLink(lua_State* L) {
     int32_t spellId;
 
     if (lua_isnumber(L, 1) && lua_gettop(L) == 1) {
-        spellId = static_cast<int32_t>(lua_tonumber(L, 1));
+        spellId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         uint32_t slot = 0;
         int32_t petSpell;
@@ -1191,7 +1191,7 @@ static int32_t Script_GetSpellInfo(lua_State* L) {
     int32_t spellId;
 
     if (lua_isnumber(L, 1) && lua_gettop(L) == 1) {
-        spellId = static_cast<int32_t>(lua_tonumber(L, 1));
+        spellId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         uint32_t slot = 0;
 

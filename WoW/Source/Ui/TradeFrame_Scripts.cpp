@@ -55,7 +55,7 @@ static int32_t Script_GetTradeTargetItemLink(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index > 6) {
         return 0;
@@ -104,7 +104,7 @@ static int32_t Script_PickupTradeMoney(lua_State* L) {
         return 0;
     }
 
-    int32_t amount = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t amount = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (amount > 0 && static_cast<uint32_t>(amount) <= CGTradeInfo::GetPlayerTradeMoney()) {
         CGTradeInfo::RemoveMoney(amount);
@@ -138,7 +138,7 @@ static int32_t Script_ClickTargetTradeButton(lua_State* L) {
         if (CGTradeInfo::AddMoney(CGGameUI::m_cursorMoney)) {
             CGGameUI::ClearCursor(1, 0);
         }
-    } else if (static_cast<int32_t>(lua_tonumber(L, 1)) - 1 == 6) {
+    } else if (static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1 == 6) {
         CGGameUI::TargetTradeItem();
     }
 
@@ -153,7 +153,7 @@ static int32_t Script_GetTradePlayerItemLink(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     WOWGUID guid = index > 6 ? WOWGUID() : CGTradeInfo::m_playerItems[index];
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_ITEM, __FILE__, __LINE__));
 
@@ -206,7 +206,7 @@ static int32_t Script_ClickTradeButton(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (lua_toboolean(L, 2)) {
         WOWGUID item;
@@ -302,7 +302,7 @@ static int32_t Script_GetTradeTargetItemInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t itemId;
     ItemStats_C* stats;
 
@@ -359,7 +359,7 @@ static int32_t Script_GetTradePlayerItemInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     WOWGUID guid = index > 6 ? WOWGUID() : CGTradeInfo::m_playerItems[index];
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_ITEM, __FILE__, __LINE__));
 

@@ -141,7 +141,7 @@ static int32_t Script_GetAuctionInvTypes(lua_State* L) {
     }
 
     uint32_t classIndex = static_cast<uint32_t>(lua_tonumber(L, 1)) - 1;
-    int32_t subClass = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t subClass = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (classIndex >= 12 || !s_auctionClasses[classIndex].m_hasSubClasses) {
         return 0;
@@ -458,11 +458,11 @@ static int32_t Script_QueryAuctionItems(lua_State* L) {
     uint8_t maxLevel = 0;
 
     if (lua_isnumber(L, 2)) {
-        minLevel = static_cast<uint8_t>(lua_tonumber(L, 2));
+        minLevel = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     }
 
     if (lua_isnumber(L, 3)) {
-        maxLevel = static_cast<uint8_t>(lua_tonumber(L, 3));
+        maxLevel = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
     }
 
     int32_t invType = -1;
@@ -488,7 +488,7 @@ static int32_t Script_QueryAuctionItems(lua_State* L) {
     int32_t subClassID = -1;
 
     if (classID >= 0 && lua_isnumber(L, 6)) {
-        int32_t remaining = static_cast<int32_t>(lua_tonumber(L, 6)) - 1;
+        int32_t remaining = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 6))) - 1;
 
         for (int32_t i = 0; i < g_itemSubClassDB.m_numRecords; i++) {
             ItemSubClassRec* rec = i < 0 || i >= g_itemSubClassDB.m_numRecords ? nullptr : &g_itemSubClassDB.m_records[i];
@@ -507,19 +507,19 @@ static int32_t Script_QueryAuctionItems(lua_State* L) {
     int32_t page = 0;
 
     if (lua_isnumber(L, 7)) {
-        page = 50 * static_cast<int32_t>(lua_tonumber(L, 7));
+        page = 50 * static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 7)));
     }
 
     uint8_t usable = 0;
 
     if (lua_isnumber(L, 8)) {
-        usable = static_cast<uint8_t>(lua_tonumber(L, 8));
+        usable = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 8)));
     }
 
     int32_t quality = -1;
 
     if (lua_isnumber(L, 9)) {
-        quality = static_cast<int32_t>(lua_tonumber(L, 9));
+        quality = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 9)));
     }
 
     bool getAll = lua_type(L, 10) == LUA_TBOOLEAN && lua_toboolean(L, 10);
@@ -728,7 +728,7 @@ static int32_t Script_CalculateAuctionDeposit(lua_State* L) {
     int32_t count;
 
     if (lua_isnumber(L, 2)) {
-        count = static_cast<int32_t>(lua_tonumber(L, 2));
+        count = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     } else {
         count = item->m_item->m_itemFieldStackCount;
     }
@@ -785,7 +785,7 @@ static int32_t Script_GetBidderAuctionItems(lua_State* L) {
         int32_t page = 0;
 
         if (lua_isnumber(L, 1)) {
-            page = 50 * static_cast<int32_t>(lua_tonumber(L, 1));
+            page = 50 * static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
         }
 
         BidderListItems(page);

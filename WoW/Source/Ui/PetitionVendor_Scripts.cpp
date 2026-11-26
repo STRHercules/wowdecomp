@@ -168,10 +168,10 @@ static int32_t Script_TurnInArenaPetition(lua_State* L) {
         CImVector color = CImVector(0, 0, 0, 0);
         FrameScript_GetColorNoAlpha(L, 2, color);
         background = *reinterpret_cast<uint32_t*>(&color);
-        emblemStyle = static_cast<int32_t>(lua_tonumber(L, 5));
+        emblemStyle = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 5)));
         FrameScript_GetColorNoAlpha(L, 6, color);
         emblemColor = *reinterpret_cast<uint32_t*>(&color);
-        borderStyle = static_cast<int32_t>(lua_tonumber(L, 9));
+        borderStyle = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 9)));
         FrameScript_GetColorNoAlpha(L, 10, color);
         borderColor = *reinterpret_cast<uint32_t*>(&color);
     } else {

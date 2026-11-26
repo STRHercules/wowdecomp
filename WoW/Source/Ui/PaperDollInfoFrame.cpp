@@ -171,7 +171,7 @@ int32_t CGCharacterInfo::CanInspect(const CGPlayer_C* unit) {
 // OFFSET: 0x005E7C00
 int32_t ResolveInventorySlotArg(lua_State* L, int32_t index, int32_t& slot) {
     if (lua_isnumber(L, index)) {
-        slot = static_cast<int32_t>(lua_tonumber(L, index)) - 1;
+        slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, index))) - 1;
     } else if (lua_isstring(L, index)) {
         const char* name = lua_tolstring(L, index, nullptr);
 

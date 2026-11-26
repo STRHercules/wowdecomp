@@ -53,7 +53,7 @@ static int32_t Script_TryOn(lua_State* L) {
     CGDressUpModelFrame* frame = static_cast<CGDressUpModelFrame*>(FrameScript_GetObjectThis(L, CGDressUpModelFrame::GetObjectType()));
 
     if (lua_isnumber(L, 2)) {
-        frame->TryOn(static_cast<int32_t>(lua_tonumber(L, 2)), nullptr, -1);
+        frame->TryOn(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))), nullptr, -1);
         return 0;
     }
 

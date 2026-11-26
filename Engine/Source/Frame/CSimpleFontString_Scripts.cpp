@@ -123,7 +123,7 @@ static int32_t Script_SetAlpha(lua_State* L) {
         return 0;
     }
 
-    uint8_t alpha = static_cast<uint8_t>(lua_tonumber(L, 2) * 255.0);
+    uint8_t alpha = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2) * 255.0));
 
     CImVector color;
     string->GetVertexColor(color);
@@ -144,8 +144,8 @@ static int32_t Script_SetAlphaGradient(lua_State* L) {
         return 0;
     }
 
-    int32_t start = static_cast<int32_t>(lua_tonumber(L, 2));
-    int32_t length = static_cast<int32_t>(lua_tonumber(L, 3));
+    int32_t start = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
+    int32_t length = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
 
     if (string->SetAlphaGradient(start, length)) {
         lua_pushnumber(L, 1.0);

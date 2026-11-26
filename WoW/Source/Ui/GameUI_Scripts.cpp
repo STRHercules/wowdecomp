@@ -578,7 +578,7 @@ static int32_t Script_FrameXML_Debug(lua_State* L) {
     int32_t level = FrameXML_GetDebugLevel();
 
     if (lua_isnumber(L, 1)) {
-        level = static_cast<int32_t>(lua_tonumber(L, 1));
+        level = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
         FrameXML_SetDebugLevel(level);
     }
 
@@ -1219,7 +1219,7 @@ static int32_t Script_CanMapChangeDifficulty(lua_State* L) {
     int32_t mapId;
 
     if (lua_isnumber(L, 1)) {
-        mapId = static_cast<int32_t>(lua_tonumber(L, 1));
+        mapId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         mapId = CGGameUI::m_iCurrentMapID;
     }
@@ -1317,7 +1317,7 @@ static int32_t Script_SetPVP(lua_State* L) {
     uint8_t enable;
 
     if (lua_isnumber(L, 1)) {
-        enable = static_cast<uint8_t>(lua_tonumber(L, 1));
+        enable = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         enable = 0;
     }
@@ -1565,7 +1565,7 @@ static int32_t Script_GetItemQualityColor(lua_State* L) {
         return 0;
     }
 
-    uint32_t quality = static_cast<int32_t>(lua_tonumber(L, 1));
+    uint32_t quality = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     const CImVector* color = CGTooltip::GetItemQualityColor(quality);
     lua_pushnumber(L, color->r * 0.00392156862745098);
     lua_pushnumber(L, color->g * 0.00392156862745098);
@@ -1580,7 +1580,7 @@ static int32_t Script_IsAddOnLoaded(lua_State* L) {
     const char* name;
 
     if (lua_isnumber(L, 1)) {
-        name = GetAddOnByIndex(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+        name = GetAddOnByIndex(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
         if (!name) {
             luaL_error(L, "AddOn index must be in the range of 1 to %d", GetNumAddOns());
@@ -1872,7 +1872,7 @@ static int32_t Script_LoadAddOn(lua_State* L) {
     const char* name;
 
     if (lua_isnumber(L, 1)) {
-        name = GetAddOnByIndex(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+        name = GetAddOnByIndex(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
         if (!name) {
             luaL_error(L, "AddOn index must be in the range of 1 to %d", GetNumAddOns());
@@ -2123,7 +2123,7 @@ static int32_t Script_SetLayoutMode(lua_State* L) {
     int32_t enabled = 1;
 
     if (lua_isnumber(L, 1)) {
-        enabled = static_cast<int32_t>(lua_tonumber(L, 1));
+        enabled = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     }
 
     if (!CSimpleTop::s_instance) {
@@ -2158,7 +2158,7 @@ static int32_t Script_DestroyTotem(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (static_cast<uint32_t>(slot - 1) > 3) {
         luaL_error(L, "Totem slot must be in range of 1 to %d", 4);
@@ -2683,7 +2683,7 @@ static int32_t Script_GetItemInfo(lua_State* L) {
     int32_t itemId;
 
     if (lua_isnumber(L, 1)) {
-        itemId = static_cast<int32_t>(lua_tonumber(L, 1));
+        itemId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         if (!lua_isstring(L, 1)) {
             luaL_error(L, "Usage: GetItemInfo(itemID|\"name\"|\"itemlink\")");
@@ -3054,7 +3054,7 @@ static int32_t Script_GetTitleName(lua_State* L) {
         return 0;
     }
 
-    int32_t maskId = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t maskId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
     int32_t gender = player ? player->m_player->m_playerBytes3[0] : 0;
     char title[256];
@@ -3517,7 +3517,7 @@ static int32_t Script_GetCoinTextureString(lua_State* L) {
     }
 
     if (lua_isnumber(L, 2)) {
-        height = static_cast<int32_t>(lua_tonumber(L, 2));
+        height = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     }
 
     char text[1024];
@@ -3913,7 +3913,7 @@ static int32_t Script_DeclineName(lua_State* L) {
 
     char declensions[5][1024];
 
-    if (GetNameDeclensions(s_locale, declensions[0], name, sex, static_cast<int32_t>(lua_tonumber(L, 3)) - 1)) {
+    if (GetNameDeclensions(s_locale, declensions[0], name, sex, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1)) {
         for (uint32_t i = 0; i < 5; i++) {
             lua_pushstring(L, declensions[i]);
         }
@@ -4167,7 +4167,7 @@ static int32_t Script_GetItemUniqueness(lua_State* L) {
     int32_t itemId;
 
     if (lua_isnumber(L, 1)) {
-        itemId = static_cast<int32_t>(lua_tonumber(L, 1));
+        itemId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
         if (!lua_isstring(L, 1)) {
             luaL_error(L, "Usage: GetItemUniqueness(itemID|\"name\"|\"itemlink\")");
@@ -4537,7 +4537,7 @@ static int32_t Script_EquipCursorItem(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint32_t index = slot - 1;
 
     if (slot != 256 && slot) {
@@ -4963,7 +4963,7 @@ static int32_t Script_GetItemGem(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
 
     if (index > 2) {
         return 0;
@@ -5400,7 +5400,7 @@ static int32_t Script_EquipItemByName(lua_State* L) {
     uint32_t dstSlot = 0;
 
     if (lua_isnumber(L, 2)) {
-        dstSlot = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+        dstSlot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     } else {
         int32_t found = 0;
 
@@ -5749,7 +5749,7 @@ static int32_t Script_SetCurrentTitle(lua_State* L) {
     }
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
-    int32_t title = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t title = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (!player) {
         return 0;
@@ -5929,7 +5929,7 @@ static int32_t Script_EndRefund(lua_State* L) {
         return 0;
     }
 
-    int32_t type = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t type = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (type == 1) {
         CGGameUI::CastItemSpell(CGGameUI::m_lastItemSpellTarget, 1);

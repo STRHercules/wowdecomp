@@ -113,7 +113,7 @@ static int32_t Script_GetQuestWatchIndex(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader) {
         return 0;
@@ -144,7 +144,7 @@ static int32_t Script_IsQuestWatched(lua_State* L) {
     }
 
     int32_t watched = 0;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0 && index < CGQuestLog::m_numQuest && !CGQuestLog::m_quests[index].m_isHeader) {
         int32_t questId = CGQuestLog::m_quests[index].m_questId;
@@ -201,7 +201,7 @@ static int32_t Script_SelectQuestLogEntry(lua_State* L) {
         return 0;
     }
 
-    CGQuestLog::SetSelectedQuest(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGQuestLog::SetSelectedQuest(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -229,7 +229,7 @@ static int32_t Script_GetAbandonQuestName(lua_State* L) {
 // VERIFY: 9852e1b1 manual
 // OFFSET: 0x005DF520
 static int32_t Script_GetQuestLogPushable(lua_State* L) {
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t questId = index ? CGQuestLog::GetQuestAt(index - 1) : CGQuestLog::m_selectedQuest;
     QuestCache* quest = g_questDBCache.GetRecord(questId, WOWGUID(), nullptr, nullptr, false);
 
@@ -360,7 +360,7 @@ static int32_t Script_GetQuestLogItemLink(lua_State* L) {
     }
 
     const char* type = lua_tolstring(L, 1, nullptr);
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     WOWGUID none = { 0 };
     QuestCache* quest = g_questDBCache.GetRecord(CGQuestLog::m_selectedQuest, none, nullptr, nullptr, false);
 
@@ -672,7 +672,7 @@ static int32_t Script_GetNumQuestLeaderBoards(lua_State* L) {
         int32_t questId;
 
         if (lua_isnumber(L, 1)) {
-            int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+            int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
             questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
         } else {
             questId = CGQuestLog::m_selectedQuest;
@@ -694,7 +694,7 @@ static int32_t Script_GetNumQuestItemDrops(lua_State* L) {
         int32_t questId;
 
         if (lua_isnumber(L, 1)) {
-            int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+            int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
             questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
         } else {
             questId = CGQuestLog::m_selectedQuest;
@@ -907,7 +907,7 @@ static int32_t Script_GetQuestIndexForTimer(lua_State* L) {
         return luaL_error(L, "Usage: GetQuestIndexForTimer(index)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t found = 0;
     CGPlayer_C* player = static_cast<CGPlayer_C*>(ClntObjMgrObjectPtr(ClntObjMgrGetActivePlayer(), TYPEMASK_PLAYER, __FILE__, __LINE__));
 
@@ -952,7 +952,7 @@ static int32_t Script_CollapseQuestHeader(lua_State* L) {
         return luaL_error(L, "Usage: CollapseQuestHeader(index)");
     }
 
-    CGQuestLog::CollapseHeader(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, 1);
+    CGQuestLog::CollapseHeader(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, 1);
     return 0;
 }
 
@@ -963,7 +963,7 @@ static int32_t Script_ExpandQuestHeader(lua_State* L) {
         return luaL_error(L, "Usage: ExpandQuestHeader(index)");
     }
 
-    CGQuestLog::CollapseHeader(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, 0);
+    CGQuestLog::CollapseHeader(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, 0);
     return 0;
 }
 
@@ -974,7 +974,7 @@ static int32_t Script_GetQuestLink(lua_State* L) {
         return luaL_error(L, "Usage: GetQuestLink(questID)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t questId;
     QuestCache* quest;
     WOWGUID none = { 0 };
@@ -996,7 +996,7 @@ static int32_t Script_AddQuestWatch(lua_State* L) {
     int32_t questId;
 
     if (lua_isnumber(L, 1)) {
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
         questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
     } else {
         questId = CGQuestLog::m_selectedQuest;
@@ -1006,7 +1006,7 @@ static int32_t Script_AddQuestWatch(lua_State* L) {
         int32_t duration = 0;
 
         if (lua_isnumber(L, 2)) {
-            duration = static_cast<int32_t>(lua_tonumber(L, 2));
+            duration = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
         }
 
         CGQuestLog::AddQuestWatch(questId, duration);
@@ -1021,7 +1021,7 @@ static int32_t Script_RemoveQuestWatch(lua_State* L) {
     int32_t questId;
 
     if (lua_isnumber(L, 1)) {
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
         questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
     } else {
         questId = CGQuestLog::m_selectedQuest;
@@ -1059,7 +1059,7 @@ static int32_t Script_GetQuestSortIndex(lua_State* L) {
         return luaL_error(L, "Usage: GetQuestSortIndex(questIndex)");
     }
 
-    lua_pushnumber(L, GetQuestSortId(static_cast<int32_t>(lua_tonumber(L, 1)) - 1) + 1);
+    lua_pushnumber(L, GetQuestSortId(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1) + 1);
     return 1;
 }
 
@@ -1159,7 +1159,7 @@ static int32_t Script_IsUnitOnQuest(lua_State* L) {
         return luaL_error(L, "Usage: IsUnitOnQuest(index, \"unit\")");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t questId;
     CGPlayer_C* member;
     WOWGUID guid;
@@ -1404,7 +1404,7 @@ static int32_t Script_GetQuestWorldMapAreaID(lua_State* L) {
     }
 
     int32_t floor = 0;
-    int32_t area = CGQuestLog::GetQuestWorldMapAreaID(static_cast<int32_t>(lua_tonumber(L, 1)), &floor);
+    int32_t area = CGQuestLog::GetQuestWorldMapAreaID(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))), &floor);
     lua_pushnumber(L, area);
     lua_pushnumber(L, floor);
     return 2;
@@ -1424,7 +1424,7 @@ static int32_t Script_QuestPOIGetQuestIDByVisibleIndex(lua_State* L) {
         return luaL_error(L, "Usage: Script_QuestPOIGetQuestIDByVisibleIndex(index)");
     }
 
-    int32_t questId = CGQuestLog::GetPOIQuestIDByVisibleIndex(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    int32_t questId = CGQuestLog::GetPOIQuestIDByVisibleIndex(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (questId < 0) {
         return 0;
@@ -1442,7 +1442,7 @@ static int32_t Script_GetQuestLogTitle(lua_State* L) {
         return luaL_error(L, "Usage: GetQuestLogTitle(index)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     lua_pushstring(L, GetQuestTitle(index));
     int32_t level = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : GetQuestLevel(CGQuestLog::m_quests[index].m_questId);
     lua_pushnumber(L, level);
@@ -1539,9 +1539,9 @@ static int32_t Script_GetQuestLogLeaderBoard(lua_State* L) {
         return luaL_error(L, "Usage: GetQuestLogLeaderBoard(index)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     QuestLogLeaderBoardParams params;
-    params.m_index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    params.m_index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     params.m_requireLogEntry = 1;
     int32_t questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
 
@@ -1605,7 +1605,7 @@ static int32_t Script_QuestPOIGetIconInfo(lua_State* L) {
     int32_t iconY;
     int32_t objective;
 
-    if (!CGQuestLog::GetQuestPOIIcon(static_cast<int32_t>(lua_tonumber(L, 1)), &complete, &mapId, &mapFloor, &iconX, &iconY, &objective)) {
+    if (!CGQuestLog::GetQuestPOIIcon(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))), &complete, &mapId, &mapFloor, &iconX, &iconY, &objective)) {
         return 0;
     }
 
@@ -1638,9 +1638,9 @@ static int32_t Script_GetQuestLogItemDrop(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     QuestLogLeaderBoardParams params;
-    params.m_index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    params.m_index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     params.m_requireLogEntry = 1;
     int32_t questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
 
@@ -1671,9 +1671,9 @@ static int32_t Script_GetQuestPOILeaderBoard(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     QuestLogLeaderBoardParams params;
-    params.m_index = static_cast<int32_t>(lua_tonumber(L, 1));
+    params.m_index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     params.m_requireLogEntry = 1;
     int32_t questId = index < 0 || index >= CGQuestLog::m_numQuest || CGQuestLog::m_quests[index].m_isHeader ? 0 : CGQuestLog::m_quests[index].m_questId;
 

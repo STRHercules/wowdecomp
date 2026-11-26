@@ -377,7 +377,7 @@ static const char* s_equipmentSetIconPath = "Interface\\Icons\\";
 // VERIFY: 4c8d1592 manual
 // OFFSET: 0x005AF120
 static int32_t Script_GetEquipmentSetInfo(lua_State* L) {
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (static_cast<uint32_t>(index - 1) > 9) {
         luaL_error(L, "Usage: GetEquipmentSetInfo(setIndex)");
@@ -456,7 +456,7 @@ static int32_t Script_PickupEquipmentSet(lua_State* L) {
         return 0;
     }
 
-    EQUIPMENT_SET* set = CGEquipmentManager::GetSetByIndex(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    EQUIPMENT_SET* set = CGEquipmentManager::GetSetByIndex(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
 
     if (set) {
         CGGameUI::SetCursorEquipmentSet(set->m_id);
@@ -545,7 +545,7 @@ static int32_t Script_SaveEquipmentSet(lua_State* L) {
     }
 
     const char* setName = lua_tolstring(L, 1, nullptr);
-    int32_t iconIndex = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t iconIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     char name[128];
 
     if (!ScrubString(setName, name, 32, sizeof(name), 1)) {

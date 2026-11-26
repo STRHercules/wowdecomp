@@ -144,7 +144,7 @@ int32_t CGLookingForGroup::GetLFGRoleUpdateSlot(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CGLookingForGroup::m_roleCheckSlots.m_count)) {
         return 0;
@@ -344,7 +344,7 @@ int32_t CGLookingForGroup::GetLFGRoleUpdateMember(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0 || index >= static_cast<int32_t>(CGLookingForGroup::m_roleCheckMembers.m_count)) {
         return 0;

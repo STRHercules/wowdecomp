@@ -408,7 +408,7 @@ static int32_t Script_GetPoint(lua_State* L) {
     int32_t index = 0;
 
     if (lua_isnumber(L, 2)) {
-        index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+        index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     }
 
     int32_t found = 0;

@@ -355,7 +355,7 @@ static int32_t Script_GetQuestItemLink(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     int32_t itemId = CGQuestInfo::GetQuestItemID(lua_tostring(L, 1), index - 1);
     ItemStats_C* stats;
     WOWGUID none = { 0 };
@@ -515,7 +515,7 @@ static int32_t Script_GetQuestReward(lua_State* L) {
     int32_t choice = -1;
 
     if (lua_isnumber(L, 1)) {
-        choice = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+        choice = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     }
 
     if (!CGQuestInfo::GetReward(choice)) {
@@ -629,7 +629,7 @@ static int32_t Script_GetQuestItemInfo(lua_State* L) {
     int32_t quality;
     int32_t usable;
 
-    if (!lua_isstring(L, 1) || !lua_isnumber(L, 2) || !CGQuestInfo::QuestItemInfo(lua_tostring(L, 1), static_cast<int32_t>(lua_tonumber(L, 2)) - 1, name, sizeof(name), texture, sizeof(texture), &count, &quality, &usable)) {
+    if (!lua_isstring(L, 1) || !lua_isnumber(L, 2) || !CGQuestInfo::QuestItemInfo(lua_tostring(L, 1), static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1, name, sizeof(name), texture, sizeof(texture), &count, &quality, &usable)) {
         luaL_error(L, "Invalid quest item in GetQuestItemInfo(\"type\", index)");
         return 0;
     }

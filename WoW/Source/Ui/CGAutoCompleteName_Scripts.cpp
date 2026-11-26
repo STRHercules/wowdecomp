@@ -14,10 +14,10 @@ static int32_t Script_GetAutoCompleteResults(lua_State* L) {
     const char* text = lua_tolstring(L, 1, nullptr);
     uint32_t include = static_cast<uint32_t>(lua_tonumber(L, 2));
     uint32_t exclude = static_cast<uint32_t>(lua_tonumber(L, 3));
-    int32_t numReturns = static_cast<int32_t>(lua_tonumber(L, 4));
+    int32_t numReturns = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 4)));
     int32_t cursor;
 
-    if (!lua_isnumber(L, 5) || (cursor = static_cast<int32_t>(lua_tonumber(L, 5))) < 0 || cursor > static_cast<int32_t>(SStrLenUTF8(text))) {
+    if (!lua_isnumber(L, 5) || (cursor = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 5)))) < 0 || cursor > static_cast<int32_t>(SStrLenUTF8(text))) {
         cursor = SStrLenUTF8(text);
     }
 
