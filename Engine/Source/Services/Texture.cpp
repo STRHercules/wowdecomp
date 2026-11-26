@@ -923,6 +923,10 @@ void TextureGetTextureFormats(PIXEL_FORMAT& pixelFormat, EGxTexFormat& gxTexForm
             break;
 
         default:
+            // Unknown BLP preferred format: the original left the out-params uninitialized,
+            // crashing in CGxDeviceD3d::ITexCreate with a garbage format index. Fall back to a safe format.
+            gxTexFormat = alphaBits > 1 ? GxTex_Argb8888 : (alphaBits == 1 ? GxTex_Argb1555 : GxTex_Rgb565);
+            pixelFormat = PIXEL_ARGB8888;
             break;
     }
 }
@@ -1837,8 +1841,8 @@ int32_t PumpBlpTextureAsync(CTexture* texture, void* data) {
     RequestImageDimensions(&width, &height, &bestMip);
     texture->m_bestMip = bestMip;
 
-    PIXEL_FORMAT pixelFormat;
-    EGxTexFormat gxTexFormat;
+    PIXEL_FORMAT pixelFormat = PIXEL_ARGB8888;
+    EGxTexFormat gxTexFormat = GxTex_Argb8888;
     // Raw BLP2 pixels are BGRA even when an imported file retains a DXT format hint.
     TextureGetTextureFormats(pixelFormat, gxTexFormat,
         image.m_header.m_colorEncoding == 3 ? PIXEL_ARGB8888
