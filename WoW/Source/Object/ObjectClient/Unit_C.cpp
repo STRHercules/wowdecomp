@@ -23489,7 +23489,7 @@ CM2Model* CGUnit_C::CreateItemModel(uint32_t displayId, uint32_t inventoryType, 
 
     if (inventoryType == 1) {
         int32_t sex = this->m_displayInfoExtra ? this->m_displayInfoExtra->m_displaySexID : this->m_unit->m_unitFieldBytes0[2];
-        ChrRacesRec* race = g_chrRacesDB.GetRecord(sex);
+        ChrRacesRec* race = g_chrRacesDB.GetRecord(this->GetDisplayRace());
 
         if (!race) {
             return nullptr;

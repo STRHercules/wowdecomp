@@ -1913,7 +1913,7 @@ void CCharacterComponent::SetHairColor(int32_t hairColorID, bool loadHair, const
     this->m_data.m_preferences.m_hairColorId = hairColorID;
     ChrRacesRec* raceRec = g_chrRacesDB.GetRecord(this->m_data.m_preferences.m_raceID);
 
-    if (!this->m_data.m_preferences.m_sexID && !this->m_data.m_preferences.m_hairStyleId && (raceRec->m_flags & 0x8)) {
+    if (!this->m_data.m_preferences.m_sexID && !this->m_data.m_preferences.m_hairStyleId && raceRec && (raceRec->m_flags & 0x8)) {
         this->ReplaceHairTexture(1, debug);
     }
 
