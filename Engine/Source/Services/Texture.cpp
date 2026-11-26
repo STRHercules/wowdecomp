@@ -2013,7 +2013,10 @@ int32_t LoadBlpMips(char* fileName, char* extension, int32_t flags, MipBits** im
     PIXEL_FORMAT format;
 
     if (!pixelFormat || (format = *pixelFormat) == PIXEL_UNSPECIFIED) {
-        if (image.m_header.m_alphaSize) {
+        // BC5 only blits to ARGB8888, so it may not pick a 16-bit format.
+        if (image.m_header.m_preferredFormat == PIXEL_BC5) {
+            format = PIXEL_ARGB8888;
+        } else if (image.m_header.m_alphaSize) {
             format = image.m_header.m_alphaSize != 1 ? PIXEL_ARGB4444 : PIXEL_ARGB1555;
         } else {
             format = PIXEL_RGB565;

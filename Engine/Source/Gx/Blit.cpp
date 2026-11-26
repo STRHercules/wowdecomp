@@ -252,6 +252,9 @@ uint32_t CalcRowStride(BlitFormat format, uint32_t width, uint32_t height) {
             width = 6 * (height > 4 ? height : 4);
         } else if (width <= 4) {
             width = 4;
+        } else if (format == BlitFormat_Bc5) {
+            // Whole blocks for a partial last column (DXT keeps the original's round-down).
+            width = (width + 3) & ~3u;
         }
     }
 

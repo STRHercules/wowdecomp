@@ -96,7 +96,8 @@ static int bit_mod (lua_State *L) {
     lua_pushnumber(L, 1 / lua_tonumber(L, 2));
     return 1;
   }
-  lua_pushnumber(L, checkint(L, 1) % checkint(L, 2));
+  /* x % -1 is 0, and INT_MIN % -1 traps in idiv (an addon could crash the 32-bit client this way). */
+  lua_pushnumber(L, checkint(L, 2) == -1 ? 0 : checkint(L, 1) % checkint(L, 2));
   return 1;
 }
 

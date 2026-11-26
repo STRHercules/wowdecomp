@@ -23491,7 +23491,8 @@ CM2Model* CGUnit_C::CreateItemModel(uint32_t displayId, uint32_t inventoryType, 
         int32_t sex = this->m_displayInfoExtra ? this->m_displayInfoExtra->m_displaySexID : this->m_unit->m_unitFieldBytes0[2];
         ChrRacesRec* race = g_chrRacesDB.GetRecord(this->GetDisplayRace());
 
-        if (!race) {
+        // s_genderSuffix has two entries; the sex comes from server data.
+        if (!race || sex < 0 || sex > 1) {
             return nullptr;
         }
 
