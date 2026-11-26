@@ -18,7 +18,15 @@ inline bool PatchPathConfined(const char* path) {
 
     for (const char* c = path;; c++) {
         if (*c == '\\' || *c == '/' || *c == '\0') {
-            if (c - component == 2 && component[0] == '.' && component[1] == '.') {
+            // Windows drops trailing dots / spaces, so "..", ".. " and "..." all climb; only a bare "." is allowed.
+            const size_t length = static_cast<size_t>(c - component);
+            size_t trimmed = length;
+
+            while (trimmed && (component[trimmed - 1] == '.' || component[trimmed - 1] == ' ')) {
+                trimmed--;
+            }
+
+            if (trimmed == 0 && length != 0 && !(length == 1 && component[0] == '.')) {
                 return false;
             }
 
@@ -46,6 +54,8 @@ inline bool PatchExtractAllowed(const char* path) {
     static const char* const kRunnable[] = {
         ".exe", ".dll", ".com", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".scr",
         ".msi", ".msp", ".lnk", ".pif", ".cpl", ".hta", ".reg", ".sys", ".ocx", ".jar",
+        // AddOns (Interface\AddOns) and SavedVariables (WTF\) run Lua on the next launch.
+        ".lua", ".xml", ".toc",
     };
 
     for (const char* extension : kRunnable) {
