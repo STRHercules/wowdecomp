@@ -1,4 +1,5 @@
 #include "BattlefieldInfo.h"
+#include "WoW/Source/Ui/BattlefieldPositionsGuard.h"
 #include "WoW/Source/DB/DBClient/DBClient.h"
 #include "WoW/Source/DB/Rec/BattlemasterListRec.h"
 #include "WoW/Source/DB/Rec/PvpDifficultyRec.h"
@@ -649,6 +650,13 @@ int32_t Packet_SMSG_GROUP_JOINED_BATTLEGROUND(void* param, NETMESSAGE msgId, uin
 int32_t Packet_MSG_BATTLEGROUND_PLAYER_POSITIONS(void* param, NETMESSAGE msgId, uint32_t time, CDataStore* msg) {
     msg->Get(CGBattlefieldInfo::m_numPlayerPositions);
 
+    // CoA64: security fix -- the 32-bit client trusts both counts (the 3.3.5a RCE write primitive); a packet whose
+    // counts exceed the static arrays is dropped (BattlefieldPositionsGuard.h).
+    if (!BattlefieldPositionsGuard::PlayerCountValid(CGBattlefieldInfo::m_numPlayerPositions)) {
+        CGBattlefieldInfo::m_numPlayerPositions = 0;
+        return 1;
+    }
+
     for (uint32_t i = 0; i < CGBattlefieldInfo::m_numPlayerPositions; i++) {
         msg->Get(CGBattlefieldInfo::m_playerPositionGuids[i].m_guid);
         msg->Get(CGBattlefieldInfo::m_playerPositions[i].x);
@@ -659,6 +667,10 @@ int32_t Packet_MSG_BATTLEGROUND_PLAYER_POSITIONS(void* param, NETMESSAGE msgId, 
     msg->Get(reinterpret_cast<uint32_t&>(numFlags));
 
     if (numFlags > 0) {
+        if (!BattlefieldPositionsGuard::FlagCountValid(numFlags)) {
+            return 1;
+        }
+
         if (numFlags < 2) {
             CGBattlefieldInfo::m_flagCarriers[1] = WOWGUID();
             CGBattlefieldInfo::m_flagPositions[1].x = 0.0f;

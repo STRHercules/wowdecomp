@@ -10421,6 +10421,11 @@ int32_t CGUnit_C::HasAttachmentForEffect(uint32_t id, int32_t raw) const {
         return model->HasAttachment(s_effectAttachmentIds[4]);
     }
 
+    // x86 wrapped id -1 to the dword before the table; x64 zero-extends it 16 GB past the end.
+    if (id >= std::size(s_effectAttachmentIds)) {
+        return 0;
+    }
+
     return model->HasAttachment(s_effectAttachmentIds[id]);
 }
 
@@ -23484,9 +23489,10 @@ CM2Model* CGUnit_C::CreateItemModel(uint32_t displayId, uint32_t inventoryType, 
 
     if (inventoryType == 1) {
         int32_t sex = this->m_displayInfoExtra ? this->m_displayInfoExtra->m_displaySexID : this->m_unit->m_unitFieldBytes0[2];
-        ChrRacesRec* race = g_chrRacesDB.GetRecord(sex);
+        ChrRacesRec* race = g_chrRacesDB.GetRecord(this->GetDisplayRace());
 
-        if (!race) {
+        // s_genderSuffix has two entries; the sex comes from server data.
+        if (!race || sex < 0 || sex > 1) {
             return nullptr;
         }
 

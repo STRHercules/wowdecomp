@@ -2151,11 +2151,12 @@ FMOD_RESULT SoundI::setSoundGroup(SoundGroupI *soundgroup)
         mSoundGroupNode.removeNode();
         mSoundGroupNode.addBefore(&mSoundGroup->mSoundHead);
         mSoundGroupNode.setData(this);
+
+        // CoA64: relinked under the lock (the original does it after Leave); the NONBLOCKING thread races updateSoundGroups.
+        mSoundGroup->removeNode();
+        mSoundGroup->addAfter(&mSystem->mSoundGroupUsedHead);
     }
     FMOD_OS_CriticalSection_Leave(mSystem->gSoundListCrit);
-
-    mSoundGroup->removeNode();
-    mSoundGroup->addAfter(&mSystem->mSoundGroupUsedHead);
 
     return FMOD_OK;
 }

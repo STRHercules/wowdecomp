@@ -346,7 +346,7 @@ static void ChannelDisplayCommand(lua_State* L, uint32_t msgId, const char* name
     }
 
     int32_t type;
-    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, &type);
+    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, &type);
 
     if (!channel || type) {
         return;
@@ -367,7 +367,7 @@ static int32_t Script_SetSelectedDisplayChannel(lua_State* L) {
     }
 
     int32_t type;
-    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, &type);
+    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, &type);
 
     if (!channel || type == 4) {
         return 0;
@@ -532,7 +532,7 @@ static int32_t Script_SetChatWindowSize(lua_State* L) {
     uint32_t index = static_cast<uint32_t>(lua_tonumber(L, 1)) - 1;
 
     if (index < 10) {
-        int32_t size = static_cast<int32_t>(lua_tonumber(L, 2));
+        int32_t size = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
         if (size > 0) {
             s_chatWindows[index].m_unkD0 = size;
@@ -563,7 +563,7 @@ static int32_t Script_SetChatWindowAlpha(lua_State* L) {
     uint32_t index = static_cast<uint32_t>(lua_tonumber(L, 1)) - 1;
 
     if (index < 10) {
-        s_chatWindows[index].m_color.a = static_cast<uint8_t>(lua_tonumber(L, 2) * 255.0);
+        s_chatWindows[index].m_color.a = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2) * 255.0));
     }
 
     return 0;
@@ -673,7 +673,7 @@ static int32_t Script_GetLanguageByIndex(lua_State* L) {
         return 0;
     }
 
-    int32_t wanted = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t wanted = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t numRecords = g_languagesDB.m_numRecords;
     int32_t found = 0;
 
@@ -762,9 +762,9 @@ static int32_t Script_SetChatWindowColor(lua_State* L) {
     }
 
     ChatWindowInfo* window = &s_chatWindows[index];
-    window->m_color.r = static_cast<uint8_t>(lua_tonumber(L, 2) * 255.0);
-    window->m_color.g = static_cast<uint8_t>(lua_tonumber(L, 3) * 255.0);
-    window->m_color.b = static_cast<uint8_t>(lua_tonumber(L, 4) * 255.0);
+    window->m_color.r = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2) * 255.0));
+    window->m_color.g = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 3) * 255.0));
+    window->m_color.b = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 4) * 255.0));
     return 0;
 }
 
@@ -922,9 +922,9 @@ static int32_t Script_ChangeChatColor(lua_State* L) {
     }
 
     const char* type = lua_tolstring(L, 1, nullptr);
-    uint8_t r = static_cast<uint8_t>(lua_tonumber(L, 2) * 255.0);
-    uint8_t g = static_cast<uint8_t>(lua_tonumber(L, 3) * 255.0);
-    uint8_t b = static_cast<uint8_t>(lua_tonumber(L, 4) * 255.0);
+    uint8_t r = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 2) * 255.0));
+    uint8_t g = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 3) * 255.0));
+    uint8_t b = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 4) * 255.0));
     int32_t found = 0;
 
     for (uint32_t i = 0; i < CHAT_MSG_MAX; i++) {
@@ -1048,7 +1048,7 @@ static int32_t Script_GetChannelName(lua_State* L) {
     ChatChannel* channel;
 
     if (lua_isnumber(L, 1)) {
-        int32_t number = static_cast<int32_t>(lua_tonumber(L, 1));
+        int32_t number = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
         if (number < 1 || number > static_cast<int32_t>(CGChat::s_channels.Count())) {
             channel = nullptr;
@@ -1378,7 +1378,7 @@ static int32_t Script_GetChannelRosterInfo(lua_State* L) {
     }
 
     int32_t type;
-    const char* name = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, &type);
+    const char* name = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, &type);
 
     if (!name || type == 4) {
         return 0;
@@ -1975,7 +1975,7 @@ static int32_t Script_SetActiveVoiceChannel(lua_State* L) {
 
     if (lua_tonumber(L, 1)) {
         int32_t type;
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
         const char* channel = CGChat::GetChannelStringForDisplay(index, &type);
 
         if (channel && CGChat::s_displayChannels[index].m_voiceEnabled) {
@@ -2228,7 +2228,7 @@ static int32_t Script_GetNumChannelMembers(lua_State* L) {
     }
 
     int32_t type;
-    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(lua_tonumber(L, 1)) - 1, &type);
+    const char* channel = CGChat::GetChannelStringForDisplay(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1, &type);
 
     if (!channel || type == 4) {
         lua_pushnil(L);

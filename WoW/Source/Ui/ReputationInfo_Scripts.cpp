@@ -118,7 +118,7 @@ static int32_t Script_GetFactionInfoByID(lua_State* L) {
         return 0;
     }
 
-    return GetFactionInfoHelper(L, static_cast<int32_t>(lua_tonumber(L, 1)));
+    return GetFactionInfoHelper(L, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 }
 
 // VERIFY: 941cdb0b manual

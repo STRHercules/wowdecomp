@@ -88,7 +88,7 @@ static int32_t Script_SetTerrainMip(lua_State* L) {
         return 0;
     }
 
-    int32_t value = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t value = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     char buffer[16];
     SStrPrintf(buffer, sizeof(buffer), "%d", 1 - value);

@@ -29,7 +29,7 @@ static int32_t Script_IsUsableAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (slot >= 0 && slot < sizeof(CGActionBar::m_slotActions) / sizeof(CGActionBar::m_slotActions[0]) && CGActionBar::m_slotUsable[slot]) {
         if (CGActionBar::m_slotNoMana[slot]) {
@@ -56,7 +56,7 @@ static int32_t Script_HasAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::HasAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -75,7 +75,7 @@ static int32_t Script_GetActionInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint32_t action = CGActionBar::m_slotActions[slot - 1];
 
     if (action && !(action & 0xF0000000)) {
@@ -150,7 +150,7 @@ static int32_t Script_GetActionCooldown(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint32_t start;
     uint32_t duration;
     uint32_t enable = 0;
@@ -169,7 +169,7 @@ static int32_t Script_GetActionTexture(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     const char* texture = CGActionBar::GetTexture(slot - 1);
 
     if (texture) {
@@ -189,7 +189,7 @@ static int32_t Script_IsCurrentAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::IsCurrentAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -208,7 +208,7 @@ static int32_t Script_PickupAction(lua_State* L) {
         return 0;
     }
 
-    CGActionBar::PickupAction(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGActionBar::PickupAction(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -220,7 +220,7 @@ static int32_t Script_UseAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     WOWGUID target;
 
     if (Script_GetGUIDFromToken(lua_tolstring(L, 2, nullptr), target, true)) {
@@ -238,7 +238,7 @@ static int32_t Script_GetActionText(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint32_t action = CGActionBar::m_slotActions[slot - 1];
 
     if (action) {
@@ -290,7 +290,7 @@ static int32_t Script_PlaceAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (slot >= 120 && static_cast<uint32_t>(slot) < 132) {
         return 0;
@@ -303,7 +303,7 @@ static int32_t Script_PlaceAction(lua_State* L) {
 // VERIFY: ce325702 auto
 // OFFSET: 0x005A7F60
 static int32_t Script_ChangeActionBarPage(lua_State* L) {
-    int32_t page = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t page = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (page < 0 || static_cast<uint32_t>(page) >= 6) {
         luaL_error(L, "ChangeActionBarPage() needs a page in the range 1 to %d", 6);
@@ -383,7 +383,7 @@ static int32_t Script_IsEquippedAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::IsEquippedAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -402,7 +402,7 @@ static int32_t Script_IsConsumableAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::IsConsumableAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -421,7 +421,7 @@ static int32_t Script_IsStackableAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (IsStackableAucItem(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -463,7 +463,7 @@ static int32_t Script_IsAttackAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::IsAttackAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -482,7 +482,7 @@ static int32_t Script_IsAutoRepeatAction(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (CGActionBar::IsAutoRepeatAction(slot - 1)) {
         lua_pushnumber(L, 1.0);
@@ -497,7 +497,7 @@ static int32_t Script_IsAutoRepeatAction(lua_State* L) {
 // OFFSET: 0x005A9D50
 static int32_t Script_IsActionInRange(lua_State* L) {
     if (lua_isnumber(L, 1)) {
-        int32_t slot = static_cast<int32_t>(lua_tonumber(L, 1));
+        int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
         int32_t inRange = 0;
         WOWGUID target = WOWGUID();
         Script_GetGUIDFromToken(lua_tolstring(L, 2, nullptr), target, false);
@@ -569,7 +569,7 @@ static int32_t Script_GetActionAutocast(lua_State* L) {
 // VERIFY: 3af652b3 auto
 // OFFSET: 0x005A9CF0
 static int32_t Script_ActionHasRange(lua_State* L) {
-    if (lua_isnumber(L, 1) && CGActionBar::ActionHasRange(static_cast<int32_t>(lua_tonumber(L, 1)) - 1)) {
+    if (lua_isnumber(L, 1) && CGActionBar::ActionHasRange(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1)) {
         lua_pushnumber(L, 1.0);
         return 1;
     }

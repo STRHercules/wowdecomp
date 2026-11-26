@@ -46,7 +46,7 @@ static int32_t Script_GetPreviousAchievement(lua_State* L) {
         return 0;
     }
 
-    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(lua_tonumber(L, 1)));
+    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!rec || !rec->m_supercedes) {
         return 0;
@@ -64,7 +64,7 @@ static int32_t Script_GetAchievementCategory(lua_State* L) {
         return 0;
     }
 
-    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(lua_tonumber(L, 1)));
+    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!rec || !rec->m_category || (rec->m_flags & 2)) {
         return 0;
@@ -82,7 +82,7 @@ static int32_t Script_GetAchievementNumRewards(lua_State* L) {
         return 0;
     }
 
-    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(lua_tonumber(L, 1)));
+    AchievementRec* rec = g_achievementDB.GetRecord(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (rec && !(rec->m_flags & 2)) {
         lua_pushnumber(L, 1.0);
@@ -101,7 +101,7 @@ static int32_t Script_GetAchievementReward(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     lua_tonumber(L, 2);
     AchievementRec* rec = g_achievementDB.GetRecord(id);
 
@@ -206,7 +206,7 @@ static int32_t Script_GetCategoryInfo(lua_State* L) {
         return 0;
     }
 
-    Achievement_CategoryRec* category = g_achievement_CategoryDB.GetRecord(static_cast<int32_t>(lua_tonumber(L, 1)));
+    Achievement_CategoryRec* category = g_achievement_CategoryDB.GetRecord(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!category) {
         return 0;
@@ -248,7 +248,7 @@ static int32_t Script_GetCategoryNumAchievements(lua_State* L) {
         return 0;
     }
 
-    int32_t categoryId = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t categoryId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     for (int32_t i = 0; i < g_achievementDB.m_numRecords; i++) {
         AchievementRec* achievement = g_achievementDB.GetRecordByIndex(i);
@@ -457,7 +457,7 @@ static int32_t Script_GetAchievementInfoFromCriteria(lua_State* L) {
         return 0;
     }
 
-    Achievement_CriteriaRec* criteria = g_achievement_CriteriaDB.GetRecord(static_cast<int32_t>(lua_tonumber(L, 1)));
+    Achievement_CriteriaRec* criteria = g_achievement_CriteriaDB.GetRecord(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
 
     if (!criteria) {
         return 0;
@@ -567,7 +567,7 @@ static int32_t Script_GetComparisonAchievementPoints(lua_State* L) {
 // VERIFY: a5598214 manual
 // OFFSET: 0x005B2090
 static int32_t Script_IsTrackedAchievement(lua_State* L) {
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (id) {
         for (CLIENT_ACHIEVEMENTS* node = s_trackedAchievements.Head(); node; node = s_trackedAchievements.Next(node)) {
@@ -605,7 +605,7 @@ static int32_t Script_GetComparisonCategoryNumAchievements(lua_State* L) {
         return 0;
     }
 
-    int32_t categoryId = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t categoryId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     for (int32_t i = 0; i < g_achievementDB.m_numRecords; i++) {
         AchievementRec* achievement = g_achievementDB.GetRecordByIndex(i);
@@ -695,7 +695,7 @@ static int32_t Script_GetNextAchievement(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     for (int32_t i = 0; i < g_achievementDB.m_numRecords; i++) {
         AchievementRec* achievement = g_achievementDB.GetRecordByIndex(i);
@@ -731,10 +731,10 @@ static int32_t Script_GetAchievementInfo(lua_State* L) {
     }
 
     if (!lua_isnumber(L, 2)) {
-        id = static_cast<int32_t>(lua_tonumber(L, 1));
+        id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     } else {
-        int32_t categoryId = static_cast<int32_t>(lua_tonumber(L, 1));
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 2));
+        int32_t categoryId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
         for (CLIENT_ACHIEVEMENTS* node = s_completedAchievements.Head(); node && id == -1; node = s_completedAchievements.Next(node)) {
             CLIENT_ACHIEVEMENTS* inspected = nullptr;
@@ -997,7 +997,7 @@ static int32_t Script_GetAchievementComparisonInfo(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (!CGAchievementInfo::m_inspect) {
         return 0;
@@ -1021,7 +1021,7 @@ static int32_t Script_GetAchievementComparisonInfo(lua_State* L) {
 // VERIFY: 9a10a883 auto
 // OFFSET: 0x005B4870
 static int32_t Script_AddTrackedAchievement(lua_State* L) {
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (!id || !g_achievementDB.GetRecord(id)) {
         luaL_error(L, "Usage: AddTrackedAchievement(achievementID)");
@@ -1035,7 +1035,7 @@ static int32_t Script_AddTrackedAchievement(lua_State* L) {
 // VERIFY: 7eb57b4e auto
 // OFFSET: 0x005B48D0
 static int32_t Script_RemoveTrackedAchievement(lua_State* L) {
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (!id) {
         luaL_error(L, "Usage: RemoveTrackedAchievement(achievementID)");
@@ -1075,7 +1075,7 @@ static int32_t Script_GetAchievementNumCriteria(lua_State* L) {
         return 0;
     }
 
-    ACHIEVEMENT* achievement = s_achievements.Ptr(static_cast<int32_t>(lua_tonumber(L, 1)), HASHKEY_NONE());
+    ACHIEVEMENT* achievement = s_achievements.Ptr(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))), HASHKEY_NONE());
 
     if (!achievement) {
         return 0;
@@ -1113,7 +1113,7 @@ static int32_t Script_GetStatistic(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint64_t value = 0;
     uint64_t sum = 0;
     uint64_t highest = 0;
@@ -1206,8 +1206,8 @@ static int32_t Script_GetAchievementCriteriaInfo(lua_State* L) {
     int32_t criteriaId;
 
     if (lua_isnumber(L, 2)) {
-        achievementId = static_cast<int32_t>(lua_tonumber(L, 1));
-        int32_t index = static_cast<int32_t>(lua_tonumber(L, 2));
+        achievementId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+        int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
         ACHIEVEMENT* achievement = s_achievements.Ptr(achievementId, HASHKEY_NONE());
 
         if (!achievement) {
@@ -1244,7 +1244,7 @@ static int32_t Script_GetAchievementCriteriaInfo(lua_State* L) {
 
         criteriaId = spec->m_criteria->m_id;
     } else {
-        criteriaId = static_cast<int32_t>(lua_tonumber(L, 1));
+        criteriaId = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     }
 
     if (criteriaId < 0) {
@@ -1391,7 +1391,7 @@ static int32_t Script_GetComparisonStatistic(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     uint64_t value = 0;
     uint64_t sum = 0;
     uint64_t highest = 0;
@@ -1481,7 +1481,7 @@ static int32_t Script_GetAchievementLink(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     AchievementRec* achievement = g_achievementDB.GetRecord(id);
 
     if (!achievement) {

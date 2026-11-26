@@ -543,7 +543,7 @@ static bool GetSpentSpellCharges(int32_t spellId, uint32_t& start, uint32_t& dur
 static int32_t Script_GetSpellCharges(lua_State* L) {
     if (lua_isnumber(L, 1)) {
         LoadSpellChargeTables();
-        auto link = s_spellChargeLinks.find(static_cast<uint32_t>(static_cast<int32_t>(lua_tonumber(L, 1))));
+        auto link = s_spellChargeLinks.find(static_cast<uint32_t>(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)))));
         auto category = link != s_spellChargeLinks.end() ? s_spellChargeCategories.find(link->second) : s_spellChargeCategories.end();
 
         if (category != s_spellChargeCategories.end()) {
@@ -2903,7 +2903,7 @@ void PendingSpellCast::OnSpellGo(CDataStore* msg) {
 // VERIFY: 2af0e265 manual
 // OFFSET: 0x007FDE00
 uint32_t Spell_C_GetPowerDisplayMod(POWER_TYPE powerType) {
-    if (static_cast<int32_t>(powerType) < 0) {
+    if (static_cast<uint32_t>(powerType) >= NUM_POWER_TYPES) {
         return 1;
     }
 

@@ -712,6 +712,9 @@ int32_t TextureLoadBlpMips(char* fileName, char* extension, int32_t flags, MipBi
                 format = GxTex_Argb4444;
                 pixels = PIXEL_ARGB4444;
             }
+        } else if (static_cast<uint32_t>(pixels) >= NUM_PIXEL_FORMATS) {
+            // CoA: BC5 decodes to ARGB8888 in Lock; unknown formats then fail there instead of copying garbage.
+            pixels = PIXEL_ARGB8888;
         }
     }
 
@@ -922,7 +925,16 @@ void TextureGetTextureFormats(PIXEL_FORMAT& pixelFormat, EGxTexFormat& gxTexForm
 
             break;
 
+        case PIXEL_BC5:
+            gxTexFormat = GxTex_Argb8888;
+            pixelFormat = PIXEL_ARGB8888;
+            break;
+
         default:
+            // Unknown BLP preferred format: the original left the out-params uninitialized (ITexCreate crash).
+            // The DXT decode of such files fails in CBLPFile::Lock2 and the texture falls back to solid.
+            gxTexFormat = alphaBits > 1 ? GxTex_Argb8888 : (alphaBits == 1 ? GxTex_Argb1555 : GxTex_Rgb565);
+            pixelFormat = PIXEL_ARGB8888;
             break;
     }
 }
@@ -1837,8 +1849,8 @@ int32_t PumpBlpTextureAsync(CTexture* texture, void* data) {
     RequestImageDimensions(&width, &height, &bestMip);
     texture->m_bestMip = bestMip;
 
-    PIXEL_FORMAT pixelFormat;
-    EGxTexFormat gxTexFormat;
+    PIXEL_FORMAT pixelFormat = PIXEL_ARGB8888;
+    EGxTexFormat gxTexFormat = GxTex_Argb8888;
     // Raw BLP2 pixels are BGRA even when an imported file retains a DXT format hint.
     TextureGetTextureFormats(pixelFormat, gxTexFormat,
         image.m_header.m_colorEncoding == 3 ? PIXEL_ARGB8888
@@ -2001,7 +2013,10 @@ int32_t LoadBlpMips(char* fileName, char* extension, int32_t flags, MipBits** im
     PIXEL_FORMAT format;
 
     if (!pixelFormat || (format = *pixelFormat) == PIXEL_UNSPECIFIED) {
-        if (image.m_header.m_alphaSize) {
+        // BC5 only blits to ARGB8888, so it may not pick a 16-bit format.
+        if (image.m_header.m_preferredFormat == PIXEL_BC5) {
+            format = PIXEL_ARGB8888;
+        } else if (image.m_header.m_alphaSize) {
             format = image.m_header.m_alphaSize != 1 ? PIXEL_ARGB4444 : PIXEL_ARGB1555;
         } else {
             format = PIXEL_RGB565;

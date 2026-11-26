@@ -603,7 +603,7 @@ static int32_t Script_BNInviteToConversation(lua_State* L) {
         luaL_error(L, "Usage: BNInviteToConversation(channel,id)");
     }
 
-    uint8_t channel = static_cast<uint8_t>(lua_tonumber(L, 1) - 1.0);
+    uint8_t channel = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
 
     if (channel >= 6) {
         luaL_error(L, "Invalid Channel");
@@ -663,7 +663,7 @@ static int32_t Script_BNSendConversationMessage(lua_State* L) {
         }
 
         if (BattlenetUI_IsAvailable()) {
-            int32_t channelNumber = static_cast<int32_t>(lua_tonumber(L, 1) - 1.0);
+            int32_t channelNumber = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
             uint8_t channel = channelNumber;
             const char* text = lua_tolstring(L, 2, nullptr);
             char message[1026];
@@ -697,7 +697,7 @@ static int32_t Script_BNGetNumConversationMembers(lua_State* L) {
     double count;
 
     if (BattlenetUI_IsAvailable()) {
-        int32_t channel = static_cast<int32_t>(lua_tonumber(L, 1) - 1.0);
+        int32_t channel = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
 
         if (static_cast<uint8_t>(channel) >= 6) {
             luaL_error(L, "Invalid Channel");
@@ -1513,7 +1513,7 @@ static int32_t Script_BNGetConversationMemberInfo(lua_State* L) {
         return 0;
     }
 
-    uint8_t channel = static_cast<uint8_t>(lua_tonumber(L, 1) - 1.0);
+    uint8_t channel = static_cast<uint8_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
     double indexNumber = lua_tonumber(L, 2);
     uint32_t index = static_cast<uint32_t>(indexNumber - 1);
 

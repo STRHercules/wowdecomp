@@ -462,7 +462,7 @@ static int32_t StickyOrder(lua_State* L, int32_t ref) {
     lua_rawgeti(L, LUA_REGISTRYINDEX, s_stickyTable);
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
     lua_rawget(L, -2);
-    int32_t order = static_cast<int32_t>(lua_tonumber(L, -1));
+    int32_t order = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, -1)));
     lua_pop(L, 2);
     return order;
 }

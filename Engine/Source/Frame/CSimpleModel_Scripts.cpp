@@ -222,7 +222,7 @@ static int32_t Script_SetSequenceTime(lua_State* L) {
     CSimpleModel* model = static_cast<CSimpleModel*>(FrameScript_GetObjectThis(L, CSimpleModel::GetObjectType()));
 
     if (lua_isnumber(L, 2) && lua_isnumber(L, 3)) {
-        int32_t time = static_cast<int32_t>(lua_tonumber(L, 3));
+        int32_t time = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
         uint32_t sequence = static_cast<uint32_t>(lua_tonumber(L, 2));
         model->SetSequenceTime(sequence, time);
         return 0;

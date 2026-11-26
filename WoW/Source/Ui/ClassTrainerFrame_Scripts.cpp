@@ -202,7 +202,7 @@ static int32_t Script_GetTrainerSkillLineFilter(lua_State* L) {
     }
 
     uint32_t filter = CGClassTrainer::m_skillLineFilter;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         for (uint32_t i = 0; i < CGClassTrainer::m_numSkillLines; i++) {
@@ -695,7 +695,7 @@ static int32_t Script_BuyTrainerService(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         CGPlayer_C::TrainerBuySpell(index);
@@ -737,12 +737,12 @@ static int32_t Script_SetTrainerServiceTypeFilter(lua_State* L) {
 
     int32_t filter = g_serviceTypeFilterCVar->m_intValue;
 
-    if (!static_cast<int32_t>(lua_tonumber(L, 2))) {
+    if (!static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)))) {
         CGClassTrainer::SetServiceTypeFilter(filter & ~(1 << serviceType));
         return 0;
     }
 
-    if (lua_isnumber(L, 3) && static_cast<int32_t>(lua_tonumber(L, 3))) {
+    if (lua_isnumber(L, 3) && static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)))) {
         CGClassTrainer::SetServiceTypeFilter(1 << serviceType);
         return 0;
     }
@@ -759,7 +759,7 @@ static int32_t Script_SetTrainerSkillLineFilter(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         CGClassTrainer::m_skillLineFilter = 0xFFFFFFFF;
@@ -780,12 +780,12 @@ static int32_t Script_SetTrainerSkillLineFilter(lua_State* L) {
 
     uint32_t filter = CGClassTrainer::m_skillLineFilter;
 
-    if (!static_cast<int32_t>(lua_tonumber(L, 2))) {
+    if (!static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)))) {
         CGClassTrainer::SetSkillLineFilter(filter & ~(1 << index));
         return 0;
     }
 
-    if (lua_isnumber(L, 3) && static_cast<int32_t>(lua_tonumber(L, 3))) {
+    if (lua_isnumber(L, 3) && static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)))) {
         CGClassTrainer::SetSkillLineFilter(1 << index);
         return 0;
     }
@@ -802,7 +802,7 @@ static int32_t Script_CollapseTrainerSkillLine(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         int32_t skillLine = CGClassTrainer::GetSkillLineIndexFromService(index);
@@ -830,7 +830,7 @@ static int32_t Script_ExpandTrainerSkillLine(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         int32_t skillLine = CGClassTrainer::GetSkillLineIndexFromService(index);

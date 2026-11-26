@@ -115,7 +115,7 @@ static int32_t Script_KeyRingButtonIDToInvSlotID(lua_State* L) {
         return 0;
     }
 
-    lua_pushnumber(L, static_cast<int32_t>(lua_tonumber(L, 1)) + 86);
+    lua_pushnumber(L, static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) + 86);
     return 1;
 }
 
@@ -522,7 +522,7 @@ static int32_t Script_GetInspectArenaTeamData(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 3) {
         return 0;
@@ -571,7 +571,7 @@ static int32_t Script_GetInventoryItemsForSlot(lua_State* L) {
     uint32_t slot = 0;
 
     if (lua_isnumber(L, 1)) {
-        slot = static_cast<int32_t>(lua_tonumber(L, 1) - 1.0);
+        slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1) - 1.0));
 
         if (slot > 18) {
             return 0;

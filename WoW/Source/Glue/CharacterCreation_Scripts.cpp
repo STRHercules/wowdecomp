@@ -59,8 +59,8 @@ static int32_t Script_IsRaceClassRestricted(lua_State* L) {
         return 0;
     }
 
-    int32_t raceID = static_cast<int32_t>(lua_tonumber(L, 1));
-    int32_t classID = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t raceID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    int32_t classID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     if (classID < 1 || classID > WOWDECOMP_MAX_CLASSES) {
         luaL_error(L, "Script_IsRaceClassRestricted: unsupported class ID(%d)", classID);
         return 0;
@@ -193,7 +193,7 @@ static int32_t Script_GetFactionForRace(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t raceID = index < CCharacterCreation::m_races.Count() ? CCharacterCreation::m_races.m_data[index] : 0;
     ChrRacesRec* raceRec = g_chrRacesDB.GetRecord(raceID);
 
@@ -435,8 +435,8 @@ static int32_t Script_CycleCharCustomization(lua_State* L) {
         return 0;
     }
 
-    CHAR_CUSTOMIZATION_TYPE type = static_cast<CHAR_CUSTOMIZATION_TYPE>(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
-    int32_t delta = static_cast<int32_t>(lua_tonumber(L, 2));
+    CHAR_CUSTOMIZATION_TYPE type = static_cast<CHAR_CUSTOMIZATION_TYPE>(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
+    int32_t delta = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     CCharacterCreation::CycleCharCustomization(type, delta);
     return 0;
 }
@@ -624,7 +624,7 @@ static int32_t Script_SetSelectedClass(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     ChrClassesRec* classRec = index >= 0 && index < g_chrClassesDB.m_numRecords ? &g_chrClassesDB.m_records[index] : nullptr;
     if (!classRec) {
         return 0;

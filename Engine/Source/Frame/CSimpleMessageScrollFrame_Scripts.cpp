@@ -211,7 +211,7 @@ static int32_t Script_AddMessage(lua_State* L) {
         FrameScript_GetColorNoAlpha(L, 3, color);
 
         if (lua_isnumber(L, 6)) {
-            typeID = static_cast<int32_t>(lua_tonumber(L, 6));
+            typeID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 6)));
         }
 
         if (lua_type(L, 7) == LUA_TBOOLEAN) {
@@ -219,17 +219,17 @@ static int32_t Script_AddMessage(lua_State* L) {
         }
 
         if (lua_isnumber(L, 8)) {
-            accessID = static_cast<int32_t>(lua_tonumber(L, 8));
+            accessID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 8)));
         }
 
         if (lua_isnumber(L, 9)) {
-            extraData = static_cast<int32_t>(lua_tonumber(L, 9));
+            extraData = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 9)));
         }
     } else {
         color = frame->m_font->m_attributes.m_color;
 
         if (lua_isnumber(L, 3)) {
-            typeID = static_cast<int32_t>(lua_tonumber(L, 3));
+            typeID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
         }
 
         if (lua_type(L, 4) == LUA_TBOOLEAN) {
@@ -237,11 +237,11 @@ static int32_t Script_AddMessage(lua_State* L) {
         }
 
         if (lua_isnumber(L, 5)) {
-            accessID = static_cast<int32_t>(lua_tonumber(L, 5));
+            accessID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 5)));
         }
 
         if (lua_isnumber(L, 6)) {
-            extraData = static_cast<int32_t>(lua_tonumber(L, 6));
+            extraData = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 6)));
         }
     }
 
@@ -344,7 +344,7 @@ static int32_t Script_ScrollToBottom(lua_State* L) {
 static int32_t Script_SetScrollOffset(lua_State* L) {
     if (lua_isnumber(L, 2)) {
         CSimpleMessageScrollFrame* frame = static_cast<CSimpleMessageScrollFrame*>(FrameScript_GetObjectThis(L, CSimpleMessageScrollFrame::GetObjectType()));
-        frame->SetScrollOffset(static_cast<int32_t>(lua_tonumber(L, 2)));
+        frame->SetScrollOffset(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
     }
 
     return 0;
@@ -384,7 +384,7 @@ static int32_t Script_UpdateColorByID(lua_State* L) {
     CSimpleMessageScrollFrame* frame = static_cast<CSimpleMessageScrollFrame*>(FrameScript_GetObjectThis(L, CSimpleMessageScrollFrame::GetObjectType()));
 
     if (lua_isnumber(L, 2) && lua_isnumber(L, 3) && lua_isnumber(L, 4) && lua_isnumber(L, 5)) {
-        int32_t typeID = static_cast<int32_t>(lua_tonumber(L, 2));
+        int32_t typeID = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
         CImVector color;
         FrameScript_GetColorNoAlpha(L, 3, color);
         frame->UpdateColorByID(typeID, color);
@@ -440,7 +440,7 @@ static int32_t Script_SetMaxLines(lua_State* L) {
     CSimpleMessageScrollFrame* frame = static_cast<CSimpleMessageScrollFrame*>(FrameScript_GetObjectThis(L, CSimpleMessageScrollFrame::GetObjectType()));
 
     if (lua_isnumber(L, 2)) {
-        int32_t maxLines = static_cast<int32_t>(lua_tonumber(L, 2));
+        int32_t maxLines = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
         if (maxLines > 0) {
             frame->SetMaxLines(maxLines);

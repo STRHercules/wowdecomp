@@ -69,7 +69,8 @@ static int32_t Script_GetGossipText(lua_State* L) {
 static int32_t Script_GetGossipOptions(lua_State* L) {
     int32_t count = 0;
 
-    for (GossipOption* option = CGGossipInfo::m_options; option < reinterpret_cast<GossipOption*>(CGGossipInfo::m_gossipText); option++) {
+    // x64: m_gossipText does not follow m_options (m_gossipID/m_gossipOptionsCount sit between), so bound by the array.
+    for (GossipOption* option = CGGossipInfo::m_options; option < CGGossipInfo::m_options + 32; option++) {
         if (option && option->m_index >= 0) {
             lua_checkstack(L, 2);
             lua_pushstring(L, option->m_text);
@@ -188,7 +189,7 @@ static int32_t Script_SelectGossipOption(lua_State* L) {
         return luaL_error(L, "Usage: SelectGossipOption(index)");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     int32_t confirmed = StringToBOOL(L, 3, 0);
     CGGossipInfo::SelectGossipOption(index, lua_tolstring(L, 2, nullptr), confirmed);
     return 0;
@@ -201,7 +202,7 @@ static int32_t Script_SelectGossipAvailableQuest(lua_State* L) {
         return luaL_error(L, "Usage: SelectGossipAvailableQuest(index)");
     }
 
-    CGGossipInfo::SelectGossipAvailableQuest(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGGossipInfo::SelectGossipAvailableQuest(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 
@@ -212,7 +213,7 @@ static int32_t Script_SelectGossipActiveQuest(lua_State* L) {
         return luaL_error(L, "Usage: SelectGossipActiveQuest(index)");
     }
 
-    CGGossipInfo::SelectGossipActiveQuest(static_cast<int32_t>(lua_tonumber(L, 1)) - 1);
+    CGGossipInfo::SelectGossipActiveQuest(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1);
     return 0;
 }
 

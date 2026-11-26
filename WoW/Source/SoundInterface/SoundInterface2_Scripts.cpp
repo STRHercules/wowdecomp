@@ -15,7 +15,7 @@
 // OFFSET: 0x009858B0
 static int32_t Script_PlaySound(lua_State* L) {
     if (lua_isnumber(L, 1)) {
-        SI2::PlayUISound(static_cast<int32_t>(lua_tonumber(L, 1)));
+        SI2::PlayUISound(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
         return 0;
     }
 
@@ -183,7 +183,7 @@ static int32_t Script_VoiceChat_RecordLoopbackSound(lua_State* L) {
         return 0;
     }
 
-    SI2::VoiceChat_RecordLoopbackSound(static_cast<int32_t>(lua_tonumber(L, 1)));
+    SI2::VoiceChat_RecordLoopbackSound(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))));
     return 0;
 }
 

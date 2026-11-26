@@ -45,6 +45,15 @@ static BlitFormat GetBlitFormat(PIXEL_FORMAT format) {
         BlitFormat_Unknown,
     };
 
+    // CoA: m_preferredFormat is a raw header byte; retail BC5 (11) read past the table into CalcRowStride.
+    if (format == PIXEL_BC5) {
+        return BlitFormat_Bc5;
+    }
+
+    if (static_cast<uint32_t>(format) >= NUM_PIXEL_FORMATS) {
+        return BlitFormat_Unknown;
+    }
+
     return blitFmt[format];
 }
 
@@ -756,6 +765,10 @@ int32_t CBLPFile::Lock(PIXEL_FORMAT format, uint32_t mipLevel, uint8_t*& data, u
                     BlitFormat inFormat = GetBlitFormat(static_cast<PIXEL_FORMAT>(this->m_header.m_preferredFormat));
                     BlitFormat outFormat = GetBlitFormat(format);
 
+                    if (inFormat == BlitFormat_Unknown) {
+                        return 0;
+                    }
+
                     data = static_cast<uint8_t*>(SMemAlloc(size, __FILE__, __LINE__, 0));
                     this->m_lockDecompMem = data;
 
@@ -879,6 +892,11 @@ int32_t CBLPFile::Lock2(const char* fileName, PIXEL_FORMAT format, uint32_t mipL
                     BlitFormat inFormat = GetBlitFormat(static_cast<PIXEL_FORMAT>(this->m_header.m_preferredFormat));
                     BlitFormat outFormat = GetBlitFormat(format);
                     C2iVector blitSize = { static_cast<int32_t>(width), static_cast<int32_t>(this->Height(mipLevel)) };
+
+                    if (inFormat == BlitFormat_Unknown) {
+                        DebugLog("%s: unsupported DXT preferred format %d", fileName, this->m_header.m_preferredFormat);
+                        return 0;
+                    }
 
                     return Blit(blitSize, BlitAlpha_0, image, CalcRowStride(inFormat, width, height), inFormat, data, CalcRowStride(outFormat, width, height), outFormat);
                 }

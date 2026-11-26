@@ -467,7 +467,7 @@ static int32_t Script_GetPetActionSlotUsable(lua_State* L) {
         return 0;
     }
 
-    if (CGPetInfo::PetActionSlotUsable(GetPetAction(static_cast<int32_t>(lua_tonumber(L, 1)) - 1))) {
+    if (CGPetInfo::PetActionSlotUsable(GetPetAction(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1))) {
         lua_pushnumber(L, 1.0);
     } else {
         lua_pushnil(L);
@@ -624,7 +624,7 @@ static int32_t Script_PickupPetAction(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (slot > 10) {
         luaL_error(L, "Invalid slot in PickupPetAction");
@@ -670,7 +670,7 @@ static int32_t Script_TogglePetAutocast(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (slot > 10) {
         luaL_error(L, "Invalid slot in TogglePetAutocast");
@@ -697,7 +697,7 @@ static int32_t Script_CastPetAction(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (slot > 10) {
         luaL_error(L, "Invalid slot in CastPetAction");

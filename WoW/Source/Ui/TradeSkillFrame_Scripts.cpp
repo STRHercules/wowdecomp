@@ -110,7 +110,7 @@ static int32_t Script_GetTradeSkillSubClassFilter(lua_State* L) {
     }
 
     uint32_t filter = CGTradeSkillInfo::m_subClassFilter;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         for (uint32_t i = 0; i < CGTradeSkillInfo::m_numSubClasses; i++) {
@@ -610,7 +610,7 @@ static int32_t Script_GetTradeSkillReagentItemLink(lua_State* L) {
     }
 
     uint32_t index = static_cast<uint32_t>(lua_tonumber(L, 1)) - 1;
-    int32_t reagentIndex = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t reagentIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     TradeSkillInfo* info;
 
     if (index < CGTradeSkillInfo::m_numDisplayEntries && (info = CGTradeSkillInfo::m_displayList.m_data[index])) {
@@ -704,7 +704,7 @@ static int32_t Script_GetTradeSkillInvSlotFilter(lua_State* L) {
     }
 
     uint32_t filter = CGTradeSkillInfo::m_invTypeFilter;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         if (CGTradeSkillInfo::m_invTypeFilter == 0xFFFFFFFF) {
@@ -792,7 +792,7 @@ static int32_t Script_SetTradeSkillSubClassFilter(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         CGTradeSkillInfo::m_subClassFilter = 0xFFFFFFFF;
@@ -814,9 +814,9 @@ static int32_t Script_SetTradeSkillSubClassFilter(lua_State* L) {
 
     uint32_t filter = CGTradeSkillInfo::m_subClassFilter;
 
-    if (!static_cast<int32_t>(lua_tonumber(L, 2))) {
+    if (!static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)))) {
         CGTradeSkillInfo::SetSubClassFilter(filter & ~(1 << index), index);
-    } else if (lua_isnumber(L, 3) && static_cast<int32_t>(lua_tonumber(L, 3))) {
+    } else if (lua_isnumber(L, 3) && static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)))) {
         CGTradeSkillInfo::SetSubClassFilter(1 << index, index);
     } else {
         CGTradeSkillInfo::SetSubClassFilter(filter | (1 << index), index);
@@ -832,7 +832,7 @@ static int32_t Script_SetTradeSkillInvSlotFilter(lua_State* L) {
         luaL_error(L, "Usage: SetTradeSkillInvSlotFilter(index [, on\\off, exclusive])");
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index < 0) {
         CGTradeSkillInfo::m_invTypeFilter = 0xFFFFFFFF;
@@ -923,7 +923,7 @@ static int32_t Script_CollapseTradeSkillSubClass(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         int32_t subClass = CGTradeSkillInfo::GetSubClassIndexFromSkill(index);
@@ -951,7 +951,7 @@ static int32_t Script_ExpandTradeSkillSubClass(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
 
     if (index >= 0) {
         int32_t subClass = CGTradeSkillInfo::GetSubClassIndexFromSkill(index);
@@ -988,7 +988,7 @@ static int32_t Script_GetTradeSkillReagentInfo(lua_State* L) {
     }
 
     uint32_t index = static_cast<uint32_t>(lua_tonumber(L, 1)) - 1;
-    int32_t reagentIndex = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t reagentIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     TradeSkillInfo* info;
 
     if (index < CGTradeSkillInfo::m_numDisplayEntries && (info = CGTradeSkillInfo::m_displayList.m_data[index])) {

@@ -144,7 +144,7 @@ static int32_t Script_GetNewSocketLink(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     WOWGUID guid = index >= 3 ? WOWGUID() : CGItemSocketInfo::m_gemItems[index];
     CGItem_C* gem = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_ITEM, __FILE__, __LINE__));
 
@@ -205,7 +205,7 @@ static int32_t Script_GetExistingSocketInfo(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(CGItemSocketInfo::m_socketItem, TYPEMASK_ITEM, __FILE__, __LINE__));
     SpellItemEnchantmentRec* enchant;
     ItemStats_C* stats;
@@ -252,7 +252,7 @@ static int32_t Script_GetExistingSocketLink(lua_State* L) {
         return 0;
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(CGItemSocketInfo::m_socketItem, TYPEMASK_ITEM, __FILE__, __LINE__));
 
     if (!item || index >= 3) {

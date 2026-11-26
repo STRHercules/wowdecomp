@@ -49,8 +49,8 @@ static int32_t Script_SetCooldown(lua_State* L) {
         return 0;
     }
 
-    int32_t start = static_cast<int32_t>(lua_tonumber(L, 2) * 1000.0);
-    int32_t duration = static_cast<int32_t>(lua_tonumber(L, 3) * 1000.0);
+    int32_t start = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) * 1000.0));
+    int32_t duration = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3) * 1000.0));
     cooldown->SetCooldown(start, duration);
     return 0;
 }

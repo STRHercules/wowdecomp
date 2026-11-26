@@ -1048,7 +1048,7 @@ static int32_t Script_SetLFGDungeon(lua_State* L) {
         return 0;
     }
 
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     LfgDungeonsRec* rec = g_lfgDungeonsDB.GetRecord(id);
 
     if (rec) {
@@ -1523,7 +1523,7 @@ static int32_t Script_SearchLFGGetEncounterResults(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     double encounter = lua_tonumber(L, 2);
     LFGListPlayer* player = nullptr;
     LFGListParty* party = nullptr;
@@ -1718,8 +1718,8 @@ static int32_t Script_SearchLFGGetPartyResults(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
-    int32_t partyIndex = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
+    int32_t partyIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     LFGListParty* party = nullptr;
     LFGListPlayer* leader;
 
@@ -1769,7 +1769,7 @@ static int32_t Script_SetLFGHeaderCollapsed(lua_State* L) {
         return 0;
     }
 
-    int32_t header = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t header = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t collapsed = StringToBOOL(L, 2, 0);
 
     if (header < 0 && g_lfgDungeonGroupDB.GetRecord(-header)) {
@@ -1787,7 +1787,7 @@ static int32_t Script_SetLFGDungeonEnabled(lua_State* L) {
         return 0;
     }
 
-    int32_t dungeon = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t dungeon = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t enabled = StringToBOOL(L, 2, 1);
 
     if (dungeon > 0) {
@@ -1900,8 +1900,8 @@ static int32_t Script_SearchLFGJoin(lua_State* L) {
         return 0;
     }
 
-    int32_t type = static_cast<int32_t>(lua_tonumber(L, 1));
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t type = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
     if (type < 7 && g_lfgDungeonsDB.GetRecord(id)) {
         CGLookingForGroup::JoinLFGSearch((type << 24) | (id & 0xFFFFFF));
@@ -1919,7 +1919,7 @@ static int32_t Script_ClearLFGDungeon(lua_State* L) {
     }
 
     uint32_t type = static_cast<uint32_t>(lua_tonumber(L, 1));
-    int32_t id = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t id = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
 
     if (type < 7 && g_lfgDungeonsDB.GetRecord(id)) {
         CGLookingForGroup::ClearLFGDungeon((type << 24) | (id & 0xFFFFFF));

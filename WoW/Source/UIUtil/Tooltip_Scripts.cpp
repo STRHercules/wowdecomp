@@ -725,7 +725,7 @@ static int32_t Script_SetInventoryItem(lua_State* L) {
 
     int32_t slot;
 
-    if (!lua_isnumber(L, 3) || ((slot = static_cast<int32_t>(lua_tonumber(L, 3) - 1.0)) < 0 || slot > 22) && (slot < 39 || slot > 66) && (slot < 67 || slot > 73) && (slot < 86 || slot > 117) && (slot < 118 || slot > 149) && slot != -1) {
+    if (!lua_isnumber(L, 3) || ((slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3) - 1.0))) < 0 || slot > 22) && (slot < 39 || slot > 66) && (slot < 67 || slot > 73) && (slot < 86 || slot > 117) && (slot < 118 || slot > 149) && slot != -1) {
         luaL_error(L, "Invalid inventory slot in SetInventoryItem");
         return 0;
     }
@@ -840,7 +840,7 @@ static int32_t Script_SetBagItem(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     CGBag_C* bag;
 
     if (index == -1) {
@@ -863,7 +863,7 @@ static int32_t Script_SetBagItem(lua_State* L) {
         return 0;
     }
 
-    int32_t slot = static_cast<int32_t>(lua_tonumber(L, 3)) - 1;
+    int32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1;
 
     if (bag == &player->m_bag) {
         slot += 23;
@@ -1185,7 +1185,7 @@ static int32_t Script_SetHyperlinkCompareItem(lua_State* L) {
         int32_t shift = StringToBOOL(L, 4, 0);
 
         if (lua_isnumber(L, 3)) {
-            offset = static_cast<int32_t>(lua_tonumber(L, 3)) - 1;
+            offset = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1;
         }
 
         if (lua_type(L, 5) == LUA_TTABLE) {
@@ -1256,7 +1256,7 @@ static int32_t Script_SetLootRollItem(lua_State* L) {
         luaL_error(L, "Usage: %s:SetLootRollItem(id)", name ? name : "<unnamed>");
     }
 
-    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(lua_tonumber(L, 2)));
+    PendingLootRoll* roll = FindRoll(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))));
 
     if (!roll) {
         return 0;
@@ -1825,7 +1825,7 @@ static int32_t Script_SetQuestLogItem(lua_State* L) {
     int32_t index;
     int32_t itemId;
 
-    if (!lua_isstring(L, 2) || !lua_isnumber(L, 3) || (type = lua_tolstring(L, 2, nullptr), index = static_cast<int32_t>(lua_tonumber(L, 3)) - 1, itemId = GetQuestItemRewards(type, index), itemId <= 0)) {
+    if (!lua_isstring(L, 2) || !lua_isnumber(L, 3) || (type = lua_tolstring(L, 2, nullptr), index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1, itemId = GetQuestItemRewards(type, index), itemId <= 0)) {
         luaL_error(L, "Invalid quest item in SetQuestLogItem(\"type\", index)");
         return 0;
     }
@@ -1854,7 +1854,7 @@ static int32_t Script_SetTrainerService(lua_State* L) {
     CGTooltip* tooltip = static_cast<CGTooltip*>(FrameScript_GetObjectThis(L, CGTooltip::GetObjectType()));
     TrainerServiceInfo* service;
 
-    if (!lua_isnumber(L, 2) || (service = CGClassTrainer::GetService(static_cast<int32_t>(lua_tonumber(L, 2)) - 1)) == nullptr) {
+    if (!lua_isnumber(L, 2) || (service = CGClassTrainer::GetService(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1)) == nullptr) {
         luaL_error(L, "Invalid trainer service in SetTrainerService(index)");
     }
 
@@ -1909,7 +1909,7 @@ static int32_t Script_SetTradeSkillItem(lua_State* L) {
     }
 
     if (lua_isnumber(L, 3)) {
-        int32_t reagent = static_cast<int32_t>(lua_tonumber(L, 3));
+        int32_t reagent = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)));
         int32_t count = 0;
         uint32_t i;
 
@@ -1965,7 +1965,7 @@ static int32_t Script_SetMerchantItem(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
     MerchantItem* item;
 
     if (index < 0 || index >= CGMerchantInfo::m_numMerchantItems || !CGMerchantInfo::m_merchant || (item = &CGMerchantInfo::m_items[index]) == nullptr || !item->m_itemID) {
@@ -1988,8 +1988,8 @@ static int32_t Script_SetMerchantCostItem(lua_State* L) {
         return 0;
     }
 
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
-    int32_t costIndex = static_cast<int32_t>(lua_tonumber(L, 3) - 1.0);
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
+    int32_t costIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3) - 1.0));
     MerchantItem* item;
     ItemExtendedCostRec* cost;
 
@@ -2028,7 +2028,7 @@ static int32_t Script_SetTradePlayerItem(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
     WOWGUID guid = slot > 6 ? WOWGUID() : CGTradeInfo::m_playerItems[slot];
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(guid, TYPEMASK_ITEM, __FILE__, __LINE__));
 
@@ -2076,7 +2076,7 @@ static int32_t Script_SetTradeTargetItem(lua_State* L) {
         return 0;
     }
 
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
 
     if (slot > 6) {
         return 0;
@@ -2129,7 +2129,7 @@ static int32_t Script_SetSendMailItem(lua_State* L) {
     uint32_t index;
 
     if (lua_isnumber(L, 2)) {
-        index = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
+        index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
 
         if (index >= 16) {
             lua_pushnil(L);
@@ -2164,7 +2164,7 @@ static int32_t Script_SetInboxItem(lua_State* L) {
         luaL_error(L, "Usage: %s:SetInboxItem(messageIndex, attachmentIndex)", name ? name : "<unnamed>");
     }
 
-    int32_t messageIndex = static_cast<int32_t>(lua_tonumber(L, 2));
+    int32_t messageIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2)));
     MailboxMessageInfo* message;
 
     if (static_cast<uint32_t>(messageIndex - 1) >= CGMailInfo::m_numInboxItems || (message = CGMailInfo::m_inbox.m_data[messageIndex - 1]) == nullptr) {
@@ -2175,7 +2175,7 @@ static int32_t Script_SetInboxItem(lua_State* L) {
     MailAttachmentInfo* attachment;
     int32_t attachmentIndex;
 
-    if (lua_isnumber(L, 3) && (attachmentIndex = static_cast<int32_t>(lua_tonumber(L, 3))) != 0) {
+    if (lua_isnumber(L, 3) && (attachmentIndex = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3)))) != 0) {
         if (static_cast<uint32_t>(attachmentIndex - 1) >= 16) {
             lua_pushnil(L);
             return 1;
@@ -2253,7 +2253,7 @@ static int32_t Script_SetAuctionItem(lua_State* L) {
     }
 
     const char* type = lua_tolstring(L, 2, nullptr);
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 3)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3))) - 1;
     AuctionItemInfo* auction;
 
     if (!SStrCmpI(type, "owner", STORM_MAX_STR)) {
@@ -2338,7 +2338,7 @@ static int32_t Script_SetSocketGem(lua_State* L) {
         luaL_error(L, "Usage: %s:SetSocketGem(index)", name ? name : "<unnamed>");
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     WOWGUID gem = index >= 3 ? WOWGUID() : CGItemSocketInfo::m_gemItems[index];
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(gem, TYPEMASK_ITEM, __FILE__, __LINE__));
 
@@ -2361,7 +2361,7 @@ static int32_t Script_SetExistingSocketGem(lua_State* L) {
         luaL_error(L, "Usage: %s:SetSocketGem(index, [toDestroy])", name ? name : "<unnamed>");
     }
 
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     int32_t toDestroy = StringToBOOL(L, 3, 0);
     CGItem_C* item = static_cast<CGItem_C*>(ClntObjMgrObjectPtr(CGItemSocketInfo::m_socketItem, TYPEMASK_ITEM, __FILE__, __LINE__));
 
@@ -2388,8 +2388,8 @@ static int32_t Script_SetGuildBankItem(lua_State* L) {
         return 0;
     }
 
-    uint32_t tab = static_cast<int32_t>(lua_tonumber(L, 2) - 1.0);
-    uint32_t slot = static_cast<int32_t>(lua_tonumber(L, 3) - 1.0);
+    uint32_t tab = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2) - 1.0));
+    uint32_t slot = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 3) - 1.0));
     GuildBankSlotInfo* info = CGGuildBankInfo::GetGuildBankItem(tab, slot);
 
     if (!info) {
@@ -2428,7 +2428,7 @@ static int32_t Script_SetBackpackToken(lua_State* L) {
     }
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
-    CurrencyTypesRec* currency = CGCurrencyTypes::GetBackpackCurrencyInfo(static_cast<int32_t>(lua_tonumber(L, 2)) - 1);
+    CurrencyTypesRec* currency = CGCurrencyTypes::GetBackpackCurrencyInfo(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1);
 
     if (!tooltip || !player || !currency) {
         return 0;
@@ -2462,7 +2462,7 @@ static int32_t Script_SetQuestLogSpecialItem(lua_State* L) {
         luaL_error(L, "Usage: %s:SetQuestLogSpecialItem(index)", name ? name : "<unnamed>");
     }
 
-    CGItem_C* item = CGQuestLog::GetQuestSpecialItem(static_cast<int32_t>(lua_tonumber(L, 2)) - 1);
+    CGItem_C* item = CGQuestLog::GetQuestSpecialItem(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1);
 
     if (item) {
         WOWGUID itemGuid = item->m_obj->m_guid;
@@ -2519,7 +2519,7 @@ static int32_t Script_SetBuybackItem(lua_State* L) {
     }
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
-    uint32_t index = static_cast<int32_t>(lua_tonumber(L, 2)) - 1;
+    uint32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1;
     uint32_t slot = index < CGMerchantInfo::m_numBuybackItems ? CGMerchantInfo::m_buybackSlots[index] : 0;
 
     if (!player || !slot) {
@@ -2555,7 +2555,7 @@ static int32_t Script_SetCurrencyToken(lua_State* L) {
     }
 
     CGPlayer_C* player = ClntObjMgrGetActivePlayerObj();
-    CurrencyListEntry* entry = CGCurrencyTypes::GetDisplayListInfo(static_cast<int32_t>(lua_tonumber(L, 2)) - 1);
+    CurrencyListEntry* entry = CGCurrencyTypes::GetDisplayListInfo(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 2))) - 1);
 
     if (!tooltip || !player || !entry || entry->m_isHeader) {
         return 0;

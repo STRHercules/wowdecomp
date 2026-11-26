@@ -65,7 +65,7 @@ static int32_t Script_GetNumModifiedClickActions(lua_State* L) {
 // VERIFY: 4918368e auto
 // OFFSET: 0x00564070
 static int32_t Script_LoadBindings(lua_State* L) {
-    int32_t set = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t set = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (set >= 3) {
         luaL_error(L, "Usage: LoadBindings(0||1||2)");
@@ -84,7 +84,7 @@ static int32_t Script_GetModifiedClickAction(lua_State* L) {
         return 0;
     }
 
-    lua_pushstring(L, CGUIBindings::s_bindings->GetModifiedClick(static_cast<int32_t>(lua_tonumber(L, 1)) - 1));
+    lua_pushstring(L, CGUIBindings::s_bindings->GetModifiedClick(static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1));
     return 1;
 }
 
@@ -103,7 +103,7 @@ static int32_t Script_IsModifiedClick(lua_State* L) {
 // VERIFY: a6e5f57d auto
 // OFFSET: 0x005640C0
 static int32_t Script_SaveBindings(lua_State* L) {
-    int32_t set = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t set = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
 
     if (set != 1 && set != 2) {
         luaL_error(L, "Usage: SaveBindings(1||2)");
@@ -310,7 +310,7 @@ static int32_t Script_GetBinding(lua_State* L) {
 
     CGUIBindings* bindings = CGUIBindings::s_bindings;
     int32_t count = 0;
-    int32_t index = static_cast<int32_t>(lua_tonumber(L, 1)) - 1;
+    int32_t index = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1))) - 1;
     BINDING_MODE mode = BINDING_MODE_0;
 
     if (lua_isnumber(L, 2)) {

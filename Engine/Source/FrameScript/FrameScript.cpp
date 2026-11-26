@@ -405,13 +405,13 @@ char* FrameScript_Sprintf(lua_State* L, int32_t index, char* buffer, uint32_t bu
 
         switch (*format++) {
             case 'c':
-                *dest++ = static_cast<char>(luaL_checknumber(L, arg));
+                *dest++ = static_cast<char>(static_cast<int64_t>(luaL_checknumber(L, arg)));
                 space--;
                 break;
 
             case 'd':
             case 'i':
-                written = SStrPrintf(dest, space, spec, static_cast<int32_t>(luaL_checknumber(L, arg)));
+                written = SStrPrintf(dest, space, spec, static_cast<int32_t>(static_cast<int64_t>(luaL_checknumber(L, arg))));
 
                 if (written > 0) {
                     lua_convertdecimal(dest);
@@ -1058,7 +1058,7 @@ void FrameScript_PackVariable(lua_State* L, const char* name, int32_t depth, cha
                 while (lua_next(L, -2)) {
                     if (lua_isnumber(L, -2)) {
                         char key[32];
-                        SStrPrintf(key, sizeof(key), "%d", static_cast<int32_t>(lua_tonumber(L, -2)));
+                        SStrPrintf(key, sizeof(key), "%d", static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, -2))));
                         FrameScript_PackVariable(L, key, 1, buffer, bufferLen);
                     } else {
                         FrameScript_PackVariable(L, lua_tostring(L, -2), 1, buffer, bufferLen);

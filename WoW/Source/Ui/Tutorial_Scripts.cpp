@@ -101,7 +101,7 @@ static int32_t Script_GetNextCompleatedTutorial(lua_State* L) {
         return 0;
     }
 
-    int32_t tutorial = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t tutorial = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t next = CGTutorial::GetNextCompletedTutorial(tutorial - 1);
 
     if (next == 60) {
@@ -120,7 +120,7 @@ static int32_t Script_GetPrevCompleatedTutorial(lua_State* L) {
         return 0;
     }
 
-    int32_t tutorial = static_cast<int32_t>(lua_tonumber(L, 1));
+    int32_t tutorial = static_cast<int32_t>(static_cast<int64_t>(lua_tonumber(L, 1)));
     int32_t prev = CGTutorial::GetPrevCompletedTutorial(tutorial - 1);
 
     if (!prev) {
